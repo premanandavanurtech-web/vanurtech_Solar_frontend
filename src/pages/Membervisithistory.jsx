@@ -1027,6 +1027,21 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     };
   }, []);
 
+  const isRawCoordinateValue = (val) => {
+    if (!val) return true;
+    const str = typeof val === "string" ? val : val?.full || val?.short || "";
+    const trimmed = str.trim();
+    if (
+      !trimmed ||
+      trimmed === "Fetching address…" ||
+      trimmed === "Location not available" ||
+      trimmed === "Detecting location…"
+    ) {
+      return true;
+    }
+    return /^-?\d+(\.\d+)?[,\s]+-?\d+(\.\d+)?$/.test(trimmed);
+  };
+
   const lastGeocodedRef = useRef(null);
 
   useEffect(() => {
@@ -1039,16 +1054,61 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     lastGeocodedRef.current = coordKey;
 
     let active = true;
-    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`, {
-      headers: { "Accept-Language": "en" }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (!active || !data) return;
-        const fullAddress = data.display_name;
-        if (fullAddress) setResolvedAddress(fullAddress);
-      })
-      .catch(() => {});
+
+    const resolveLocation = async () => {
+      // 1. Try Nominatim first (zoom=18 for exact street, road, building & colony details)
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`,
+          { headers: { "Accept-Language": "en" } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.display_name && active) {
+            setResolvedAddress(data.display_name);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // 2. Fallback to BigDataCloud with full detailed area + street components
+      try {
+        const res = await fetch(
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const informative = (data.localityInfo?.informative || [])
+            .map((i) => i.name)
+            .filter((n) => n && !/india/i.test(n));
+          const admin = (data.localityInfo?.administrative || [])
+            .filter((a) => a.order >= 4)
+            .map((a) => a.name);
+          const locality = data.locality || data.city;
+          const district = data.principalSubdivision;
+          const postcode = data.postcode;
+          const country = data.countryName;
+
+          const uniqueParts = Array.from(
+            new Set([
+              ...informative,
+              ...admin,
+              locality,
+              district,
+              postcode,
+              country,
+            ])
+          ).filter(Boolean);
+
+          if (uniqueParts.length > 0 && active) {
+            setResolvedAddress(uniqueParts.join(", "));
+            return;
+          }
+        }
+      } catch (e) {}
+    };
+
+    resolveLocation();
 
     return () => { active = false; };
   }, [currentLocation?.lat, currentLocation?.lng, punchInLocation?.lat, punchInLocation?.lng, visits]);
@@ -2149,8 +2209,8 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                           <LocationOn sx={{ fontSize: 12, color: "#94a3b8", mt: "2px", flexShrink: 0 }} />
                           <Typography sx={{ fontSize: "0.75rem", color: "#64748b", lineHeight: 1.5 }}>
                             {resolvedAddress ||
-                              (typeof punchInLocation?.address === "string" ? punchInLocation.address : punchInLocation?.address?.full || punchInLocation?.address?.short) ||
-                              (punchInLocation?.lat ? "Fetching address…" : "Location not available")}
+                              (!isRawCoordinateValue(punchInLocation?.address) ? (typeof punchInLocation?.address === "string" ? punchInLocation.address : punchInLocation?.address?.full || punchInLocation?.address?.short) : null) ||
+                              (punchInLocation?.lat ? "Locating address…" : "Location not available")}
                           </Typography>
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
@@ -2203,8 +2263,8 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                             <LocationOn sx={{ fontSize: 12, color: PRIMARY, mt: "2px", flexShrink: 0 }} />
                             <Typography sx={{ fontSize: "0.75rem", color: "#475569", lineHeight: 1.5 }}>
                               {resolvedAddress ||
-                                (typeof punchInLocation.address === "string" ? punchInLocation.address : punchInLocation.address?.full || punchInLocation.address?.short) ||
-                                (punchInLocation?.lat ? "Fetching address…" : "")}
+                                (!isRawCoordinateValue(punchInLocation?.address) ? (typeof punchInLocation.address === "string" ? punchInLocation.address : punchInLocation.address?.full || punchInLocation.address?.short) : null) ||
+                                (punchInLocation?.lat ? "Locating address…" : "")}
                             </Typography>
                           </Box>
                         </Box>

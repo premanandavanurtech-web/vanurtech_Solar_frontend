@@ -36,18 +36,50 @@ export function useToast() {
 const ICONS = {
   success: "✓",
   error:   "✕",
-  warn:    "⚠",
+  warn:    "!",
   info:    "ℹ",
 };
 
-const COLORS = {
-  success: { bg: "#f0fdf4", border: "#86efac", icon: "#16a34a", bar: "#22c55e", text: "#14532d" },
-  error:   { bg: "#fff1f2", border: "#fda4af", icon: "#dc2626", bar: "#ef4444", text: "#7f1d1d" },
-  warn:    { bg: "#fffbeb", border: "#fcd34d", icon: "#d97706", bar: "#f59e0b", text: "#78350f" },
-  info:    { bg: "#eff6ff", border: "#93c5fd", icon: "#2563eb", bar: "#3b82f6", text: "#1e3a8a" },
+const THEMES = {
+  success: {
+    bg: "#ffffff",
+    border: "rgba(16, 185, 129, 0.3)",
+    iconBg: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+    iconShadow: "0 4px 12px rgba(16, 185, 129, 0.35)",
+    bar: "#10b981",
+    title: "#065f46",
+    text: "#1e293b",
+  },
+  error: {
+    bg: "#ffffff",
+    border: "rgba(239, 68, 68, 0.3)",
+    iconBg: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+    iconShadow: "0 4px 12px rgba(239, 68, 68, 0.35)",
+    bar: "#ef4444",
+    title: "#991b1b",
+    text: "#1e293b",
+  },
+  warn: {
+    bg: "#ffffff",
+    border: "rgba(245, 158, 11, 0.3)",
+    iconBg: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+    iconShadow: "0 4px 12px rgba(245, 158, 11, 0.35)",
+    bar: "#f59e0b",
+    title: "#92400e",
+    text: "#1e293b",
+  },
+  info: {
+    bg: "#ffffff",
+    border: "rgba(59, 130, 246, 0.3)",
+    iconBg: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+    iconShadow: "0 4px 12px rgba(59, 130, 246, 0.35)",
+    bar: "#3b82f6",
+    title: "#1e40af",
+    text: "#1e293b",
+  },
 };
 
-const DURATION = 4500; // ms
+const DURATION = 4200; // ms
 
 export function ToastContainer() {
   const [toasts, setToasts] = useState([]);
@@ -61,7 +93,7 @@ export function ToastContainer() {
         );
         setTimeout(() => {
           setToasts((prev) => prev.filter((x) => x.id !== t.id));
-        }, 380);
+        }, 320);
       }, DURATION);
     };
     listeners.add(handler);
@@ -74,55 +106,64 @@ export function ToastContainer() {
     );
     setTimeout(() => {
       setToasts((prev) => prev.filter((x) => x.id !== id));
-    }, 380);
+    }, 320);
   };
 
   return (
     <>
       <style>{`
-        @keyframes toastIn {
-          from { opacity: 0; transform: translateX(110%); }
-          to   { opacity: 1; transform: translateX(0); }
+        @keyframes toastSlideInCenter {
+          0%   { opacity: 0; transform: translateY(-24px) scale(0.92); filter: blur(4px); }
+          100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
-        @keyframes toastOut {
-          from { opacity: 1; transform: translateX(0); max-height: 100px; margin-bottom: 10px; }
-          to   { opacity: 0; transform: translateX(110%); max-height: 0;   margin-bottom: 0;  }
+        @keyframes toastSlideOutCenter {
+          0%   { opacity: 1; transform: translateY(0) scale(1); max-height: 120px; margin-bottom: 12px; }
+          100% { opacity: 0; transform: translateY(-20px) scale(0.92); max-height: 0; margin-bottom: 0; }
         }
-        @keyframes toastBar {
+        @keyframes toastProgressBar {
           from { width: 100%; }
           to   { width: 0%; }
         }
-        .toast-item {
-          animation: toastIn 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards;
+        .premium-toast-item {
+          animation: toastSlideInCenter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .toast-item.hiding {
-          animation: toastOut 0.38s ease-in forwards;
+        .premium-toast-item:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 20px 48px -8px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.08) !important;
+        }
+        .premium-toast-item.hiding {
+          animation: toastSlideOutCenter 0.30s ease-in forwards;
         }
       `}</style>
 
       <div style={{
         position:  "fixed",
-        top:       20,
-        right:     20,
-        zIndex:    99999,
+        top:       24,
+        left:      "50%",
+        transform: "translateX(-50%)",
+        zIndex:    999999,
         display:   "flex",
         flexDirection: "column",
-        gap:       10,
-        maxWidth:  360,
-        width:     "calc(100vw - 40px)",
+        alignItems: "center",
+        gap:       12,
+        maxWidth:  480,
+        width:     "calc(100vw - 32px)",
         pointerEvents: "none",
       }}>
         {toasts.map((t) => {
-          const c = COLORS[t.type] || COLORS.info;
+          const c = THEMES[t.type] || THEMES.info;
           return (
             <div
               key={t.id}
-              className={`toast-item${t.visible ? "" : " hiding"}`}
+              className={`premium-toast-item${t.visible ? "" : " hiding"}`}
               style={{
+                width:        "100%",
                 background:   c.bg,
                 border:       `1px solid ${c.border}`,
-                borderRadius: 12,
-                boxShadow:    "0 4px 24px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)",
+                borderRadius: "16px",
+                boxShadow:    "0 16px 40px -6px rgba(0,0,0,0.14), 0 4px 16px rgba(0,0,0,0.06)",
+                backdropFilter: "blur(14px)",
                 overflow:     "hidden",
                 pointerEvents: "all",
                 cursor:       "pointer",
@@ -132,47 +173,36 @@ export function ToastContainer() {
               {/* Content */}
               <div style={{
                 display:    "flex",
-                alignItems: "flex-start",
-                gap:        10,
-                padding:    "13px 14px 10px",
+                alignItems: "center",
+                gap:        14,
+                padding:    "14px 18px",
               }}>
-                {/* Icon badge */}
+                {/* Glowing Gradient Icon badge */}
                 <div style={{
-                  width:        28,
-                  height:       28,
-                  borderRadius: "50%",
-                  background:   c.icon,
-                  color:        "#fff",
+                  width:        34,
+                  height:       34,
+                  borderRadius: "11px",
+                  background:   c.iconBg,
+                  boxShadow:    c.iconShadow,
+                  color:        "#ffffff",
                   display:      "flex",
                   alignItems:   "center",
                   justifyContent: "center",
-                  fontSize:     13,
-                  fontWeight:   800,
+                  fontSize:     15,
+                  fontWeight:   900,
                   flexShrink:   0,
-                  marginTop:    1,
                 }}>
                   {ICONS[t.type]}
                 </div>
 
                 {/* Text */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {t.title && (
-                    <div style={{
-                      fontSize:   13,
-                      fontWeight: 700,
-                      color:      c.text,
-                      marginBottom: 2,
-                      lineHeight: 1.3,
-                    }}>
-                      {t.title}
-                    </div>
-                  )}
                   <div style={{
-                    fontSize:   13,
+                    fontSize:   "0.88rem",
+                    fontWeight: 700,
                     color:      c.text,
-                    opacity:    t.title ? 0.8 : 1,
                     lineHeight: 1.45,
-                    wordBreak:  "break-word",
+                    letterSpacing: "-0.01em",
                   }}>
                     {t.message}
                   </div>
@@ -182,30 +212,37 @@ export function ToastContainer() {
                 <button
                   onClick={(e) => { e.stopPropagation(); dismiss(t.id); }}
                   style={{
-                    background: "none",
+                    background: "rgba(0,0,0,0.04)",
                     border:     "none",
+                    borderRadius: "8px",
                     cursor:     "pointer",
-                    color:      c.icon,
-                    opacity:    0.6,
-                    fontSize:   16,
-                    lineHeight: 1,
-                    padding:    "0 2px",
+                    color:      "#64748b",
+                    fontSize:   14,
+                    width:      24,
+                    height:     24,
+                    display:    "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding:    0,
                     flexShrink: 0,
+                    transition: "all 0.15s ease",
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.1)"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.04)"}
                 >
-                  ×
+                  ✕
                 </button>
               </div>
 
-              {/* Progress bar */}
+              {/* Smooth Progress Bar */}
               <div style={{
                 height:     3,
-                background: `${c.bar}30`,
+                background: "rgba(0,0,0,0.04)",
               }}>
                 <div style={{
                   height:           "100%",
                   background:       c.bar,
-                  animation:        `toastBar ${DURATION}ms linear forwards`,
+                  animation:        `toastProgressBar ${DURATION}ms linear forwards`,
                   transformOrigin:  "left",
                 }} />
               </div>

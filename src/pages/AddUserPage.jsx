@@ -53,37 +53,47 @@ const PRIMARY_COLOR = "#3a5ac8";
 const SECONDARY_COLOR = "#2c489e";
 
 const ROLE_CONFIG = {
-  ADMIN: { label: "Admin", icon: <Security />, description: "Full system access and administration rights", color: "#3a5ac8", shortDesc: "Admin" },
-  MANAGER: { label: "Manager", icon: <Group />, description: "Manage operations and approvals", color: "#3a5ac8", shortDesc: "Manager" },
-  SUPERVISOR: { label: "Supervisor", icon: <Group />, description: "Supervise installers and approve worksheets", color: "#3a5ac8", shortDesc: "Supervisor" },
-  INSTALLER: { label: "Installer", icon: <Person />, description: "Field work and daily worksheet entry", color: "#3a5ac8", shortDesc: "Installer" },
   Admin_panel: {
-    label: "Admin",
+    label: "Admin panel",
     icon: <Security />,
     description: "Full system access and administration rights",
     color: "#3a5ac8",
-    shortDesc: "Admin",
+    shortDesc: "Admin panel",
+  },
+  ADMIN: {
+    label: "Admin panel",
+    icon: <Security />,
+    description: "Full system access and administration rights",
+    color: "#3a5ac8",
+    shortDesc: "Admin panel",
   },
   ZSM: {
     label: "Manager",
     icon: <Group />,
-    description: "Manage regional teams and operations",
+    description: "Manage operations and approvals",
     color: "#3a5ac8",
     shortDesc: "Manager",
   },
-  Incharge: {
+  MANAGER: {
+    label: "Manager",
+    icon: <Group />,
+    description: "Manage operations and approvals",
+    color: "#3a5ac8",
+    shortDesc: "Manager",
+  },
+  SUPERVISOR: {
     label: "Supervisor",
     icon: <Group />,
-    description: "Manage local teams and field operations",
+    description: "Supervise incharge teams and operations",
     color: "#3a5ac8",
     shortDesc: "Supervisor",
   },
-  TEAM: {
-    label: "Installer",
+  Incharge: {
+    label: "Incharge",
     icon: <Person />,
-    description: "Field operations and lead management",
+    description: "Manage local site operations and tasks",
     color: "#3a5ac8",
-    shortDesc: "Installer",
+    shortDesc: "Incharge",
   },
 };
 
@@ -98,10 +108,8 @@ const normalizeRole = (role) => {
     manager: "ZSM",
     zsm: "ZSM",
     operation_lead: "ZSM",
-    supervisor: "Incharge",
+    supervisor: "SUPERVISOR",
     incharge: "Incharge",
-    installer: "TEAM",
-    team: "TEAM",
   };
   return map[key] || role;
 };
@@ -168,26 +176,28 @@ export default function AddUserPage() {
 
   const missingPasswordRules = passwordRuleChecks.filter((rule) => !rule.valid);
   const [activeStep, setActiveStep] = useState(0);
+
+
   const [touched, setTouched] = useState({});
 
   // Determine available roles based on current user's role
   const getAvailableRoles = () => {
     const currentRole = normalizeRole(currentUser?.role);
     if (currentRole === "Admin_panel") {
-      return ["Admin_panel", "ZSM", "Incharge", "TEAM"];
+      return ["Admin_panel", "ZSM", "SUPERVISOR", "Incharge"];
     } else if (currentRole === "ZSM") {
-      return ["Incharge", "TEAM"];
-    } else if (currentRole === "Incharge") {
-      return ["TEAM"];
+      return ["SUPERVISOR", "Incharge"];
+    } else if (currentRole === "SUPERVISOR") {
+      return ["Incharge"];
     }
-    return [];
+    return ["Incharge"];
   };
 
   const roles = getAvailableRoles();
 
-  // Fetch supervisors for TEAM role
+  // Fetch supervisors for Incharge / Supervisor role
   useEffect(() => {
-    if (formData.role === "TEAM") {
+    if (formData.role === "Incharge" || formData.role === "SUPERVISOR") {
       fetchSupervisors();
     }
   }, [formData.role]);
@@ -200,25 +210,26 @@ export default function AddUserPage() {
         const currentRole = normalizeRole(currentUser?.role);
         if (currentRole === "Admin_panel") {
           filteredSupervisors = data.result.users.filter((u) =>
-            ["Admin_panel", "ZSM", "Incharge"].includes(normalizeRole(u.role)),
+            ["Admin_panel", "ZSM", "SUPERVISOR"].includes(normalizeRole(u.role))
           );
         } else if (currentRole === "ZSM") {
           filteredSupervisors = data.result.users.filter((u) =>
-            ["ZSM", "Incharge"].includes(normalizeRole(u.role)),
+            ["ZSM", "SUPERVISOR"].includes(normalizeRole(u.role))
           );
-        } else if (currentRole === "Incharge") {
+        } else if (currentRole === "SUPERVISOR") {
           filteredSupervisors = data.result.users.filter(
-            (u) => normalizeRole(u.role) === "Incharge",
+            (u) => normalizeRole(u.role) === "SUPERVISOR"
           );
+        } else {
+          filteredSupervisors = data.result.users;
         }
         setSupervisors(filteredSupervisors);
       }
-    } catch (error) {
-      console.error("Error fetching supervisors:", error);
+    } catch (err) {
+      console.error("Error fetching supervisors:", err);
     }
   };
 
-  // Validate specific field
   const validateField = (field, value) => {
     const newErrors = { ...errors };
 
@@ -891,8 +902,8 @@ export default function AddUserPage() {
             </Grid>
           )}
 
-          {/* Supervisor Selection for TEAM */}
-          {formData.role === "TEAM" && (!isMobile || activeStep === 2) && (
+          {/* Supervisor Selection for Incharge / Supervisor */}
+          {(formData.role === "Incharge" || formData.role === "SUPERVISOR") && (!isMobile || activeStep === 2) && (
             <Grid item xs={12}>
               <Typography
                 variant="subtitle1"
@@ -950,8 +961,7 @@ export default function AddUserPage() {
                 color="text.secondary"
                 sx={{ mt: 1, display: "block" }}
               >
-                Team members can be assigned to supervisors for better
-                management
+                Users can be assigned to supervisors for better management
               </Typography>
             </Grid>
           )}
@@ -973,37 +983,15 @@ export default function AddUserPage() {
                 </Typography>
                 <Typography variant="body2">
                   {normalizeRole(currentUser.role) === "Admin_panel" &&
-                    "Admin -> Manager -> Supervisor -> Installer"}
+                    "Admin panel -> Manager -> Supervisor -> Incharge"}
                   {normalizeRole(currentUser.role) === "ZSM" &&
-                    "Manager -> Supervisor -> Installer"}
+                    "Manager -> Supervisor -> Incharge"}
+                  {normalizeRole(currentUser.role) === "SUPERVISOR" &&
+                    "Supervisor -> Incharge"}
                   {normalizeRole(currentUser.role) === "Incharge" &&
-                    "Supervisor -> Installer"}
-                </Typography>
-                <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
-                  You can only manage roles below your own in the hierarchy.
+                    "Incharge"}
                 </Typography>
               </Alert>
-            </Grid>
-          )}
-
-          {/* Mobile Step Navigation */}
-          {isMobile && activeStep < 2 && (
-            <Grid item xs={12}>
-              <Box display="flex" justifyContent="flex-end">
-                <Button
-                  variant="contained"
-                  onClick={handleNext}
-                  disabled={loading}
-                  sx={{
-                    bgcolor: PRIMARY_COLOR,
-                    "&:hover": { bgcolor: SECONDARY_COLOR },
-                    borderRadius: 2,
-                    px: 4,
-                  }}
-                >
-                  Next Step
-                </Button>
-              </Box>
             </Grid>
           )}
 

@@ -76,6 +76,7 @@ const LeadAssignDialog = ({
   showSnackbar,
 }) => {
   const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
   const { fetchAPI, user } = useAuth();
 
@@ -97,6 +98,13 @@ const LeadAssignDialog = ({
   }, [record]);
   const recordChipLabel = recordTypeLabel || "Lead";
   const selectedUsers = assignToRole === "Incharge" ? inchargeUsers : teamUsers;
+  const surface = isDark ? "#0b1120" : "#f6fbfd";
+  const panel = isDark ? "#111827" : "#fff";
+  const panelSoft = isDark ? "#0f172a" : "#fff";
+  const textMain = isDark ? "#f8fafc" : "#1f2937";
+  const textMuted = isDark ? "#94a3b8" : "text.secondary";
+  const border = isDark ? "rgba(148, 163, 184, 0.18)" : "rgba(15, 31, 61, 0.1)";
+  const accent = isDark ? "#38bdf8" : "#4c63f2";
 
   const resetState = useCallback(() => {
     setAvailableRoles([]);
@@ -269,15 +277,18 @@ const LeadAssignDialog = ({
           sx: {
             borderRadius: fullScreen ? 0 : 4,
             overflow: "hidden",
+            bgcolor: panel,
+            color: textMain,
+            backgroundImage: "none",
           },
         }}
       >
-        <DialogContent sx={{ p: 0 }}>
+        <DialogContent sx={{ p: 0, bgcolor: surface }}>
           <Box
             sx={{
               p: 3,
               color: "#fff",
-              background: "linear-gradient(135deg, #1a2747 0%, #3f7a93 100%)",
+              background: isDark ? "linear-gradient(135deg, #0f172a 0%, #155e75 100%)" : "linear-gradient(135deg, #1a2747 0%, #3f7a93 100%)",
             }}
           >
             <Typography variant="h6" fontWeight={800}>
@@ -288,12 +299,12 @@ const LeadAssignDialog = ({
             </Typography>
           </Box>
           <Box sx={{ p: 3 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color={textMuted}>
               Role: {userRole || "Unknown"}
             </Typography>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
+        <DialogActions sx={{ px: 3, pb: 3, bgcolor: panel }}>
           <Button onClick={onClose} variant="contained">
             Close
           </Button>
@@ -314,7 +325,10 @@ const LeadAssignDialog = ({
         sx: {
           borderRadius: fullScreen ? 0 : 5,
           overflow: "hidden",
-          boxShadow: "0 24px 64px rgba(15, 31, 61, 0.18)",
+          bgcolor: panel,
+          color: textMain,
+          backgroundImage: "none",
+          boxShadow: isDark ? "0 24px 80px rgba(0,0,0,0.65)" : "0 24px 64px rgba(15, 31, 61, 0.18)",
         },
       }}
     >
@@ -326,7 +340,7 @@ const LeadAssignDialog = ({
           py: { xs: 2.5, sm: 3 },
           minHeight: 128,
           color: "#fff",
-          background: "linear-gradient(135deg, #14233f 0%, #276e89 100%)",
+          background: isDark ? "linear-gradient(135deg, #0f172a 0%, #155e75 100%)" : "linear-gradient(135deg, #14233f 0%, #276e89 100%)",
         }}
       >
         <Box
@@ -374,16 +388,16 @@ const LeadAssignDialog = ({
         </Stack>
       </Box>
 
-      <DialogContent sx={{ p: 0, bgcolor: "#f6fbfd" }}>
+      <DialogContent sx={{ p: 0, bgcolor: surface, color: textMain }}>
         <Box sx={{ px: { xs: 2.5, sm: 3.5 }, py: { xs: 2.5, sm: 3 } }}>
           <Box
             sx={{
               p: { xs: 2, sm: 2.5 },
               mb: 3,
               borderRadius: 4,
-              bgcolor: "#fff",
-              border: "1px solid rgba(15, 31, 61, 0.08)",
-              boxShadow: "0 10px 24px rgba(15, 31, 61, 0.04)",
+              bgcolor: panel,
+              border: `1px solid ${border}`,
+              boxShadow: isDark ? "0 10px 30px rgba(0,0,0,0.22)" : "0 10px 24px rgba(15, 31, 61, 0.04)",
             }}
           >
             <Stack direction="row" spacing={2} alignItems="center">
@@ -391,8 +405,8 @@ const LeadAssignDialog = ({
                 sx={{
                   width: 58,
                   height: 58,
-                  bgcolor: alpha("#2f6f8d", 0.12),
-                  color: "#2f6f8d",
+                  bgcolor: alpha(accent, 0.16),
+                  color: accent,
                   fontWeight: 800,
                 }}
               >
@@ -405,16 +419,16 @@ const LeadAssignDialog = ({
                 <Stack direction="row" spacing={1} sx={{ mt: 0.75, flexWrap: "wrap" }}>
                   {recordContact[0] && (
                     <Stack direction="row" spacing={0.75} alignItems="center">
-                      <Email sx={{ fontSize: 16, color: "text.secondary" }} />
-                      <Typography variant="body2" color="text.secondary" noWrap>
+                      <Email sx={{ fontSize: 16, color: textMuted }} />
+                      <Typography variant="body2" color={textMuted} noWrap>
                         {recordContact[0]}
                       </Typography>
                     </Stack>
                   )}
                   {recordContact[1] && (
                     <Stack direction="row" spacing={0.75} alignItems="center">
-                      <Phone sx={{ fontSize: 16, color: "text.secondary" }} />
-                      <Typography variant="body2" color="text.secondary" noWrap>
+                      <Phone sx={{ fontSize: 16, color: textMuted }} />
+                      <Typography variant="body2" color={textMuted} noWrap>
                         {recordContact[1]}
                       </Typography>
                     </Stack>
@@ -427,8 +441,8 @@ const LeadAssignDialog = ({
                     mt: 1.2,
                     borderRadius: 999,
                     fontWeight: 700,
-                    bgcolor: alpha("#4c63f2", 0.12),
-                    color: "#4c63f2",
+                    bgcolor: alpha(accent, 0.14),
+                    color: accent,
                   }}
                 />
               </Box>
@@ -461,19 +475,19 @@ const LeadAssignDialog = ({
                     textTransform: "none",
                     fontSize: 16,
                     fontWeight: 600,
-                    borderColor: selected ? "#4c63f2" : "rgba(15, 31, 61, 0.12)",
-                    color: "#1f2937",
-                    bgcolor: selected ? alpha("#4c63f2", 0.06) : "#fff",
+                    borderColor: selected ? accent : border,
+                    color: textMain,
+                    bgcolor: selected ? alpha(accent, 0.14) : panelSoft,
                     "&:hover": {
                       borderWidth: 1.5,
-                      borderColor: "#4c63f2",
-                      bgcolor: alpha("#4c63f2", 0.04),
+                      borderColor: accent,
+                      bgcolor: alpha(accent, 0.1),
                     },
                   }}
                 >
                   {role === "Incharge" ? "Incharge" : "Team"}
                   {selected && (
-                    <Box sx={{ ml: "auto", display: "flex", color: "#4c63f2" }}>
+                    <Box sx={{ ml: "auto", display: "flex", color: accent }}>
                       <CheckCircle fontSize="small" />
                     </Box>
                   )}
@@ -491,7 +505,7 @@ const LeadAssignDialog = ({
               {loadingUsers ? (
                 <Box sx={{ py: 4, textAlign: "center" }}>
                   <CircularProgress size={30} />
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1.25 }}>
+                  <Typography variant="body2" color={textMuted} sx={{ mt: 1.25 }}>
                     Loading available users...
                   </Typography>
                 </Box>
@@ -512,15 +526,15 @@ const LeadAssignDialog = ({
                           p: 1.5,
                           borderRadius: 3,
                           cursor: "pointer",
-                          border: `1.5px solid ${selected ? "#4c63f2" : "rgba(15, 31, 61, 0.1)"}`,
-                          bgcolor: selected ? alpha("#4c63f2", 0.05) : "#fff",
+                          border: `1.5px solid ${selected ? accent : border}`,
+                          bgcolor: selected ? alpha(accent, 0.14) : panelSoft,
                           display: "flex",
                           alignItems: "center",
                           gap: 1.5,
                           transition: "all 0.2s ease",
                           "&:hover": {
-                            borderColor: "#4c63f2",
-                            bgcolor: alpha("#4c63f2", 0.03),
+                            borderColor: accent,
+                            bgcolor: alpha(accent, 0.1),
                           },
                         }}
                       >
@@ -528,8 +542,8 @@ const LeadAssignDialog = ({
                           sx={{
                             width: 42,
                             height: 42,
-                            bgcolor: alpha("#2f6f8d", 0.16),
-                            color: "#2f6f8d",
+                            bgcolor: alpha(accent, 0.18),
+                            color: accent,
                             fontWeight: 800,
                           }}
                         >
@@ -540,7 +554,7 @@ const LeadAssignDialog = ({
                             {name}
                           </Typography>
                           {secondary && (
-                            <Typography variant="caption" color="text.secondary" noWrap>
+                            <Typography variant="caption" color={textMuted} noWrap>
                               {secondary}
                             </Typography>
                           )}
@@ -550,8 +564,8 @@ const LeadAssignDialog = ({
                             width: 22,
                             height: 22,
                             borderRadius: "50%",
-                            border: `2px solid ${selected ? "#4c63f2" : "rgba(15, 31, 61, 0.16)"}`,
-                            bgcolor: selected ? "#4c63f2" : "transparent",
+                            border: `2px solid ${selected ? accent : border}`,
+                            bgcolor: selected ? accent : "transparent",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -569,12 +583,12 @@ const LeadAssignDialog = ({
                     p: 3,
                     borderRadius: 3,
                     textAlign: "center",
-                    bgcolor: "#fff",
-                    border: "1px dashed rgba(15, 31, 61, 0.16)",
+                    bgcolor: panelSoft,
+                    border: `1px dashed ${border}`,
                   }}
                 >
-                  <Person sx={{ fontSize: 34, color: alpha("#2f6f8d", 0.45) }} />
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  <Person sx={{ fontSize: 34, color: alpha(accent, 0.55) }} />
+                  <Typography variant="body2" color={textMuted} sx={{ mt: 1 }}>
                     No available users found.
                   </Typography>
                 </Box>
@@ -588,9 +602,9 @@ const LeadAssignDialog = ({
                 mt: 3,
                 p: 1.5,
                 borderRadius: 2.5,
-                bgcolor: alpha("#ef4444", 0.08),
-                color: "#b91c1c",
-                border: "1px solid rgba(239, 68, 68, 0.18)",
+                bgcolor: alpha("#ef4444", isDark ? 0.16 : 0.08),
+                color: isDark ? "#fca5a5" : "#b91c1c",
+                border: `1px solid ${alpha("#ef4444", isDark ? 0.28 : 0.18)}`,
                 fontSize: 14,
               }}
             >
@@ -604,8 +618,8 @@ const LeadAssignDialog = ({
         sx={{
           px: { xs: 2.5, sm: 3.5 },
           py: 2.5,
-          bgcolor: "#fff",
-          borderTop: "1px solid rgba(15, 31, 61, 0.08)",
+          bgcolor: panel,
+          borderTop: `1px solid ${border}`,
           gap: 1.5,
         }}
       >
@@ -616,11 +630,11 @@ const LeadAssignDialog = ({
           sx={{
             minWidth: 140,
             borderRadius: 999,
-            borderColor: "rgba(47, 111, 141, 0.35)",
-            color: "#2f6f8d",
+            borderColor: alpha(accent, 0.45),
+            color: accent,
             fontWeight: 700,
             textTransform: "none",
-            "&:hover": { borderColor: "#2f6f8d", bgcolor: alpha("#2f6f8d", 0.04) },
+            "&:hover": { borderColor: accent, bgcolor: alpha(accent, 0.08) },
           }}
         >
           Cancel
@@ -639,8 +653,8 @@ const LeadAssignDialog = ({
             boxShadow: "0 10px 18px rgba(242, 137, 46, 0.25)",
             "&:hover": { bgcolor: "#dd7720" },
             "&.Mui-disabled": {
-              bgcolor: alpha("#f2892e", 0.35),
-              color: "#fff",
+              bgcolor: alpha(isDark ? "#94a3b8" : "#f2892e", 0.28),
+              color: isDark ? "#cbd5e1" : "#fff",
             },
           }}
         >

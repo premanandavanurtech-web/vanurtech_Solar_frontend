@@ -160,6 +160,9 @@ const Topbar = ({
   }, []);
   
   const handleLogout = useCallback(async () => {
+    if (!window.confirm('Are you sure you want to log out?')) {
+      return;
+    }
     try {
       setLoggingOut(true);
       handleClose();

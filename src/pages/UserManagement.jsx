@@ -28,6 +28,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Menu,
   Dialog,
   DialogContent,
   DialogActions,
@@ -89,6 +90,8 @@ import {
   VerifiedUser,
   PersonRemove,
   ErrorOutline,
+  MoreVert,
+  InfoOutlined,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -105,64 +108,79 @@ const PERIOD_OPTIONS = [
 ];
 
 const ROLE_CONFIG = {
-  ADMIN: { color: PRIMARY_COLOR, bg: alpha(PRIMARY_COLOR, 0.08), icon: <AdminPanelSettings fontSize="small" />, label: "Admin / Super Admin", level: 1 },
-  PROJECT_HEAD: { color: PRIMARY_COLOR, bg: alpha(PRIMARY_COLOR, 0.08), icon: <SupervisorAccount fontSize="small" />, label: "Project Head", level: 2 },
-  MANAGER: { color: PRIMARY_COLOR, bg: alpha(PRIMARY_COLOR, 0.08), icon: <SupervisorAccount fontSize="small" />, label: "Manager (Backend / Ops)", level: 3 },
-  SUPERVISOR: { color: PRIMARY_COLOR, bg: alpha(PRIMARY_COLOR, 0.08), icon: <SupervisorAccount fontSize="small" />, label: "Supervisor", level: 4 },
-  INSTALLER: { color: PRIMARY_COLOR, bg: alpha(PRIMARY_COLOR, 0.08), icon: <Group fontSize="small" />, label: "Installer", level: 5 },
   Admin_panel: {
     color: PRIMARY_COLOR,
     bg: alpha(PRIMARY_COLOR, 0.08),
     icon: <AdminPanelSettings fontSize="small" />,
-    label: "Admin Panel",
+    label: "Admin panel",
+    level: 1,
+  },
+  ADMIN: {
+    color: PRIMARY_COLOR,
+    bg: alpha(PRIMARY_COLOR, 0.08),
+    icon: <AdminPanelSettings fontSize="small" />,
+    label: "Admin panel",
     level: 1,
   },
   ZSM: {
     color: PRIMARY_COLOR,
     bg: alpha(PRIMARY_COLOR, 0.08),
     icon: <SupervisorAccount fontSize="small" />,
-    label: "Operation Lead",
+    label: "Manager",
     level: 2,
+  },
+  MANAGER: {
+    color: PRIMARY_COLOR,
+    bg: alpha(PRIMARY_COLOR, 0.08),
+    icon: <SupervisorAccount fontSize="small" />,
+    label: "Manager",
+    level: 2,
+  },
+  SUPERVISOR: {
+    color: PRIMARY_COLOR,
+    bg: alpha(PRIMARY_COLOR, 0.08),
+    icon: <SupervisorAccount fontSize="small" />,
+    label: "Supervisor",
+    level: 3,
   },
   Incharge: {
     color: PRIMARY_COLOR,
     bg: alpha(PRIMARY_COLOR, 0.08),
     icon: <Group fontSize="small" />,
-    label: "Supervisor",
-    level: 3,
-  },
-  TEAM: {
-    color: PRIMARY_COLOR,
-    bg: alpha(PRIMARY_COLOR, 0.08),
-    icon: <Group fontSize="small" />,
-    label: "Installer",
-    level: 5,
+    label: "Incharge",
+    level: 4,
   },
 };
 
 const normalizeRole = (role) => {
   const value = String(role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   const map = {
-    head_office: "ADMIN",
-    admin_panel: "ADMIN",
-    admin: "ADMIN",
-    super_admin: "ADMIN",
-    zsm: "PROJECT_HEAD",
-    project_head: "PROJECT_HEAD",
-    manager: "MANAGER",
-    incharge: "SUPERVISOR",
+    head_office: "Admin_panel",
+    admin_panel: "Admin_panel",
+    admin: "Admin_panel",
+    super_admin: "Admin_panel",
+    zsm: "ZSM",
+    project_head: "ZSM",
+    manager: "ZSM",
+    operation_lead: "ZSM",
+    operationlead: "ZSM",
     supervisor: "SUPERVISOR",
-    team: "INSTALLER",
-    installer: "INSTALLER",
+    incharge: "Incharge",
+    team: "Incharge",
+    installer: "Incharge",
   };
   return map[value] || role;
 };
 
-const getRoleConfig = (role) => ROLE_CONFIG[normalizeRole(role)] || ROLE_CONFIG[role] || ROLE_CONFIG.INSTALLER;
-const isAdminRole = (role) => normalizeRole(role) === "ADMIN";
-const isInstallerRole = (role) => normalizeRole(role) === "INSTALLER";
-const MANAGER_ROLE_KEYS = ["ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR"];
-const EDITABLE_ROLE_KEYS = ["ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"];
+const getRoleConfig = (role) => ROLE_CONFIG[normalizeRole(role)] || ROLE_CONFIG[role] || ROLE_CONFIG.Incharge;
+const isAdminRole = (role) => normalizeRole(role) === "Admin_panel" || normalizeRole(role) === "ADMIN";
+const isManagerRole = (role) => normalizeRole(role) === "ZSM" || normalizeRole(role) === "MANAGER";
+const isSupervisorRole = (role) => normalizeRole(role) === "SUPERVISOR";
+const isInchargeRole = (role) => normalizeRole(role) === "Incharge";
+const isInstallerRole = (role) => normalizeRole(role) === "Incharge" || normalizeRole(role) === "TEAM" || normalizeRole(role) === "INSTALLER";
+
+const MANAGER_ROLE_KEYS = ["Admin_panel", "ZSM", "SUPERVISOR"];
+const EDITABLE_ROLE_KEYS = ["Admin_panel", "ZSM", "SUPERVISOR", "Incharge"];
 
 const STATUS_CONFIG = {
   active: {
@@ -311,7 +329,7 @@ const MobileFilterDrawer = ({
       anchor="bottom"
       open={open}
       onClose={onClose}
-      onOpen={() => {}}
+      onOpen={() => { }}
       disableSwipeToOpen={false}
       PaperProps={{
         sx: {
@@ -854,6 +872,7 @@ const MobileUserCard = ({
   onAssign,
   onViewPassword,
   onDelete,
+  onViewDetails,
   currentUserRole,
   currentUserId,
   statusLoading,
@@ -871,14 +890,14 @@ const MobileUserCard = ({
     if (isAdminRole(currentUserRole)) return true;
     const userRoleLevel = getRoleConfig(user.role)?.level || 999;
     const currentRoleLevel = getRoleConfig(currentUserRole)?.level || 0;
-    if (normalizedCurrentRole === "PROJECT_HEAD" || normalizedCurrentRole === "MANAGER") return userRoleLevel > currentRoleLevel;
-    if (normalizedCurrentRole === "SUPERVISOR") return isInstallerRole(user.role);
+    if (normalizedCurrentRole === "ZSM" || normalizedCurrentRole === "MANAGER") return userRoleLevel > currentRoleLevel;
+    if (normalizedCurrentRole === "SUPERVISOR") return normalizedUserRole === "Incharge";
     return false;
   }, [currentUserRole, user, currentUserId, normalizedCurrentRole]);
 
   const canToggleStatus = canEdit;
   const canAssign =
-    normalizedUserRole === "INSTALLER" &&
+    normalizedUserRole === "Incharge" &&
     MANAGER_ROLE_KEYS.includes(normalizedCurrentRole) &&
     !user.supervisor;
   const canViewPassword = isAdminRole(currentUserRole);
@@ -1042,6 +1061,23 @@ const MobileUserCard = ({
 
             {/* Action Buttons */}
             <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
+              {onViewDetails && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<InfoOutlined sx={{ ml: 1 }} />}
+                  onClick={() => onViewDetails(user)}
+                  sx={{
+                    flex: 1,
+                    borderColor: "#1d68f0",
+                    color: "#1d68f0",
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  Details
+                </Button>
+              )}
               {canEdit && (
                 <Button
                   size="small"
@@ -1187,39 +1223,39 @@ const EmptyState = ({ onClearFilters, hasFilters, canAddUser, onAddUser }) => {
       <Typography variant="h6" fontWeight={600} gutterBottom sx={{ color: isDark ? "#f8fafc" : "inherit" }}>
         No users found
       </Typography>
-    <Typography
-      variant="body2"
-      color="text.secondary"
-      sx={{ mb: 3, maxWidth: 400, mx: "auto" }}
-    >
-      {hasFilters
-        ? "No users match your current filters. Try adjusting your search criteria."
-        : canAddUser
-        ? "Add your first user to get started"
-        : "No users available"}
-    </Typography>
-    {hasFilters && (
-      <Button
-        variant="contained"
-        onClick={onClearFilters}
-        startIcon={<Clear />}
-        sx={{ bgcolor: isDark ? "#3b82f6" : PRIMARY_COLOR, "&:hover": { bgcolor: isDark ? "#2563eb" : SECONDARY_COLOR } }}
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ mb: 3, maxWidth: 400, mx: "auto" }}
       >
-        Clear All Filters
-      </Button>
-    )}
-    {!hasFilters && canAddUser && (
-      <Button
-        variant="contained"
-        onClick={onAddUser}
-        startIcon={<Add />}
-        sx={{ bgcolor: isDark ? "#3b82f6" : PRIMARY_COLOR, "&:hover": { bgcolor: isDark ? "#2563eb" : SECONDARY_COLOR } }}
-      >
-        Add First User
-      </Button>
-    )}
-  </Box>
-);
+        {hasFilters
+          ? "No users match your current filters. Try adjusting your search criteria."
+          : canAddUser
+            ? "Add your first user to get started"
+            : "No users available"}
+      </Typography>
+      {hasFilters && (
+        <Button
+          variant="contained"
+          onClick={onClearFilters}
+          startIcon={<Clear />}
+          sx={{ bgcolor: isDark ? "#3b82f6" : PRIMARY_COLOR, "&:hover": { bgcolor: isDark ? "#2563eb" : SECONDARY_COLOR } }}
+        >
+          Clear All Filters
+        </Button>
+      )}
+      {!hasFilters && canAddUser && (
+        <Button
+          variant="contained"
+          onClick={onAddUser}
+          startIcon={<Add />}
+          sx={{ bgcolor: isDark ? "#3b82f6" : PRIMARY_COLOR, "&:hover": { bgcolor: isDark ? "#2563eb" : SECONDARY_COLOR } }}
+        >
+          Add First User
+        </Button>
+      )}
+    </Box>
+  );
 };
 
 // ========== EDIT USER MODAL ==========
@@ -1413,7 +1449,9 @@ const EditUserModal = ({ open, onClose, user, onSave, currentUserRole, currentUs
           borderRadius: isMobile ? 0 : 3,
           margin: isMobile ? 0 : 3,
           overflow: "hidden",
-          boxShadow: "0 24px 64px rgba(69,105,234,0.18)",
+          boxShadow: isDark ? "0 24px 64px rgba(0,0,0,0.6)" : "0 24px 64px rgba(69,105,234,0.18)",
+          bgcolor: isDark ? "#0e1424" : "#ffffff",
+          color: isDark ? "#f8fafc" : "inherit",
         },
       }}
       TransitionComponent={isMobile ? Slide : Fade}
@@ -1792,7 +1830,9 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
           borderRadius: isMobile ? 0 : 3,
           margin: isMobile ? 0 : 3,
           overflow: "hidden",
-          boxShadow: "0 24px 64px rgba(255,152,0,0.15)",
+          boxShadow: isDark ? "0 24px 64px rgba(0,0,0,0.6)" : "0 24px 64px rgba(255,152,0,0.15)",
+          bgcolor: isDark ? "#0e1424" : "#ffffff",
+          color: isDark ? "#f8fafc" : "inherit",
         },
       }}
       TransitionComponent={isMobile ? Slide : Fade}
@@ -1816,8 +1856,8 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
               gap: 1.5,
               p: 2,
               borderRadius: 2,
-              bgcolor: alpha("#ff9800", 0.08),
-              border: `1px solid ${alpha("#ff9800", 0.2)}`,
+              bgcolor: isDark ? "rgba(255, 152, 0, 0.12)" : alpha("#ff9800", 0.08),
+              border: `1px solid ${isDark ? "rgba(255, 152, 0, 0.3)" : alpha("#ff9800", 0.2)}`,
             }}
           >
             <Shield sx={{ color: "#e65100", fontSize: 20, flexShrink: 0, mt: 0.1 }} />
@@ -1825,7 +1865,7 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
               <Typography variant="subtitle2" fontWeight={700} color={isDark ? "#ff9800" : "#e65100"}>
                 Confidential Access
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: isDark ? "#cbd5e1" : "text.secondary" }}>
                 Visible to Admin Panel only. Handle with care and do not share.
               </Typography>
             </Box>
@@ -1861,9 +1901,8 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
                   px: 2,
                   py: 1,
                   bgcolor: isError ? alpha("#f44336", 0.07) : isDark ? "rgba(255, 152, 0, 0.15)" : alpha("#ff9800", 0.07),
-                  borderBottom: `1px solid ${
-                    isError ? alpha("#f44336", 0.15) : alpha("#ff9800", 0.15)
-                  }`,
+                  borderBottom: `1px solid ${isError ? alpha("#f44336", 0.15) : isDark ? "rgba(255, 152, 0, 0.2)" : alpha("#ff9800", 0.15)
+                    }`,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -1945,8 +1984,8 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
                 gap: 1.5,
                 p: 1.5,
                 borderRadius: 2,
-                bgcolor: alpha(PRIMARY_COLOR, 0.04),
-                border: `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`,
+                bgcolor: isDark ? "rgba(255, 255, 255, 0.05)" : alpha(PRIMARY_COLOR, 0.04),
+                border: `1px solid ${isDark ? "rgba(255, 255, 255, 0.1)" : alpha(PRIMARY_COLOR, 0.1)}`,
               }}
             >
               <Avatar
@@ -1956,16 +1995,17 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
                   height: 36,
                   fontSize: "0.875rem",
                   fontWeight: 700,
+                  color: "#ffffff",
                 }}
               >
                 {user.firstName?.[0]}
                 {user.lastName?.[0]}
               </Avatar>
               <Box>
-                <Typography variant="body2" fontWeight={600}>
+                <Typography variant="body2" fontWeight={600} color={isDark ? "#f8fafc" : "#0f172a"}>
                   {user.firstName} {user.lastName}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>
                   {user.email}
                 </Typography>
               </Box>
@@ -1974,8 +2014,8 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
                   label={getRoleConfig(user.role)?.label || user.role}
                   size="small"
                   sx={{
-                    bgcolor: alpha(PRIMARY_COLOR, 0.1),
-                    color: PRIMARY_COLOR,
+                    bgcolor: isDark ? "rgba(79, 70, 229, 0.25)" : alpha(PRIMARY_COLOR, 0.1),
+                    color: isDark ? "#a5b4fc" : PRIMARY_COLOR,
                     fontWeight: 600,
                     fontSize: "0.65rem",
                   }}
@@ -1990,8 +2030,8 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
         sx={{
           px: { xs: 2.5, sm: 3 },
           py: 2.5,
-          borderTop: `1px solid ${alpha("#ff9800", 0.12)}`,
-          bgcolor: "#fff",
+          borderTop: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : `1px solid ${alpha("#ff9800", 0.12)}`,
+          bgcolor: isDark ? "#0b101c" : "#fff",
         }}
       >
         <Button
@@ -2000,6 +2040,7 @@ const PasswordViewDialog = ({ open, onClose, user, fetchAPI }) => {
           fullWidth
           sx={{
             bgcolor: "#e65100",
+            color: "#ffffff",
             borderRadius: 2,
             fontWeight: 700,
             boxShadow: `0 4px 14px ${alpha("#ff9800", 0.35)}`,
@@ -2048,7 +2089,9 @@ const DeleteUserDialog = ({ open, onClose, user, onConfirm }) => {
           borderRadius: isMobile ? 0 : 3,
           margin: isMobile ? 0 : 3,
           overflow: "hidden",
-          boxShadow: "0 24px 64px rgba(244,67,54,0.18)",
+          boxShadow: isDark ? "0 24px 64px rgba(0,0,0,0.6)" : "0 24px 64px rgba(244,67,54,0.18)",
+          bgcolor: isDark ? "#0e1424" : "#ffffff",
+          color: isDark ? "#f8fafc" : "inherit",
         },
       }}
       TransitionComponent={isMobile ? Slide : Fade}
@@ -2253,7 +2296,9 @@ const AssignManagerDialog = ({
           borderRadius: isMobile ? 0 : 3,
           margin: isMobile ? 0 : 3,
           overflow: "hidden",
-          boxShadow: "0 24px 64px rgba(0,188,212,0.15)",
+          boxShadow: isDark ? "0 24px 64px rgba(0,0,0,0.6)" : "0 24px 64px rgba(0,188,212,0.15)",
+          bgcolor: isDark ? "#0e1424" : "#ffffff",
+          color: isDark ? "#f8fafc" : "inherit",
         },
       }}
       TransitionComponent={isMobile ? Slide : Fade}
@@ -2359,9 +2404,8 @@ const AssignManagerDialog = ({
                         sx={{
                           p: 1.5,
                           borderRadius: 2,
-                          border: `2px solid ${
-                            selected ? "#00bcd4" : alpha("#00bcd4", 0.15)
-                          }`,
+                          border: `2px solid ${selected ? "#00bcd4" : alpha("#00bcd4", 0.15)
+                            }`,
                           bgcolor: selected ? alpha("#00bcd4", 0.06) : "#fff",
                           cursor: "pointer",
                           transition: "all 0.2s",
@@ -2402,9 +2446,8 @@ const AssignManagerDialog = ({
                             width: 22,
                             height: 22,
                             borderRadius: "50%",
-                            border: `2px solid ${
-                              selected ? "#00bcd4" : alpha("#00bcd4", 0.3)
-                            }`,
+                            border: `2px solid ${selected ? "#00bcd4" : alpha("#00bcd4", 0.3)
+                              }`,
                             bgcolor: selected ? "#00bcd4" : "transparent",
                             display: "flex",
                             alignItems: "center",
@@ -2440,7 +2483,7 @@ const AssignManagerDialog = ({
                   sx={{ color: "#00838f", fontSize: 18, flexShrink: 0, mt: 0.1 }}
                 />
                 <Typography variant="caption" color="#00838f">
-                  As a Supervisor, you can only assign installers to yourself.
+                  As a Supervisor, you can only assign incharges to yourself.
                 </Typography>
               </Box>
             )}
@@ -2539,6 +2582,25 @@ const UserManagement = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
 
+  // Action menu state
+  const [actionAnchorEl, setActionAnchorEl] = useState(null);
+  const [actionUser, setActionUser] = useState(null);
+
+  const handleOpenActionMenu = (event, user) => {
+    event.stopPropagation();
+    setActionAnchorEl(event.currentTarget);
+    setActionUser(user);
+  };
+
+  const handleCloseActionMenu = () => {
+    setActionAnchorEl(null);
+    setActionUser(null);
+  };
+
+  const handleViewDetails = (user) => {
+    navigate(`/user-details/${user._id}`, { state: { user } });
+  };
+
   // Loading states
   const [statusLoading, setStatusLoading] = useState({});
   const [assignLoading, setAssignLoading] = useState(false);
@@ -2550,7 +2612,7 @@ const UserManagement = () => {
 
   // Role-based permissions
   const userRole = normalizeRole(currentUser?.role);
-  const canAddUser = MANAGER_ROLE_KEYS.includes(userRole) || userRole === "INSTALLER";
+  const canAddUser = MANAGER_ROLE_KEYS.includes(userRole) || userRole === "Incharge";
   const canViewPassword = isAdminRole(userRole);
   const canDeleteUsers = isAdminRole(userRole);
 
@@ -2566,13 +2628,13 @@ const UserManagement = () => {
     ];
     if (userRole === "SUPERVISOR") {
       return allRoles.filter(
-        (role) => role.value === "all" || role.value === "INSTALLER"
+        (role) => role.value === "all" || role.value === "Incharge"
       );
     }
-    if (userRole === "PROJECT_HEAD" || userRole === "MANAGER") {
+    if (userRole === "ZSM" || userRole === "MANAGER" || userRole === "PROJECT_HEAD") {
       return allRoles.filter(
         (role) =>
-          role.value === "all" || ["SUPERVISOR", "INSTALLER"].includes(role.value)
+          role.value === "all" || ["SUPERVISOR", "Incharge"].includes(role.value)
       );
     }
     return allRoles;
@@ -2589,22 +2651,22 @@ const UserManagement = () => {
   }, [searchTerm, roleFilter, statusFilter, period]);
 
   const DEMO_USERS_FALLBACK = [
-    { _id: "44dd1e", firstName: "rahul", lastName: "roy", email: "rahulr93@gmail.com", phoneNumber: "9938847728", role: "PROJECT_HEAD", status: "active" },
-    { _id: "ca2a8a", firstName: "SMRUTI RANJAN", lastName: "JENA", email: "srjena@scs.com", phoneNumber: "9668970773", role: "INSTALLER", status: "active" },
-    { _id: "024a80", firstName: "team", lastName: "demo", email: "team@gmail.com", phoneNumber: "0019920039", role: "INSTALLER", status: "active" },
-    { _id: "aaffcd", firstName: "opearion", lastName: "lead", email: "lead@gmail.com", phoneNumber: "9932201910", role: "PROJECT_HEAD", status: "active" },
+    { _id: "44dd1e", firstName: "rahul", lastName: "roy", email: "rahulr93@gmail.com", phoneNumber: "9938847728", role: "ZSM", status: "active" },
+    { _id: "ca2a8a", firstName: "SMRUTI RANJAN", lastName: "JENA", email: "srjena@scs.com", phoneNumber: "9668970773", role: "Incharge", status: "active" },
+    { _id: "024a80", firstName: "team", lastName: "demo", email: "team@gmail.com", phoneNumber: "0019920039", role: "Incharge", status: "active" },
+    { _id: "aaffcd", firstName: "opearion", lastName: "lead", email: "lead@gmail.com", phoneNumber: "9932201910", role: "ZSM", status: "active" },
     { _id: "f270c8", firstName: "narayan", lastName: "reddy", email: "reddy@gmail.com", phoneNumber: "9041039924", role: "SUPERVISOR", status: "active" },
-    { _id: "800c4f", firstName: "Soubhagya as", lastName: "Test", email: "sns@scs.com", phoneNumber: "8596963279", role: "INSTALLER", status: "active" },
-    { _id: "9a6d69", firstName: "PRIYANKA", lastName: "ROUT", email: "priyanka@scs.com", phoneNumber: "9668970774", role: "INSTALLER", status: "active" },
-    { _id: "7b63da", firstName: "TANMAY KUMAR", lastName: "SAHOO", email: "tanmay@scs.com", phoneNumber: "9668970772", role: "INSTALLER", status: "active" },
-    { _id: "766bb9", firstName: "MAHESH", lastName: "BARAL", email: "mbaral@scs.com", phoneNumber: "9439298131", role: "INSTALLER", status: "active" },
-    { _id: "c92552", firstName: "KIRTI PRASAD", lastName: "SAHU", email: "kps@scs.com", phoneNumber: "8018216911", role: "INSTALLER", status: "active" },
-    { _id: "12ab34", firstName: "SUDHANSHU", lastName: "SEKHAR", email: "sudhanshu@scs.com", phoneNumber: "9876543210", role: "INSTALLER", status: "active" },
-    { _id: "56cd78", firstName: "DEEPAK", lastName: "KUMAR", email: "deepak@scs.com", phoneNumber: "9876543211", role: "INSTALLER", status: "active" },
+    { _id: "800c4f", firstName: "Soubhagya as", lastName: "Test", email: "sns@scs.com", phoneNumber: "8596963279", role: "Incharge", status: "active" },
+    { _id: "9a6d69", firstName: "PRIYANKA", lastName: "ROUT", email: "priyanka@scs.com", phoneNumber: "9668970774", role: "Incharge", status: "active" },
+    { _id: "7b63da", firstName: "TANMAY KUMAR", lastName: "SAHOO", email: "tanmay@scs.com", phoneNumber: "9668970772", role: "Incharge", status: "active" },
+    { _id: "766bb9", firstName: "MAHESH", lastName: "BARAL", email: "mbaral@scs.com", phoneNumber: "9439298131", role: "Incharge", status: "active" },
+    { _id: "c92552", firstName: "KIRTI PRASAD", lastName: "SAHU", email: "kps@scs.com", phoneNumber: "8018216911", role: "Incharge", status: "active" },
+    { _id: "12ab34", firstName: "SUDHANSHU", lastName: "SEKHAR", email: "sudhanshu@scs.com", phoneNumber: "9876543210", role: "Incharge", status: "active" },
+    { _id: "56cd78", firstName: "DEEPAK", lastName: "KUMAR", email: "deepak@scs.com", phoneNumber: "9876543211", role: "Incharge", status: "active" },
     { _id: "90ef12", firstName: "RAJESH", lastName: "SAHOO", email: "rajesh@scs.com", phoneNumber: "9876543212", role: "SUPERVISOR", status: "active" },
-    { _id: "34gh56", firstName: "AMIT", lastName: "PANDA", email: "amit@scs.com", phoneNumber: "9876543213", role: "INSTALLER", status: "active" },
-    { _id: "78ij90", firstName: "MANOJ", lastName: "NAYAK", email: "manoj@scs.com", phoneNumber: "9876543214", role: "INSTALLER", status: "active" },
-    { _id: "12kl34", firstName: "PRADEEP", lastName: "MISHRA", email: "pradeep@scs.com", phoneNumber: "9876543215", role: "INSTALLER", status: "active" },
+    { _id: "34gh56", firstName: "AMIT", lastName: "PANDA", email: "amit@scs.com", phoneNumber: "9876543213", role: "Incharge", status: "active" },
+    { _id: "78ij90", firstName: "MANOJ", lastName: "NAYAK", email: "manoj@scs.com", phoneNumber: "9876543214", role: "Incharge", status: "active" },
+    { _id: "12kl34", firstName: "PRADEEP", lastName: "MISHRA", email: "pradeep@scs.com", phoneNumber: "9876543215", role: "Incharge", status: "active" },
   ];
 
   // â”€â”€ Fetch users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2628,12 +2690,12 @@ const UserManagement = () => {
 
         if (isAdminRole(userRole)) {
           fetchedUsers = fetchedUsers.filter((u) => !isAdminRole(u.role));
-        } else if (userRole === "PROJECT_HEAD" || userRole === "MANAGER") {
+        } else if (userRole === "ZSM" || userRole === "MANAGER" || userRole === "PROJECT_HEAD") {
           fetchedUsers = fetchedUsers.filter((u) =>
-            ["SUPERVISOR", "INSTALLER"].includes(normalizeRole(u.role))
+            ["SUPERVISOR", "Incharge"].includes(normalizeRole(u.role))
           );
         } else if (userRole === "SUPERVISOR") {
-          fetchedUsers = fetchedUsers.filter((u) => isInstallerRole(u.role));
+          fetchedUsers = fetchedUsers.filter((u) => normalizeRole(u.role) === "Incharge");
         }
 
         if (!fetchedUsers || fetchedUsers.length === 0) {
@@ -2765,8 +2827,8 @@ const UserManagement = () => {
     if (isAdminRole(currentRole)) return true;
     const userRoleLevel = getRoleConfig(user.role)?.level || 999;
     const currentRoleLevel = getRoleConfig(currentRole)?.level || 0;
-    if (currentRole === "PROJECT_HEAD" || currentRole === "MANAGER") return userRoleLevel > currentRoleLevel;
-    if (currentRole === "SUPERVISOR") return isInstallerRole(user.role);
+    if (currentRole === "ZSM" || currentRole === "MANAGER" || currentRole === "PROJECT_HEAD") return userRoleLevel > currentRoleLevel;
+    if (currentRole === "SUPERVISOR") return normalizeRole(user.role) === "Incharge";
     return false;
   };
 
@@ -2937,8 +2999,7 @@ const UserManagement = () => {
 
       if (response.success) {
         toast.success(
-          `${user.firstName} ${user.lastName} has been ${
-            newStatus === "active" ? "activated" : "deactivated"
+          `${user.firstName} ${user.lastName} has been ${newStatus === "active" ? "activated" : "deactivated"
           }.`,
           { title: `User ${newStatus === "active" ? "Activated" : "Deactivated"}` }
         );
@@ -3045,8 +3106,8 @@ const UserManagement = () => {
               {userRole === "SUPERVISOR"
                 ? "Manage your installers"
                 : userRole === "PROJECT_HEAD" || userRole === "MANAGER"
-                ? "Manage supervisors and installers"
-                : "Manage users in your head office only"}
+                  ? "Manage supervisors and installers"
+                  : "Manage users in your head office only"}
             </Typography>
           </Box>
 
@@ -3403,7 +3464,16 @@ const UserManagement = () => {
                           !user.supervisor;
                         const canView = true;
                         const canDelete = canDeleteUsers && !isAdminRole(user.role);
-                        const displayRoleLabel = user.role === "PROJECT_HEAD" || user.role === "ZSM" ? "Manager" : user.role === "SUPERVISOR" || user.role === "Incharge" ? "Supervisor" : user.role === "INSTALLER" || user.role === "TEAM" ? "Installer" : user.role === "Admin_panel" || user.role === "ADMIN" ? "Admin" : user.role;
+                        const displayRoleLabel =
+                          user.role === "PROJECT_HEAD" || user.role === "ZSM" || user.role === "MANAGER" || user.role === "operation_lead"
+                            ? "Manager"
+                            : user.role === "SUPERVISOR"
+                              ? "Supervisor"
+                              : user.role === "Incharge" || user.role === "INSTALLER" || user.role === "TEAM"
+                                ? "Incharge"
+                                : user.role === "Admin_panel" || user.role === "ADMIN" || user.role === "super_admin" || user.role === "head_office"
+                                  ? "Admin panel"
+                                  : user.role;
 
                         return (
                           <TableRow
@@ -3414,17 +3484,29 @@ const UserManagement = () => {
                             }}
                           >
                             {/* User */}
-                            <TableCell sx={{ borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0", py: 1.75 }}>
+                            <TableCell
+                              onClick={() => handleViewDetails(user)}
+                              sx={{
+                                borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0",
+                                py: 1.75,
+                                cursor: "pointer",
+                                "&:hover .userNameText": { color: "#3b82f6" },
+                              }}
+                            >
                               <Stack direction="row" alignItems="center" spacing={1.75}>
                                 <Avatar sx={{ bgcolor: "#1e3a8a", color: "#60a5fa", fontWeight: 800, width: 38, height: 38, fontSize: "0.95rem" }}>
                                   {(user.firstName?.[0] || "").toUpperCase()}
                                 </Avatar>
                                 <Box>
-                                  <Typography fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "0.85rem" }}>
+                                  <Typography
+                                    className="userNameText"
+                                    fontWeight={800}
+                                    sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "0.85rem", transition: "color 0.2s" }}
+                                  >
                                     {user.firstName} {user.lastName}
                                   </Typography>
                                   <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.72rem", display: "block" }}>
-                                    ID: {user._id?.slice(-6)}
+                                    ID: {user.employeeId || user._id?.slice(-6)}
                                   </Typography>
                                 </Box>
                               </Stack>
@@ -3522,58 +3604,24 @@ const UserManagement = () => {
 
                             {/* Actions */}
                             <TableCell align="center" sx={{ borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0", py: 1.75 }}>
-                              <Stack direction="row" spacing={1} justifyContent="center">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleViewPassword(user)}
-                                  sx={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: "8px",
-                                    bgcolor: "rgba(245, 158, 11, 0.12)",
-                                    color: "#fbbf24",
-                                    border: "1px solid rgba(245, 158, 11, 0.3)",
-                                    "&:hover": { bgcolor: "rgba(245, 158, 11, 0.25)" },
-                                  }}
-                                >
-                                  <Visibility sx={{ fontSize: 15 }} />
-                                </IconButton>
-
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleEditUser(user)}
-                                  sx={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: "8px",
-                                    bgcolor: "rgba(59, 130, 246, 0.12)",
-                                    color: "#60a5fa",
-                                    border: "1px solid rgba(59, 130, 246, 0.3)",
-                                    "&:hover": { bgcolor: "rgba(59, 130, 246, 0.25)" },
-                                  }}
-                                >
-                                  <Edit sx={{ fontSize: 15 }} />
-                                </IconButton>
-
-                                <IconButton
-                                  size="small"
-                                  onClick={() => {
-                                    setUserToDelete(user);
-                                    setDeleteDialogOpen(true);
-                                  }}
-                                  sx={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: "8px",
-                                    bgcolor: "rgba(239, 68, 68, 0.12)",
-                                    color: "#f87171",
-                                    border: "1px solid rgba(239, 68, 68, 0.3)",
-                                    "&:hover": { bgcolor: "rgba(239, 68, 68, 0.25)" },
-                                  }}
-                                >
-                                  <Delete sx={{ fontSize: 15 }} />
-                                </IconButton>
-                              </Stack>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => handleOpenActionMenu(e, user)}
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: "8px",
+                                  color: isDark ? "#cbd5e1" : "#64748b",
+                                  bgcolor: isDark ? "rgba(255, 255, 255, 0.05)" : "#f8fafc",
+                                  border: isDark ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid #e2e8f0",
+                                  "&:hover": {
+                                    bgcolor: isDark ? "rgba(255, 255, 255, 0.12)" : "#e2e8f0",
+                                    color: isDark ? "#f8fafc" : "#0f172a",
+                                  },
+                                }}
+                              >
+                                <MoreVert sx={{ fontSize: 18 }} />
+                              </IconButton>
                             </TableCell>
                           </TableRow>
                         );
@@ -3630,6 +3678,7 @@ const UserManagement = () => {
                         setUserToDelete(user);
                         setDeleteDialogOpen(true);
                       }}
+                      onViewDetails={handleViewDetails}
                       currentUserRole={userRole}
                       currentUserId={currentUser?._id}
                       statusLoading={statusLoading}
@@ -3651,6 +3700,92 @@ const UserManagement = () => {
           </Box>
         )}
       </Paper>
+
+      {/* Action Dropdown Menu */}
+      <Menu
+        anchorEl={actionAnchorEl}
+        open={Boolean(actionAnchorEl)}
+        onClose={handleCloseActionMenu}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        PaperProps={{
+          elevation: 4,
+          sx: {
+            minWidth: 165,
+            borderRadius: "10px",
+            mt: 0.5,
+            p: 0.5,
+            bgcolor: isDark ? "#0f172a" : "#ffffff",
+            color: isDark ? "#f8fafc" : "#0f172a",
+            border: isDark ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid #e2e8f0",
+            boxShadow: isDark
+              ? "0 10px 25px -5px rgba(0, 0, 0, 0.5)"
+              : "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
+            "& .MuiMenuItem-root": {
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              borderRadius: "6px",
+              py: 0.9,
+              px: 1.5,
+              gap: 1.25,
+              "&:hover": {
+                bgcolor: isDark ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9",
+              },
+            },
+          },
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            const u = actionUser;
+            handleCloseActionMenu();
+            if (u) handleViewDetails(u);
+          }}
+        >
+          <InfoOutlined sx={{ fontSize: 17, color: "#1d68f0" }} />
+          <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }}>Details</Typography>
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => {
+            const u = actionUser;
+            handleCloseActionMenu();
+            if (u) handleViewPassword(u);
+          }}
+        >
+          <Visibility sx={{ fontSize: 17, color: "#f59e0b" }} />
+          <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }}>View Password</Typography>
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => {
+            const u = actionUser;
+            handleCloseActionMenu();
+            if (u) handleEditUser(u);
+          }}
+        >
+          <Edit sx={{ fontSize: 17, color: "#3b82f6" }} />
+          <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }}>Edit User</Typography>
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => {
+            const u = actionUser;
+            handleCloseActionMenu();
+            if (u) {
+              setUserToDelete(u);
+              setDeleteDialogOpen(true);
+            }
+          }}
+          sx={{
+            color: "#ef4444 !important",
+            "&:hover": { bgcolor: "rgba(239, 68, 68, 0.08) !important" },
+          }}
+        >
+          <Delete sx={{ fontSize: 17, color: "#ef4444" }} />
+          <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, color: "#ef4444" }}>Delete User</Typography>
+        </MenuItem>
+      </Menu>
 
       {/* Edit User Modal */}
       <EditUserModal

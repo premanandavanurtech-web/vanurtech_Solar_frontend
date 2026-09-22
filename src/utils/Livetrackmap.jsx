@@ -22,7 +22,7 @@ if (typeof window !== "undefined") {
 }
 
 const API  = API_ORIGIN;
-const GKEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyDQYrvUxQPWUrpqWIy-tLg4f3DGrr4GTlg";
+const GKEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyDnCfBjgk8FQ5qdAEeN6ivx_jvl6qHZ4HQ";
 
 const MIN_MOVE_METRES = 12;
 const MIN_STATIONARY_MOVE_METRES = 25; // 25 meters (0.025 km) minimum threshold to start counting travel distance

@@ -106,160 +106,7 @@ const formatSelectedDateLabel = (value) => {
 
 const isTodayValue = (value) => value === getTodayDateInput();
 
-const DEFAULT_DEMO_TEAM = [
-  {
-    id: "demo-1",
-    firstName: "SMRUTI RANJAN",
-    lastName: "JENA",
-    phoneNumber: "9668970773",
-    email: "srjena@scs.com",
-    role: "TEAM",
-    avatar: "S",
-    color: "#f97316",
-    status: "active",
-    punchedIn: true,
-    punchInTime: "09:08 am",
-    punchOutTime: null,
-    location: "Khapuria",
-    totalHours: null,
-    holidayReason: null,
-    batteryPercentage: 85,
-    isCharging: false,
-  },
-  {
-    id: "demo-2",
-    firstName: "team",
-    lastName: "demo",
-    phoneNumber: "0019920039",
-    email: "team@gmail.com",
-    role: "TEAM",
-    avatar: "T",
-    color: "#10b981",
-    status: "absent",
-    punchedIn: false,
-    punchInTime: null,
-    punchOutTime: null,
-    location: null,
-    totalHours: null,
-    holidayReason: null,
-    batteryPercentage: null,
-    isCharging: false,
-  },
-  {
-    id: "demo-3",
-    firstName: "Soubhagya as",
-    lastName: "Test",
-    phoneNumber: "8596963279",
-    email: "srs@scs.com",
-    role: "TEAM",
-    avatar: "S",
-    color: "#f97316",
-    status: "absent",
-    punchedIn: false,
-    punchInTime: null,
-    punchOutTime: null,
-    location: null,
-    totalHours: null,
-    holidayReason: null,
-    batteryPercentage: null,
-    isCharging: false,
-  },
-  {
-    id: "demo-4",
-    firstName: "PRIYANKA",
-    lastName: "ROUT",
-    phoneNumber: "9668970774",
-    email: "priyanka@scs.com",
-    role: "TEAM",
-    avatar: "P",
-    color: "#3b82f6",
-    status: "absent",
-    punchedIn: false,
-    punchInTime: null,
-    punchOutTime: null,
-    location: null,
-    totalHours: null,
-    holidayReason: null,
-    batteryPercentage: null,
-    isCharging: false,
-  },
-  {
-    id: "demo-5",
-    firstName: "TANMAY KUMAR",
-    lastName: "SAHOO",
-    phoneNumber: "9668970772",
-    email: "tanmay@scs.com",
-    role: "TEAM",
-    avatar: "T",
-    color: "#14b8a6",
-    status: "absent",
-    punchedIn: false,
-    punchInTime: null,
-    punchOutTime: null,
-    location: null,
-    totalHours: null,
-    holidayReason: null,
-    batteryPercentage: null,
-    isCharging: false,
-  },
-  {
-    id: "demo-6",
-    firstName: "MAHESH",
-    lastName: "BARAL",
-    phoneNumber: "9439298131",
-    email: "mbaral@scs.com",
-    role: "TEAM",
-    avatar: "M",
-    color: "#f43f5e",
-    status: "absent",
-    punchedIn: false,
-    punchInTime: null,
-    punchOutTime: null,
-    location: null,
-    totalHours: null,
-    holidayReason: null,
-    batteryPercentage: null,
-    isCharging: false,
-  },
-  {
-    id: "demo-7",
-    firstName: "KIRTI PRASAD",
-    lastName: "SAHU",
-    phoneNumber: "8018216911",
-    email: "kps@scs.com",
-    role: "TEAM",
-    avatar: "K",
-    color: "#f59e0b",
-    status: "absent",
-    punchedIn: false,
-    punchInTime: null,
-    punchOutTime: null,
-    location: null,
-    totalHours: null,
-    holidayReason: null,
-    batteryPercentage: null,
-    isCharging: false,
-  },
-  {
-    id: "demo-8",
-    firstName: "MANOJ KUMAR",
-    lastName: "PANDA",
-    phoneNumber: "981089347",
-    email: "mkp@scs.com",
-    role: "TEAM",
-    avatar: "M",
-    color: "#ec4899",
-    status: "absent",
-    punchedIn: false,
-    punchInTime: null,
-    punchOutTime: null,
-    location: null,
-    totalHours: null,
-    holidayReason: null,
-    batteryPercentage: null,
-    isCharging: false,
-  },
-];
+const DEFAULT_DEMO_TEAM = [];
 
 // ── Battery helpers ───────────────────────────────────────────────────────────
 const getBatteryStyle = (pct) => {
@@ -609,10 +456,16 @@ const MemberCard = ({ member }) => {
           onClick={() =>
             navigate(`/attendance/${member.id}`, {
               state: {
+                member: member,
                 memberName: fullName,
                 memberRole: member.role,
                 memberPhone: member.phoneNumber,
                 memberEmail: member.email,
+                punchedIn: member.punchedIn,
+                punchInTime: member.punchInTime,
+                punchOutTime: member.punchOutTime,
+                location: member.location,
+                status: member.status,
                 fromTeam: true,
                 historyView: true,
               },
@@ -694,12 +547,26 @@ const TeamAttendance = () => {
 
       let rawUsers = [];
       try {
-        const usersRes = await axios.get(`${API}/api/v1/user/getManagerUnderUserList`, {
+        const allUsersRes = await axios.get(`${API}/api/v1/user/getAllUsers`, {
           headers, params: { limit: 200 },
         });
-        rawUsers = usersRes.data?.result?.users || [];
+        const list = allUsersRes.data?.result?.users || allUsersRes.data?.data?.users || allUsersRes.data?.users || allUsersRes.data?.result || [];
+        if (Array.isArray(list) && list.length > 0) {
+          rawUsers = list.filter((u) => u.role !== "Head_office");
+        }
       } catch (e) {
-        console.error("Users API failed:", e.message);
+        console.warn("getAllUsers failed, trying getManagerUnderUserList:", e.message);
+      }
+
+      if (!rawUsers || rawUsers.length === 0) {
+        try {
+          const usersRes = await axios.get(`${API}/api/v1/user/getManagerUnderUserList`, {
+            headers, params: { limit: 200 },
+          });
+          rawUsers = usersRes.data?.result?.users || [];
+        } catch (e) {
+          console.error("Users API failed:", e.message);
+        }
       }
 
       let attendances = [];

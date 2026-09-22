@@ -156,6 +156,7 @@ function useWorkTimer() {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Attendance() {
   const theme = useTheme();
+  const isDark = theme.palette.mode === "dark" || COLOR.isDark;
   const navigate = useNavigate();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { userId: paramUserId } = useParams();
@@ -189,11 +190,29 @@ export default function Attendance() {
     }
   }, [attendances]);
 
-  const hasPunchedIn = !!todayAtt?.punchIn;
-  const hasPunchedOut = !!todayAtt?.punchOut;
+  const isTodayPunched = Boolean(
+    todayAtt?.punchIn?.time ||
+    memberInfo?.punchedIn ||
+    memberInfo?.member?.punchedIn
+  );
+
+  const activePunchInTime =
+    todayAtt?.punchIn?.time ? fmtTime(todayAtt.punchIn.time) :
+    memberInfo?.punchInTime ||
+    memberInfo?.member?.punchInTime ||
+    null;
+
+  const activePunchOutTime =
+    todayAtt?.punchOut?.time ? fmtTime(todayAtt.punchOut.time) :
+    memberInfo?.punchOutTime ||
+    memberInfo?.member?.punchOutTime ||
+    null;
+
+  const hasPunchedIn = isTodayPunched;
+  const hasPunchedOut = Boolean(todayAtt?.punchOut?.time || activePunchOutTime);
 
   const [period, setPeriod] = useState(memberInfo.historyView ? "All" : "This Month");
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 7, 1));
+  const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filters, setFilters] = useState({ page: 1, limit: 10, status: "", search: "" });
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
@@ -203,36 +222,70 @@ export default function Attendance() {
 
   const showSnack = useCallback((msg, sev = "success") => setSnackbar({ open: true, message: msg, severity: sev }), []);
 
+  const [targetUserProfile, setTargetUserProfile] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (paramUserId && /^[0-9a-fA-F]{24}$/.test(paramUserId)) {
+      const token = localStorage.getItem("token");
+      axios.get(`${API}/api/v1/user/getUserById/${paramUserId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      .then((res) => {
+        if (isMounted) {
+          const u = res.data?.result || res.data?.data || res.data?.user || res.data;
+          if (u && (u.firstName || u.name || u.email)) {
+            setTargetUserProfile(u);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch target user profile:", err.message);
+      });
+    } else {
+      setTargetUserProfile(null);
+    }
+    return () => { isMounted = false; };
+  }, [paramUserId]);
+
   const loadData = useCallback(async () => {
-    const dates = {};
+    const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(paramUserId);
+    const targetUid = isValidObjectId ? paramUserId : (user?._id || user?.id);
     const q = {
       page: filters.page,
-      limit: filters.limit,
+      limit: 100,
       ...(filters.status && { status: filters.status }),
       ...(filters.search && { search: filters.search }),
-      ...(paramUserId ? { userId: paramUserId } : isTeam && user?._id ? { userId: user._id } : {}),
-      ...dates,
+      ...(targetUid && /^[0-9a-fA-F]{24}$/.test(targetUid) ? { userId: targetUid } : {}),
     };
     await fetchAttendances(q);
-  }, [filters, isTeam, user, fetchAttendances, paramUserId]);
+  }, [filters, user, fetchAttendances, paramUserId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Combined Rows
+  // Combined Rows — unique per user
   const mergedRows = useMemo(() => {
-    if (!attendances || attendances.length === 0) {
-      return DEMO_FALLBACK_ROWS;
-    }
-    return attendances.map((item) => {
+    let rows = (attendances || []).map((item) => {
       const dateKey = format(new Date(item.date || item.createdAt), "yyyy-MM-dd");
       const dateFormatted = fmtDate(item.date || item.createdAt);
+      const hasPunchIn = Boolean(item.punchIn?.time);
       const punchInTime = item.punchIn?.time ? fmtTime(item.punchIn.time) : "—";
       const punchOutTime = item.punchOut?.time ? fmtTime(item.punchOut.time) : item.punchIn?.time ? "Ongoing" : "—";
       const hoursNum = Number(item.workHours || 0);
       const h = Math.floor(hoursNum);
       const m = Math.round((hoursNum - h) * 60);
       const hours = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-      const status = item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase() : item.punchIn?.time ? "Present" : "Absent";
+
+      let status = "Absent";
+      if (hasPunchIn || item.status?.toLowerCase() === "present") {
+        status = "Present";
+      } else if (item.status?.toLowerCase() === "holiday") {
+        status = "Holiday";
+      } else if (item.status?.toLowerCase() === "leave") {
+        status = "Leave";
+      } else if (item.status?.toLowerCase() === "late") {
+        status = "Late";
+      }
 
       return {
         dateKey,
@@ -241,9 +294,29 @@ export default function Attendance() {
         punchOutTime,
         hours,
         status,
+        hasPunchIn,
       };
     });
-  }, [attendances]);
+
+    const now = new Date();
+    const todayKey = format(now, "yyyy-MM-dd");
+    const hasTodayInRows = rows.some((r) => r.dateKey === todayKey);
+
+    // If this specific user is punched in today, ensure today's record is displayed
+    if (!hasTodayInRows && isTodayPunched && activePunchInTime) {
+      rows.unshift({
+        dateKey: todayKey,
+        dateFormatted: fmtDate(now),
+        punchInTime: activePunchInTime,
+        punchOutTime: activePunchOutTime ? activePunchOutTime : "Ongoing",
+        hours: "—",
+        status: "Present",
+        hasPunchIn: true,
+      });
+    }
+
+    return rows;
+  }, [attendances, isTodayPunched, activePunchInTime, activePunchOutTime]);
 
   // Filtered rows
   const filteredRows = useMemo(() => {
@@ -283,6 +356,10 @@ export default function Attendance() {
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const now = new Date();
+    const todayY = now.getFullYear();
+    const todayM = now.getMonth();
+    const todayD = now.getDate();
 
     const cells = [];
     const prevDays = new Date(year, month, 0).getDate();
@@ -291,14 +368,34 @@ export default function Attendance() {
     }
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const cellDate = new Date(year, month, d);
+      const isSunday = cellDate.getDay() === 0;
+      const isToday = (year === todayY && month === todayM && d === todayD);
+      const isPast = (year < todayY || (year === todayY && month < todayM) || (year === todayY && month === todayM && d < todayD));
+
       const match = mergedRows.find((r) => r.dateKey === dateStr);
       let dayStatus = null;
+
       if (match) {
-        dayStatus = match.status.toLowerCase();
-      } else {
-        const isSunday = new Date(year, month, d).getDay() === 0;
-        if (isSunday) dayStatus = "holiday";
+        if (match.status.toLowerCase() === "present" || match.punchInTime !== "—") {
+          dayStatus = "present";
+        } else if (match.status.toLowerCase() === "holiday" || isSunday) {
+          dayStatus = "holiday";
+        } else if (match.status.toLowerCase() === "leave") {
+          dayStatus = "leave";
+        } else if (match.status.toLowerCase() === "late") {
+          dayStatus = "late";
+        } else {
+          dayStatus = "absent";
+        }
+      } else if (isSunday) {
+        dayStatus = "holiday";
+      } else if (isToday) {
+        dayStatus = isTodayPunched ? "present" : null;
+      } else if (isPast) {
+        dayStatus = "absent";
       }
+
       cells.push({ day: d, isCurrent: true, status: dayStatus, dateKey: dateStr });
     }
     const remaining = 35 - cells.length;
@@ -307,14 +404,17 @@ export default function Attendance() {
       cells.push({ day: d, isCurrent: false });
     }
     return cells;
-  }, [currentMonth, mergedRows]);
+  }, [currentMonth, mergedRows, isTodayPunched]);
 
-  // Display metadata
-  const displayName = memberInfo.memberName || (user?.firstName ? `${user.firstName} ${user.lastName || ""}` : user?.name || "SMRUTI RANJAN JENA");
-  const displayRole = memberInfo.memberRole || user?.role || "TEAM";
-  const displayPhone = memberInfo.memberPhone || user?.phone || user?.phoneNumber || "9668970773";
-  const displayEmail = memberInfo.memberEmail || user?.email || "srjena@s.s.com";
-  const displayAvatar = displayName.charAt(0).toUpperCase();
+  // Display metadata - dynamically resolved from targetUserProfile, memberInfo, or user
+  const displayName = targetUserProfile
+    ? (`${targetUserProfile.firstName || ""} ${targetUserProfile.lastName || ""}`.trim() || targetUserProfile.name || targetUserProfile.email || "Employee")
+    : memberInfo.memberName || (isAdminView ? "Employee" : (user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.name || "Employee"));
+
+  const displayRole = targetUserProfile?.role || memberInfo.memberRole || (isAdminView ? "TEAM" : user?.role || "TEAM");
+  const displayPhone = targetUserProfile?.phoneNumber || targetUserProfile?.phone || memberInfo.memberPhone || (!isAdminView ? (user?.phoneNumber || user?.phone || "") : "");
+  const displayEmail = targetUserProfile?.email || memberInfo.memberEmail || (!isAdminView ? user?.email || "" : "");
+  const displayAvatar = (displayName || "U").charAt(0).toUpperCase();
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: COLOR.bg, color: COLOR.text, p: { xs: 1.5, md: 3 } }}>
@@ -755,67 +855,82 @@ export default function Attendance() {
                   );
                 }
 
-                const isSelected = selectedDate.getDate() === cell.day;
+                const isSelected = selectedDate.getDate() === cell.day && selectedDate.getMonth() === currentMonth.getMonth() && selectedDate.getFullYear() === currentMonth.getFullYear();
                 const isPresent = cell.status === "present";
                 const isAbsent = cell.status === "absent";
                 const isHoliday = cell.status === "holiday";
                 const isLate = cell.status === "late";
+                const isLeave = cell.status === "leave";
 
                 return (
                   <Box
                     key={`day-${cell.day}`}
                     onClick={() => setSelectedDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), cell.day))}
                     sx={{
-                      height: 36,
+                      height: 38,
                       borderRadius: "10px",
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
                       cursor: "pointer",
-                      fontSize: "0.78rem",
+                      fontSize: "0.8rem",
                       fontWeight: 800,
                       position: "relative",
                       transition: "all 0.15s ease",
                       bgcolor: isSelected
-                        ? "rgba(16, 185, 129, 0.15)"
+                        ? (isPresent ? "rgba(16, 185, 129, 0.25)" : isAbsent ? "rgba(239, 68, 68, 0.25)" : isHoliday ? "rgba(59, 130, 246, 0.25)" : "rgba(37, 99, 235, 0.2)")
                         : isPresent
-                        ? "rgba(16, 185, 129, 0.1)"
+                        ? (isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5")
                         : isAbsent
-                        ? "rgba(239, 68, 68, 0.1)"
+                        ? (isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2")
                         : isHoliday
-                        ? "rgba(59, 130, 246, 0.1)"
-                        : "rgba(255,255,255,0.03)",
+                        ? (isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff")
+                        : isLeave
+                        ? (isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb")
+                        : (isDark ? "rgba(255,255,255,0.03)" : "#f8fafc"),
                       color: isPresent
-                        ? COLOR.green
+                        ? "#10b981"
                         : isAbsent
-                        ? COLOR.red
+                        ? "#ef4444"
                         : isHoliday
-                        ? COLOR.blue
-                        : COLOR.text,
+                        ? "#2563eb"
+                        : isLeave || isLate
+                        ? "#f59e0b"
+                        : (isDark ? "#94a3b8" : "#475569"),
                       border: isSelected
-                        ? `2px solid ${COLOR.green}`
+                        ? `2px solid ${isPresent ? "#10b981" : isAbsent ? "#ef4444" : isHoliday ? "#2563eb" : "#3b82f6"}`
                         : isPresent
-                        ? `1px solid rgba(16, 185, 129, 0.3)`
+                        ? (isDark ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid #6ee7b7")
                         : isAbsent
-                        ? `1px solid rgba(239, 68, 68, 0.3)`
-                        : `1px solid ${COLOR.border}`,
+                        ? (isDark ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #fca5a5")
+                        : isHoliday
+                        ? (isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe")
+                        : isLeave || isLate
+                        ? (isDark ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid #fde68a")
+                        : (isDark ? `1px solid ${COLOR.border}` : "1px solid #e2e8f0"),
                       "&:hover": {
                         transform: "translateY(-1px)",
-                        bgcolor: isPresent ? "rgba(16, 185, 129, 0.2)" : "rgba(255,255,255,0.08)",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
                       },
                     }}
                   >
                     {cell.day}
-                    {(isPresent || isAbsent || isHoliday || isLate) && (
+                    {(isPresent || isAbsent || isHoliday || isLate || isLeave) && (
                       <Box
                         sx={{
                           position: "absolute",
                           bottom: 3,
-                          width: 4,
-                          height: 4,
+                          width: 5,
+                          height: 5,
                           borderRadius: "50%",
-                          bgcolor: isPresent ? COLOR.green : isAbsent ? COLOR.red : isHoliday ? COLOR.blue : COLOR.amber,
+                          bgcolor: isPresent
+                            ? "#10b981"
+                            : isAbsent
+                            ? "#ef4444"
+                            : isHoliday
+                            ? "#2563eb"
+                            : "#f59e0b",
                         }}
                       />
                     )}
@@ -885,7 +1000,17 @@ export default function Attendance() {
                 variant="contained"
                 disableElevation
                 startIcon={<History sx={{ fontSize: 16 }} />}
-                onClick={() => navigate(isAdminView ? `/attendance-history/${paramUserId}` : "/attendance-history/me")}
+                onClick={() =>
+                  navigate(isAdminView ? `/attendance-history/${paramUserId}` : `/attendance-history/${user?._id || user?.id || "me"}`, {
+                    state: {
+                      userId: paramUserId,
+                      memberName: displayName,
+                      memberRole: displayRole,
+                      memberPhone: displayPhone,
+                      memberEmail: displayEmail,
+                    },
+                  })
+                }
                 sx={{
                   bgcolor: COLOR.orange,
                   color: "#fff",

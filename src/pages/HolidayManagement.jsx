@@ -1,17 +1,14 @@
-// pages/HolidayManagement.jsx (Dark Theme matching exact target design system)
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
   Button,
-  Card,
   Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   IconButton,
   Paper,
   Stack,
@@ -24,7 +21,8 @@ import {
   TextField,
   Tooltip,
   Typography,
-  alpha,
+  useTheme,
+  InputAdornment,
 } from "@mui/material";
 import {
   Add,
@@ -33,27 +31,9 @@ import {
   History,
   Refresh,
   CalendarToday,
+  EventNote,
 } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
-
-const COLOR = {
-  get isDark() {
-    return (localStorage.getItem("appThemeMode") || "dark") === "dark";
-  },
-  get bg() { return this.isDark ? "#060a12" : "#f6f8fc"; },
-  get card() { return this.isDark ? "#0e1424" : "#ffffff"; },
-  get cardHover() { return this.isDark ? "#131b30" : "#f8fafc"; },
-  get cardHeader() { return this.isDark ? "#0b101c" : "#ffffff"; },
-  get tableHead() { return this.isDark ? "#090d18" : "#f8fafc"; },
-  get border() { return this.isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0"; },
-  get text() { return this.isDark ? "#f8fafc" : "#0f172a"; },
-  get textSub() { return this.isDark ? "#94a3b8" : "#334155"; },
-  get textMuted() { return this.isDark ? "#64748b" : "#64748b"; },
-  blue: "#3b82f6",
-  amber: "#f59e0b",
-  red: "#ef4444",
-  green: "#10b981",
-};
 
 const getTodayInput = () => {
   const now = new Date();
@@ -82,7 +62,10 @@ const getUserName = (user) => {
 const isAdminRole = (role) => ["ADMIN", "Admin_panel", "PROJECT_HEAD", "MANAGER"].includes(role) || true;
 
 export default function HolidayManagement() {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const { fetchAPI, user } = useAuth();
+
   const [holidays, setHolidays] = useState([]);
   const [form, setForm] = useState({ date: getTodayInput(), reason: "" });
   const [loading, setLoading] = useState(true);
@@ -163,7 +146,7 @@ export default function HolidayManagement() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, bgcolor: COLOR.bg, minHeight: "100vh", color: COLOR.text }}>
+    <Box sx={{ p: { xs: 2, md: 3 }, minHeight: "100vh" }}>
       {/* ── Top Header Bar ── */}
       <Stack
         direction={{ xs: "column", sm: "row" }}
@@ -177,21 +160,21 @@ export default function HolidayManagement() {
             sx={{
               width: 44,
               height: 44,
-              borderRadius: "50%",
-              bgcolor: "rgba(245, 158, 11, 0.15)",
-              color: COLOR.amber,
+              borderRadius: "12px",
+              bgcolor: isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7",
+              color: "#d97706",
               display: "grid",
               placeItems: "center",
-              border: "1px solid rgba(245, 158, 11, 0.3)",
+              border: isDark ? "1px solid rgba(245, 158, 11, 0.3)" : "1px solid #fde68a",
             }}
           >
-            <Celebration sx={{ fontSize: 22 }} />
+            <Celebration sx={{ fontSize: 24 }} />
           </Box>
           <Box>
-            <Typography variant="h5" fontWeight={800} sx={{ color: COLOR.text, letterSpacing: "-0.01em" }}>
+            <Typography variant="h5" fontWeight={900} sx={{ color: isDark ? "#f8fafc" : "#0f172a", letterSpacing: "-0.01em" }}>
               Holiday Management
             </Typography>
-            <Typography variant="body2" sx={{ color: COLOR.textMuted, fontSize: "0.85rem" }}>
+            <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.85rem" }}>
               Add holidays, review history, and update attendance automatically.
             </Typography>
           </Box>
@@ -203,16 +186,19 @@ export default function HolidayManagement() {
           onClick={loadHolidays}
           disabled={loading}
           sx={{
-            color: COLOR.blue,
-            borderColor: "rgba(59, 130, 246, 0.3)",
-            bgcolor: "rgba(59, 130, 246, 0.08)",
+            color: "#1d68f0",
+            borderColor: isDark ? "rgba(29, 104, 240, 0.3)" : "#bfdbfe",
+            bgcolor: isDark ? "rgba(29, 104, 240, 0.08)" : "#eff6ff",
             borderRadius: "10px",
             height: 38,
             px: 2,
             textTransform: "none",
             fontWeight: 700,
             fontSize: "0.82rem",
-            "&:hover": { bgcolor: "rgba(59, 130, 246, 0.15)", borderColor: COLOR.blue },
+            "&:hover": {
+              bgcolor: isDark ? "rgba(29, 104, 240, 0.15)" : "#dbeafe",
+              borderColor: "#1d68f0",
+            },
           }}
         >
           Refresh
@@ -240,19 +226,30 @@ export default function HolidayManagement() {
             p: 2.5,
             mb: 3,
             borderRadius: "16px",
-            bgcolor: COLOR.card,
-            border: `1px solid ${COLOR.border}`,
+            bgcolor: isDark ? "#0d1322" : "#ffffff",
+            border: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid #e2e8f0",
+            boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 2px 12px rgba(0,0,0,0.03)",
           }}
         >
           <Stack direction="row" spacing={1.25} alignItems="center" mb={2}>
-            <Box sx={{ width: 28, height: 28, borderRadius: "8px", bgcolor: "rgba(59, 130, 246, 0.15)", color: COLOR.blue, display: "grid", placeItems: "center" }}>
+            <Box
+              sx={{
+                width: 28,
+                height: 28,
+                borderRadius: "8px",
+                bgcolor: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                color: "#1d68f0",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
               <Add sx={{ fontSize: 18 }} />
             </Box>
             <Box>
-              <Typography variant="subtitle1" fontWeight={800} sx={{ color: COLOR.text }}>
+              <Typography variant="subtitle1" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a" }}>
                 Add Holiday
               </Typography>
-              <Typography variant="caption" sx={{ color: COLOR.textMuted, fontSize: "0.72rem" }}>
+              <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.75rem" }}>
                 The selected date will appear as Holiday in attendance.
               </Typography>
             </Box>
@@ -267,36 +264,70 @@ export default function HolidayManagement() {
               InputLabelProps={{ shrink: true }}
               required
               size="small"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <CalendarToday sx={{ fontSize: 16, color: "#1d68f0" }} />
+                  </InputAdornment>
+                ),
+              }}
               sx={{
-                minWidth: { md: 220 },
+                minWidth: { md: 240 },
                 "& .MuiOutlinedInput-root": {
-                  bgcolor: "#080c16",
-                  color: COLOR.text,
+                  bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
+                  color: isDark ? "#f8fafc" : "#0f172a",
                   borderRadius: "10px",
-                  "& fieldset": { borderColor: COLOR.border },
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  "& fieldset": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0" },
+                  "&:hover fieldset": { borderColor: "#1d68f0" },
+                  "&.Mui-focused fieldset": { borderColor: "#1d68f0" },
                 },
-                "& .MuiInputLabel-root": { color: COLOR.textMuted },
+                "& .MuiInputLabel-root": {
+                  color: isDark ? "#94a3b8" : "#64748b",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  "&.Mui-focused": { color: "#1d68f0" },
+                },
               }}
             />
+
             <TextField
               label="Holiday Name"
-              placeholder="Example: Diwali"
+              placeholder="Example: Diwali / Independence Day"
               value={form.reason}
               onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))}
               inputProps={{ maxLength: 120 }}
               required
               fullWidth
               size="small"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EventNote sx={{ fontSize: 18, color: isDark ? "#94a3b8" : "#64748b" }} />
+                  </InputAdornment>
+                ),
+              }}
               sx={{
                 "& .MuiOutlinedInput-root": {
-                  bgcolor: "#080c16",
-                  color: COLOR.text,
+                  bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
+                  color: isDark ? "#f8fafc" : "#0f172a",
                   borderRadius: "10px",
-                  "& fieldset": { borderColor: COLOR.border },
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  "& fieldset": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0" },
+                  "&:hover fieldset": { borderColor: "#1d68f0" },
+                  "&.Mui-focused fieldset": { borderColor: "#1d68f0" },
                 },
-                "& .MuiInputLabel-root": { color: COLOR.textMuted },
+                "& .MuiInputLabel-root": {
+                  color: isDark ? "#94a3b8" : "#64748b",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  "&.Mui-focused": { color: "#1d68f0" },
+                },
               }}
             />
+
             <Button
               type="submit"
               variant="contained"
@@ -305,13 +336,15 @@ export default function HolidayManagement() {
               sx={{
                 minWidth: 150,
                 height: 40,
-                bgcolor: COLOR.blue,
+                bgcolor: "#1d68f0",
+                backgroundImage: "linear-gradient(135deg, #1d68f0 0%, #2563eb 100%)",
                 color: "#fff",
                 fontWeight: 800,
-                fontSize: "0.82rem",
+                fontSize: "0.85rem",
                 borderRadius: "10px",
                 textTransform: "none",
-                "&:hover": { bgcolor: "#2563eb" },
+                boxShadow: "0 4px 14px rgba(29, 104, 240, 0.35)",
+                "&:hover": { bgcolor: "#1557d0" },
               }}
             >
               {saving ? "Adding..." : "Add Holiday"}
@@ -325,64 +358,107 @@ export default function HolidayManagement() {
         elevation={0}
         sx={{
           borderRadius: "16px",
-          bgcolor: COLOR.card,
-          border: `1px solid ${COLOR.border}`,
+          bgcolor: isDark ? "#0d1322" : "#ffffff",
+          border: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid #e2e8f0",
+          boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 2px 12px rgba(0,0,0,0.03)",
           overflow: "hidden",
         }}
       >
-        <Box sx={{ px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between", bgcolor: COLOR.cardHeader, borderBottom: `1px solid ${COLOR.border}` }}>
+        <Box
+          sx={{
+            px: 3,
+            py: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc",
+            borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
+          }}
+        >
           <Stack direction="row" spacing={1} alignItems="center">
-            <Box sx={{ width: 28, height: 28, borderRadius: "8px", bgcolor: "rgba(147, 51, 234, 0.15)", color: "#c084fc", display: "grid", placeItems: "center" }}>
+            <Box
+              sx={{
+                width: 28,
+                height: 28,
+                borderRadius: "8px",
+                bgcolor: isDark ? "rgba(147, 51, 234, 0.15)" : "#f3e8ff",
+                color: "#9333ea",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
               <History sx={{ fontSize: 16 }} />
             </Box>
-            <Typography variant="subtitle1" fontWeight={800} sx={{ color: COLOR.text }}>
+            <Typography variant="subtitle1" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a" }}>
               Holiday History
             </Typography>
           </Stack>
+
           <Chip
             label={`${holidays.length} total`}
             sx={{
-              bgcolor: "rgba(59, 130, 246, 0.2)",
-              color: "#60a5fa",
+              bgcolor: isDark ? "rgba(59, 130, 246, 0.2)" : "#eff6ff",
+              color: "#1d68f0",
               fontWeight: 800,
               fontSize: "0.72rem",
               borderRadius: "999px",
               height: 24,
-              border: "1px solid rgba(59, 130, 246, 0.4)",
+              border: isDark ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid #bfdbfe",
             }}
           />
         </Box>
 
         {loading ? (
           <Box sx={{ py: 8, display: "grid", placeItems: "center" }}>
-            <CircularProgress size={32} sx={{ color: COLOR.blue }} />
+            <CircularProgress size={32} sx={{ color: "#1d68f0" }} />
           </Box>
         ) : holidays.length === 0 ? (
-          <Box sx={{ p: 5, m: 2.5, borderRadius: "14px", border: "1px dashed rgba(255, 255, 255, 0.1)", textAlign: "center" }}>
-            <Box sx={{ width: 56, height: 56, borderRadius: "50%", bgcolor: "rgba(255, 255, 255, 0.04)", display: "flex", alignItems: "center", justifyContent: "center", mx: "auto", mb: 2 }}>
-              <CalendarToday sx={{ fontSize: 28, color: COLOR.textMuted }} />
+          <Box
+            sx={{
+              p: 5,
+              m: 2.5,
+              borderRadius: "14px",
+              border: isDark ? "1px dashed rgba(255, 255, 255, 0.1)" : "1px dashed #cbd5e1",
+              bgcolor: isDark ? "transparent" : "#f8fafc",
+              textAlign: "center",
+            }}
+          >
+            <Box
+              sx={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                bgcolor: isDark ? "rgba(255, 255, 255, 0.04)" : "#e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                mx: "auto",
+                mb: 2,
+              }}
+            >
+              <CalendarToday sx={{ fontSize: 28, color: isDark ? "#94a3b8" : "#64748b" }} />
             </Box>
-            <Typography fontWeight={800} sx={{ color: COLOR.text, fontSize: "1rem", mb: 0.5 }}>
-              No holiday added yet.
+            <Typography fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1rem", mb: 0.5 }}>
+              No holidays added yet.
             </Typography>
-            <Typography variant="body2" sx={{ color: COLOR.textMuted, fontSize: "0.85rem" }}>
-              Add a holiday to see it here.
+            <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.85rem" }}>
+              Add a holiday date above to automatically connect it with attendance records.
             </Typography>
           </Box>
         ) : (
           <TableContainer>
             <Table sx={{ minWidth: 760 }}>
-              <TableHead sx={{ bgcolor: COLOR.tableHead }}>
+              <TableHead sx={{ bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc" }}>
                 <TableRow>
                   {["Date", "Holiday", "Added By", "Attendance Updated", "Skipped", ...(canManage ? ["Action"] : [])].map((head) => (
                     <TableCell
                       key={head}
                       sx={{
-                        color: COLOR.textMuted,
+                        color: isDark ? "#94a3b8" : "#64748b",
                         fontWeight: 800,
                         fontSize: "0.72rem",
                         py: 1.5,
-                        borderColor: COLOR.border,
+                        borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9",
                         ...(head === "Action" && { textAlign: "right", pr: 3 }),
                       }}
                     >
@@ -398,36 +474,37 @@ export default function HolidayManagement() {
                   return (
                     <TableRow
                       key={holiday._id}
+                      hover
                       sx={{
-                        borderBottom: `1px solid ${COLOR.border}`,
-                        "&:hover": { bgcolor: COLOR.cardHover },
+                        borderBottom: isDark ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid #f1f5f9",
+                        "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc" },
                       }}
                     >
-                      <TableCell sx={{ borderColor: COLOR.border, py: 1.75 }}>
-                        <Typography fontWeight={800} sx={{ color: COLOR.text, fontSize: "0.85rem" }}>
+                      <TableCell sx={{ borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9", py: 1.75 }}>
+                        <Typography fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "0.85rem" }}>
                           {formatDate(holiday.date)}
                         </Typography>
                       </TableCell>
 
-                      <TableCell sx={{ borderColor: COLOR.border }}>
+                      <TableCell sx={{ borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9" }}>
                         <Stack direction="row" spacing={1} alignItems="center">
-                          <Celebration sx={{ color: COLOR.amber, fontSize: 18 }} />
-                          <Typography fontWeight={800} sx={{ color: COLOR.text, fontSize: "0.85rem" }}>
+                          <Celebration sx={{ color: "#d97706", fontSize: 18 }} />
+                          <Typography fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "0.85rem" }}>
                             {holiday.reason}
                           </Typography>
                         </Stack>
                       </TableCell>
 
-                      <TableCell sx={{ borderColor: COLOR.border }}>
-                        <Typography variant="body2" sx={{ color: COLOR.textSub, fontSize: "0.82rem" }}>
+                      <TableCell sx={{ borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9" }}>
+                        <Typography variant="body2" sx={{ color: isDark ? "#cbd5e1" : "#334155", fontSize: "0.82rem", fontWeight: 600 }}>
                           {getUserName(holiday.createdBy)}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: COLOR.textMuted, fontSize: "0.75rem" }}>
+                        <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.75rem" }}>
                           {formatDate(holiday.createdAt)}
                         </Typography>
                       </TableCell>
 
-                      <TableCell sx={{ borderColor: COLOR.border }}>
+                      <TableCell sx={{ borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9" }}>
                         <Chip
                           label={`${affected} records`}
                           size="small"
@@ -436,19 +513,19 @@ export default function HolidayManagement() {
                             borderRadius: "999px",
                             fontWeight: 800,
                             fontSize: "0.72rem",
-                            bgcolor: "rgba(16, 185, 129, 0.15)",
-                            color: "#34d399",
-                            border: "1px solid rgba(16, 185, 129, 0.3)",
+                            bgcolor: isDark ? "rgba(16, 185, 129, 0.15)" : "#dcfce7",
+                            color: isDark ? "#34d399" : "#15803d",
+                            border: isDark ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid #86efac",
                           }}
                         />
                       </TableCell>
 
-                      <TableCell sx={{ color: COLOR.textSub, fontWeight: 700, borderColor: COLOR.border }}>
+                      <TableCell sx={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: 700, borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9" }}>
                         {holiday.skippedCount || 0}
                       </TableCell>
 
                       {canManage && (
-                        <TableCell align="right" sx={{ borderColor: COLOR.border, pr: 3 }}>
+                        <TableCell align="right" sx={{ borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9", pr: 3 }}>
                           <Tooltip title="Delete holiday">
                             <IconButton
                               size="small"
@@ -457,10 +534,10 @@ export default function HolidayManagement() {
                                 width: 30,
                                 height: 30,
                                 borderRadius: "8px",
-                                bgcolor: "rgba(239, 68, 68, 0.12)",
-                                color: "#f87171",
-                                border: "1px solid rgba(239, 68, 68, 0.3)",
-                                "&:hover": { bgcolor: "rgba(239, 68, 68, 0.25)" },
+                                bgcolor: isDark ? "rgba(239, 68, 68, 0.12)" : "#fee2e2",
+                                color: "#ef4444",
+                                border: isDark ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid #fca5a5",
+                                "&:hover": { bgcolor: isDark ? "rgba(239, 68, 68, 0.25)" : "#fecaca" },
                               }}
                             >
                               <DeleteOutline sx={{ fontSize: 16 }} />
@@ -485,27 +562,26 @@ export default function HolidayManagement() {
         fullWidth
         PaperProps={{
           sx: {
-            bgcolor: COLOR.card,
-            color: COLOR.text,
+            bgcolor: isDark ? "#0d1322" : "#ffffff",
+            color: isDark ? "#f8fafc" : "#0f172a",
             borderRadius: "16px",
-            border: `1px solid ${COLOR.border}`,
+            border: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid #e2e8f0",
           },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 800, borderBottom: `1px solid ${COLOR.border}` }}>
+        <DialogTitle sx={{ fontWeight: 800, borderBottom: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid #e2e8f0" }}>
           Delete Holiday?
         </DialogTitle>
         <DialogContent sx={{ pt: 2.5 }}>
-          <Typography sx={{ color: COLOR.textSub, fontSize: "0.9rem" }}>
+          <Typography sx={{ color: isDark ? "#cbd5e1" : "#334155", fontSize: "0.9rem" }}>
             Delete <strong>{deleteTarget?.reason}</strong> on <strong>{formatDate(deleteTarget?.date)}</strong>? Connected holiday attendance records will also be removed or restored.
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ p: 2, borderTop: `1px solid ${COLOR.border}` }}>
-          <Button onClick={() => setDeleteTarget(null)} disabled={deleting} sx={{ color: COLOR.textMuted, fontWeight: 700 }}>
+        <DialogActions sx={{ p: 2, borderTop: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid #e2e8f0" }}>
+          <Button onClick={() => setDeleteTarget(null)} disabled={deleting} sx={{ color: isDark ? "#94a3b8" : "#64748b", fontWeight: 700 }}>
             Cancel
           </Button>
           <Button
-            bgcolor={COLOR.red}
             variant="contained"
             color="error"
             onClick={handleDelete}

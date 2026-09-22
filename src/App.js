@@ -9,6 +9,7 @@ import {
 import { ThemeProvider, createTheme, CssBaseline } from "@mui/material";
 import { AuthProvider } from "./contexts/AuthContext";
 import { DashboardProvider } from "./contexts/DashboardContext";
+import { ToastContainer } from "./components/useToast.jsx";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
 import Login from "./components/auth/Login";
@@ -17,6 +18,7 @@ import Dashboard from "./pages/Dashboard";
 import TotalVisitsPage from "./pages/TotalVisits";
 import Reports from "./pages/Reports";
 import UserManagement from "./pages/UserManagement";
+import UserDetailsPage from "./pages/UserDetailsPage";
 import AddUserPage from "./pages/AddUserPage";
 import ImportLead from "./pages/ImportLeads";
 import AddLead from "./pages/AddLead";
@@ -45,6 +47,10 @@ import ProjectDetails from "./pages/ProjectDetails";
 import WorkRegister from "./pages/WorkRegister";
 import InventoryERP from "./pages/InventoryERP";
 import SettingsPage from "./pages/Settings";
+import Salaries from "./pages/Salaries";
+import Payroll from "./pages/Payroll";
+import Payslips from "./pages/Payslips";
+import PayrollPayments from "./pages/PayrollPayments";
 
 const getAppTheme = (mode = "light") =>
   createTheme({
@@ -52,19 +58,19 @@ const getAppTheme = (mode = "light") =>
       mode,
       ...(mode === "dark"
         ? {
-            primary: { main: "#3b82f6", light: "#60a5fa", dark: "#1d4ed8", contrastText: "#fff" },
-            secondary: { main: "#818cf8", light: "#a5b4fc", dark: "#4338ca", contrastText: "#fff" },
-            background: { default: "#050811", paper: "#0b0e1a" },
-            text: { primary: "#f8fafc", secondary: "#94a3b8", disabled: "#64748b" },
-            divider: "rgba(255, 255, 255, 0.08)",
-          }
+          primary: { main: "#3b82f6", light: "#60a5fa", dark: "#1d4ed8", contrastText: "#fff" },
+          secondary: { main: "#818cf8", light: "#a5b4fc", dark: "#4338ca", contrastText: "#fff" },
+          background: { default: "#050811", paper: "#0b0e1a" },
+          text: { primary: "#f8fafc", secondary: "#94a3b8", disabled: "#64748b" },
+          divider: "rgba(255, 255, 255, 0.08)",
+        }
         : {
-            primary: { main: "#3566bb", light: "#2172c9", dark: "#0a479b", contrastText: "#fff" },
-            secondary: { main: "#1a237e", light: "#534bae", dark: "#000051", contrastText: "#fff" },
-            background: { default: "#f8f9fa", paper: "#ffffff" },
-            text: { primary: "#1a1a1a", secondary: "#666666", disabled: "#999999" },
-            divider: "#e0e0e0",
-          }),
+          primary: { main: "#3566bb", light: "#2172c9", dark: "#0a479b", contrastText: "#fff" },
+          secondary: { main: "#1a237e", light: "#534bae", dark: "#000051", contrastText: "#fff" },
+          background: { default: "#f8f9fa", paper: "#ffffff" },
+          text: { primary: "#1a1a1a", secondary: "#666666", disabled: "#999999" },
+          divider: "#e0e0e0",
+        }),
     },
     typography: {
       fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
@@ -166,7 +172,7 @@ function App() {
               <Route
                 path="/quotation/create"
                 element={
-                  <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}>
+                  <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}>
                     <QuotationEditor initialMode="create" />
                   </ProtectedRoute>
                 }
@@ -174,7 +180,7 @@ function App() {
               <Route
                 path="/quotation/edit"
                 element={
-                  <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}>
+                  <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}>
                     <QuotationEditor />
                   </ProtectedRoute>
                 }
@@ -185,27 +191,29 @@ function App() {
                   <ProtectedRoute>
                     <MainLayout>
                       <Routes>
-                        <Route path="dashboard" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><Dashboard /></ProtectedRoute>} />
-                        <Route path="total-visits" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><TotalVisitsPage /></ProtectedRoute>} />
-                        <Route path="reports" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><Reports /></ProtectedRoute>} />
-                        <Route path="work-register" element={<ProtectedRoute allowedRoles={["ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","Admin_panel","ZSM","Incharge"]}><WorkRegister /></ProtectedRoute>} />
-                        <Route path="user-management" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><UserManagement /></ProtectedRoute>} />
-                        <Route path="add-user" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge"]}><AddUserPage /></ProtectedRoute>} />
-                        <Route path="import-leads" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><ImportLead /></ProtectedRoute>} />
-                        <Route path="add-lead" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><AddLead /></ProtectedRoute>} />
-                        <Route path="expense" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><Expense /></ProtectedRoute>} />
-                        <Route path="lead-funnel" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><LeadFunnelDashboard /></ProtectedRoute>} />
-                        <Route path="missed-leads" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><MissedLeads /></ProtectedRoute>} />
-                        <Route path="3d-design" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><ThreeDDesignDashboard /></ProtectedRoute>} />
-                        <Route path="3d-design/new" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><ThreeDDesign /></ProtectedRoute>} />
-                        <Route path="3d-design/preview" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><ThreeDDesignPreview /></ProtectedRoute>} />
-                        <Route path="quotation" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><Quotation /></ProtectedRoute>} />
-                        <Route path="all-quotes" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><AllQuotes /></ProtectedRoute>} />
-                        <Route path="add-visit" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><VisitDetails /></ProtectedRoute>} />
+                        <Route path="dashboard" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Dashboard /></ProtectedRoute>} />
+                        <Route path="total-visits" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><TotalVisitsPage /></ProtectedRoute>} />
+                        <Route path="reports" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Reports /></ProtectedRoute>} />
+                        <Route path="work-register" element={<ProtectedRoute allowedRoles={["ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "Admin_panel", "ZSM", "Incharge"]}><WorkRegister /></ProtectedRoute>} />
+                        <Route path="user-management" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR"]}><UserManagement /></ProtectedRoute>} />
+                        <Route path="user-details/:userId" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR"]}><UserDetailsPage /></ProtectedRoute>} />
+                        <Route path="user-details" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR"]}><UserDetailsPage /></ProtectedRoute>} />
+                        <Route path="add-user" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge"]}><AddUserPage /></ProtectedRoute>} />
+                        <Route path="import-leads" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><ImportLead /></ProtectedRoute>} />
+                        <Route path="add-lead" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><AddLead /></ProtectedRoute>} />
+                        <Route path="expense" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Expense /></ProtectedRoute>} />
+                        <Route path="lead-funnel" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><LeadFunnelDashboard /></ProtectedRoute>} />
+                        <Route path="missed-leads" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><MissedLeads /></ProtectedRoute>} />
+                        <Route path="3d-design" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><ThreeDDesignDashboard /></ProtectedRoute>} />
+                        <Route path="3d-design/new" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><ThreeDDesign /></ProtectedRoute>} />
+                        <Route path="3d-design/preview" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><ThreeDDesignPreview /></ProtectedRoute>} />
+                        <Route path="quotation" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Quotation /></ProtectedRoute>} />
+                        <Route path="all-quotes" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><AllQuotes /></ProtectedRoute>} />
+                        <Route path="add-visit" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><VisitDetails /></ProtectedRoute>} />
                         <Route
                           path="attendance"
                           element={
-                            <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}>
+                            <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}>
                               <Attandance />
                             </ProtectedRoute>
                           }
@@ -213,7 +221,7 @@ function App() {
                         <Route
                           path="attendance/:userId"
                           element={
-                            <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge"]}>
+                            <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge"]}>
                               <Attandance />
                             </ProtectedRoute>
                           }
@@ -221,7 +229,7 @@ function App() {
                         <Route
                           path="attendance-history/:userId"
                           element={
-                            <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}>
+                            <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}>
                               <AttendanceHistoryPage />
                             </ProtectedRoute>
                           }
@@ -229,7 +237,7 @@ function App() {
                         <Route
                           path="team-attendance"
                           element={
-                            <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge"]}>
+                            <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge"]}>
                               <TeamAttendance />
                             </ProtectedRoute>
                           }
@@ -237,7 +245,7 @@ function App() {
                         <Route
                           path="leave-management"
                           element={
-                            <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}>
+                            <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}>
                               <LeaveManagement />
                             </ProtectedRoute>
                           }
@@ -245,7 +253,7 @@ function App() {
                         <Route
                           path="leave-types"
                           element={
-                            <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}>
+                            <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}>
                               <LeaveTypes />
                             </ProtectedRoute>
                           }
@@ -253,21 +261,27 @@ function App() {
                         <Route
                           path="holiday-management"
                           element={
-                            <ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}>
+                            <ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}>
                               <HolidayManagement />
                             </ProtectedRoute>
                           }
                         />
-                        <Route path="team-tracking" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><TeamTracking /></ProtectedRoute>} />
-                        <Route path="member-history/:userId" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><MemberVisitHistory /></ProtectedRoute>} />
-                        <Route path="notifications" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><Notifications /></ProtectedRoute>} />
-                        <Route path="all-leads/:leadId" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><LeadDetailsPage /></ProtectedRoute>} />
-                        <Route path="all-leads" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><LeadOverview /></ProtectedRoute>} />
-                        <Route path="projects/:projectId" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><ProjectDetails /></ProtectedRoute>} />
-                        <Route path="projects" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM"]}><Projects /></ProtectedRoute>} />
-                        <Route path="inventory" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"]}><InventoryERP /></ProtectedRoute>} />
-                        <Route path="inventory/:section" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"]}><InventoryERP /></ProtectedRoute>} />
-                        <Route path="settings" element={<ProtectedRoute allowedRoles={["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"]}><SettingsPage /></ProtectedRoute>} />
+                        <Route path="team-tracking" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><TeamTracking /></ProtectedRoute>} />
+                        <Route path="member-history/:userId" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><MemberVisitHistory /></ProtectedRoute>} />
+                        <Route path="notifications" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Notifications /></ProtectedRoute>} />
+                        <Route path="all-leads/:leadId" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><LeadDetailsPage /></ProtectedRoute>} />
+                        <Route path="all-leads" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><LeadOverview /></ProtectedRoute>} />
+                        <Route path="projects/:projectId" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><ProjectDetails /></ProtectedRoute>} />
+                        <Route path="projects" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Projects /></ProtectedRoute>} />
+                        <Route path="inventory" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><InventoryERP /></ProtectedRoute>} />
+                        <Route path="inventory/:section" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><InventoryERP /></ProtectedRoute>} />
+                        <Route path="payroll" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><Payroll /></ProtectedRoute>} />
+                        <Route path="payroll/salaries" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><Salaries /></ProtectedRoute>} />
+                        <Route path="payroll/salary-structure" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><Salaries /></ProtectedRoute>} />
+                        <Route path="payroll/payslips" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><Payslips /></ProtectedRoute>} />
+                        <Route path="payroll/salary-slips" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><Payslips /></ProtectedRoute>} />
+                        <Route path="payroll/payments" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><PayrollPayments /></ProtectedRoute>} />
+                        <Route path="settings" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><SettingsPage /></ProtectedRoute>} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                       </Routes>
                     </MainLayout>
@@ -276,6 +290,7 @@ function App() {
               />
             </Routes>
           </Router>
+          <ToastContainer />
         </DashboardProvider>
       </AuthProvider>
     </ThemeProvider>

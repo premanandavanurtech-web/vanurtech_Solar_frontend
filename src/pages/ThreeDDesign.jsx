@@ -4378,11 +4378,12 @@ const LeafletRoofMap = ({ center, roofPoints, onMapClick }) => {
       }
     };
   }, []);
-
   return <div ref={containerRef} style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }} />;
 };
 
 const ThreeDDesign = () => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const location = useLocation();
   const navigate = useNavigate();
   const sourceLead = location.state?.lead || null;
@@ -4518,9 +4519,9 @@ const ThreeDDesign = () => {
           right: 16,
           p: { xs: 1.2, md: 1.5 },
           borderRadius: 3,
-          border: "1px solid rgba(0,0,0,0.12)",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-          bgcolor: "#ffffff",
+          border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.12)",
+          boxShadow: isDark ? "0 10px 30px rgba(0,0,0,0.6)" : "0 10px 30px rgba(0,0,0,0.15)",
+          bgcolor: isDark ? "#0e1526" : "#ffffff",
         }}
       >
         <Stack
@@ -4533,11 +4534,11 @@ const ThreeDDesign = () => {
               onClick={handleBack}
               sx={{
                 border: "1px solid",
-                borderColor: "divider",
-                bgcolor: "rgba(255,255,255,0.92)",
-                color: PRIMARY,
+                borderColor: isDark ? "rgba(255,255,255,0.12)" : "divider",
+                bgcolor: isDark ? "rgba(30, 41, 59, 0.7)" : "rgba(255,255,255,0.92)",
+                color: isDark ? "#60a5fa" : PRIMARY,
                 flexShrink: 0,
-                "&:hover": { bgcolor: alpha(PRIMARY, 0.08) },
+                "&:hover": { bgcolor: isDark ? "rgba(59, 130, 246, 0.15)" : alpha(PRIMARY, 0.08) },
               }}
             >
               <ArrowBack fontSize="small" />
@@ -4547,8 +4548,8 @@ const ThreeDDesign = () => {
                 width: 36,
                 height: 36,
                 borderRadius: 1.5,
-                bgcolor: alpha(PRIMARY, 0.12),
-                color: PRIMARY,
+                bgcolor: isDark ? "rgba(59, 130, 246, 0.18)" : alpha(PRIMARY, 0.12),
+                color: isDark ? "#60a5fa" : PRIMARY,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -4558,15 +4559,15 @@ const ThreeDDesign = () => {
               <ViewInAr fontSize="small" />
             </Box>
             <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#172033" }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: isDark ? "#f8fafc" : "#172033" }}>
                 3D Design
               </Typography>
               <Stack direction="row" alignItems="center" gap={0.7} flexWrap="wrap">
                 <Chip
                   size="small"
-                  icon={<Place />}
+                  icon={<Place sx={{ color: isDark ? "#60a5fa !important" : "inherit" }} />}
                   label={status}
-                  sx={{ bgcolor: alpha(PRIMARY, 0.08), color: "#20304d" }}
+                  sx={{ bgcolor: isDark ? "rgba(59, 130, 246, 0.15)" : alpha(PRIMARY, 0.08), color: isDark ? "#93c5fd" : "#20304d", border: isDark ? "1px solid rgba(59, 130, 246, 0.25)" : "none" }}
                 />
               </Stack>
             </Box>
@@ -4607,7 +4608,8 @@ const ThreeDDesign = () => {
                   right: 0,
                   borderRadius: 2,
                   border: "1px solid",
-                  borderColor: "divider",
+                  borderColor: isDark ? "rgba(255,255,255,0.1)" : "divider",
+                  bgcolor: isDark ? "#0f172a" : "#ffffff",
                   overflow: "hidden",
                   maxHeight: 320,
                 }}
@@ -4639,7 +4641,7 @@ const ThreeDDesign = () => {
                           px: 1.5,
                           py: 1,
                           gap: 1,
-                          "&:hover": { bgcolor: alpha(PRIMARY, 0.06) },
+                          "&:hover": { bgcolor: isDark ? "rgba(59, 130, 246, 0.12)" : alpha(PRIMARY, 0.06) },
                         }}
                       >
                         <Place sx={{ mt: 0.2, fontSize: 20, color: PRIMARY, flexShrink: 0 }} />
@@ -4647,7 +4649,7 @@ const ThreeDDesign = () => {
                           <Typography
                             variant="body2"
                             noWrap
-                            sx={{ fontWeight: 800, color: "#172033" }}
+                            sx={{ fontWeight: 800, color: isDark ? "#f8fafc" : "#172033" }}
                           >
                             {result.title}
                           </Typography>
@@ -4655,14 +4657,16 @@ const ThreeDDesign = () => {
                             <Typography
                               variant="caption"
                               noWrap
-                              sx={{ display: "block", color: "text.secondary" }}
+                              sx={{ display: "block", color: isDark ? "#94a3b8" : "text.secondary" }}
                             >
                               {result.subtitle}
                             </Typography>
                           )}
                         </Box>
                       </ButtonBase>
-                      {index < searchResults.length - 1 && <Divider />}
+                      {index < searchResults.length - 1 && (
+                        <Divider sx={{ borderColor: isDark ? "rgba(255,255,255,0.06)" : undefined }} />
+                      )}
                     </React.Fragment>
                   ))}
                 </Stack>
@@ -4711,7 +4715,12 @@ const ThreeDDesign = () => {
                 <IconButton
                   onClick={clearSelection}
                   disabled={!roofPoints.length}
-                  sx={{ border: "1px solid", borderColor: "divider" }}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: isDark ? "rgba(255,255,255,0.1)" : "divider",
+                    color: isDark ? "#cbd5e1" : "inherit",
+                    "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.05)" : undefined },
+                  }}
                 >
                   <RestartAlt />
                 </IconButton>
@@ -4722,7 +4731,12 @@ const ThreeDDesign = () => {
                 <IconButton
                   onClick={undoPoint}
                   disabled={!roofPoints.length}
-                  sx={{ border: "1px solid", borderColor: "divider" }}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: isDark ? "rgba(255,255,255,0.1)" : "divider",
+                    color: isDark ? "#cbd5e1" : "inherit",
+                    "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.05)" : undefined },
+                  }}
                 >
                   <Clear />
                 </IconButton>

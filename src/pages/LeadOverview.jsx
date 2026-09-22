@@ -482,13 +482,50 @@ const gradientIconBoxSx = {
   flexShrink: 0,
 };
 
+const getModalSectionSx = (isDark) => ({
+  p: 2.5,
+  borderRadius: 3,
+  border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.16)}`,
+  background: isDark ? "#111c30" : GRADIENT_CARD,
+  boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "inset 0 1px 0 rgba(255,255,255,0.72)",
+});
+
+const getFieldSx = (isDark) => ({
+  "& .MuiOutlinedInput-root": {
+    borderRadius: 2,
+    bgcolor: isDark ? "#172338" : "#f8fafd",
+    color: isDark ? "#f8fafc" : "#1e293b",
+    "& input, & textarea": {
+      color: isDark ? "#f8fafc" : "#1e293b",
+    },
+    "& .MuiOutlinedInput-notchedOutline": {
+      borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)",
+    },
+    "&:hover .MuiOutlinedInput-notchedOutline": {
+      borderColor: PRIMARY_COLOR,
+    },
+    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+      borderColor: PRIMARY_COLOR,
+    },
+  },
+  "& .MuiInputLabel-root": {
+    color: isDark ? "#94a3b8" : "text.secondary",
+    "&.Mui-focused": { color: PRIMARY_COLOR },
+  },
+  "& .MuiFormHelperText-root": {
+    color: isDark ? "#94a3b8" : "text.secondary",
+  },
+});
+
 const modalSectionSx = {
   p: 2.5,
   borderRadius: 3,
   border: `1px solid ${alpha(PRIMARY_COLOR, 0.16)}`,
   background: GRADIENT_CARD,
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
-};const getTableHeaderCellSx = (isDark) => ({
+};
+
+const getTableHeaderCellSx = (isDark) => ({
   background: isDark ? "#090f1d" : "linear-gradient(180deg, #f8faff, #f0f6ff)",
   fontWeight: 700,
   fontSize: "0.78rem",
@@ -550,21 +587,32 @@ const MobileFilterDrawer = ({
   open, onClose, period, setPeriod, statusFilter, setStatusFilter,
   handleClearFilters, searchQuery, setSearchQuery, activeFilterCount,
 }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const [expandedSection, setExpandedSection] = useState("search");
   const toggleSection = (section) => setExpandedSection(expandedSection === section ? null : section);
 
   return (
     <SwipeableDrawer anchor="bottom" open={open} onClose={onClose} onOpen={() => {}}
       disableSwipeToOpen={false}
-      PaperProps={{ sx: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "90vh", overflow: "hidden" } }}>
+      PaperProps={{
+        sx: {
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          maxHeight: "90vh",
+          overflow: "hidden",
+          bgcolor: isDark ? "#0e1626" : "#ffffff",
+          backgroundImage: "none",
+        },
+      }}>
       <Box sx={{ position: "relative" }}>
-        <Box sx={{ width: 40, height: 4, bgcolor: "grey.300", borderRadius: 2, mx: "auto", my: 1.5 }} />
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pb: 2, borderBottom: `1px solid ${alpha(PRIMARY_COLOR, 0.1)}` }}>
+        <Box sx={{ width: 40, height: 4, bgcolor: isDark ? "rgba(255,255,255,0.2)" : "grey.300", borderRadius: 2, mx: "auto", my: 1.5 }} />
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pb: 2, borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.1)}` }}>
           <Box>
             <Typography variant="h6" fontWeight="700" color={PRIMARY_COLOR}>Filter Leads</Typography>
             <Typography variant="caption" color="text.secondary">{activeFilterCount} active filter{activeFilterCount !== 1 && "s"}</Typography>
           </Box>
-          <IconButton onClick={onClose} size="small" sx={{ bgcolor: alpha(PRIMARY_COLOR, 0.1) }}><Close /></IconButton>
+          <IconButton onClick={onClose} size="small" sx={{ bgcolor: isDark ? "rgba(255,255,255,0.06)" : alpha(PRIMARY_COLOR, 0.1), color: isDark ? "#94a3b8" : "inherit" }}><Close /></IconButton>
         </Box>
         <Box sx={{ maxHeight: "calc(90vh - 120px)", overflow: "auto", p: 3 }}>
           <Stack spacing={2.5}>
@@ -574,7 +622,17 @@ const MobileFilterDrawer = ({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   InputProps={{ startAdornment: <InputAdornment position="start"><Search sx={{ color: "text.secondary", fontSize: 20 }} /></InputAdornment>,
                     endAdornment: searchQuery && <InputAdornment position="end"><IconButton size="small" onClick={() => setSearchQuery("")}><Close fontSize="small" /></IconButton></InputAdornment> }}
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 999, bgcolor: "#fff", transition: "box-shadow .2s ease, border-color .2s ease", "&.Mui-focused": { boxShadow: FOCUS_RING } } }} />
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: 999,
+                      bgcolor: isDark ? "#172338" : "#fff",
+                      color: isDark ? "#f8fafc" : "#1e293b",
+                      "& input": { color: isDark ? "#f8fafc" : "#1e293b" },
+                      "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)" },
+                      transition: "box-shadow .2s ease, border-color .2s ease",
+                      "&.Mui-focused": { boxShadow: FOCUS_RING },
+                    },
+                  }} />
               )},
               { key: "period", label: "Time Period", icon: <DateRange sx={{ color: PRIMARY_COLOR, fontSize: 20 }} />, content: (
                 <Grid container spacing={1}>
@@ -583,9 +641,9 @@ const MobileFilterDrawer = ({
                       <Button fullWidth variant="text" onClick={() => setPeriod(option.value)} startIcon={option.icon} size="small"
                         sx={{
                           borderRadius: 999,
-                          border: `1px solid ${period === option.value ? "transparent" : alpha(PRIMARY_COLOR, 0.16)}`,
-                          background: period === option.value ? GRADIENT_BLUE : "#fff",
-                          color: period === option.value ? "#fff" : PRIMARY_COLOR,
+                          border: `1px solid ${period === option.value ? "transparent" : isDark ? "rgba(255,255,255,0.1)" : alpha(PRIMARY_COLOR, 0.16)}`,
+                          background: period === option.value ? GRADIENT_BLUE : isDark ? "#172338" : "#fff",
+                          color: period === option.value ? "#fff" : isDark ? "#94a3b8" : PRIMARY_COLOR,
                           boxShadow: period === option.value ? "0 12px 24px rgba(37,99,235,0.18)" : "none",
                         }}>
                         {option.label}
@@ -596,7 +654,14 @@ const MobileFilterDrawer = ({
               )},
               { key: "status", label: "Lead Status", icon: <FilterAlt sx={{ color: PRIMARY_COLOR, fontSize: 20 }} />, content: (
                 <FormControl fullWidth size="small">
-                  <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} displayEmpty>
+                  <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} displayEmpty
+                    sx={{
+                      borderRadius: 2,
+                      bgcolor: isDark ? "#172338" : "#fff",
+                      color: isDark ? "#f8fafc" : "#1e293b",
+                      "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)" },
+                      "& .MuiSelect-icon": { color: isDark ? "#94a3b8" : "inherit" },
+                    }}>
                     <MenuItem value="all">All Statuses</MenuItem>
                     {LEAD_STATUS_OPTIONS.map((status) => (
                       <MenuItem key={status} value={status}>
@@ -607,9 +672,9 @@ const MobileFilterDrawer = ({
                 </FormControl>
               )},
             ].map(({ key, label, icon, content }) => (
-              <Paper key={key} elevation={0} sx={{ border: `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, borderRadius: 2, overflow: "hidden" }}>
-                <Box sx={{ p: 2, bgcolor: alpha(PRIMARY_COLOR, 0.02), display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => toggleSection(key)}>
-                  <Stack direction="row" spacing={1} alignItems="center">{icon}<Typography variant="subtitle2" fontWeight={600}>{label}</Typography></Stack>
+              <Paper key={key} elevation={0} sx={{ border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, borderRadius: 2, overflow: "hidden", bgcolor: isDark ? "#111c30" : "inherit" }}>
+                <Box sx={{ p: 2, bgcolor: isDark ? "#172338" : alpha(PRIMARY_COLOR, 0.02), display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => toggleSection(key)}>
+                  <Stack direction="row" spacing={1} alignItems="center">{icon}<Typography variant="subtitle2" fontWeight={600} color={isDark ? "#f8fafc" : "inherit"}>{label}</Typography></Stack>
                   {expandedSection === key ? <ExpandLess /> : <ExpandMore />}
                 </Box>
                 <Collapse in={expandedSection === key}><Box sx={{ p: 2 }}>{content}</Box></Collapse>
@@ -617,10 +682,10 @@ const MobileFilterDrawer = ({
             ))}
           </Stack>
         </Box>
-        <Box sx={{ p: 3, borderTop: `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, bgcolor: "#fff" }}>
+        <Box sx={{ p: 3, borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, bgcolor: isDark ? "#0e1626" : "#fff" }}>
           <Stack direction="row" spacing={2}>
             <Button fullWidth variant="outlined" onClick={() => { handleClearFilters(); onClose(); }} startIcon={<Clear />}
-              sx={{ borderColor: PRIMARY_COLOR, color: PRIMARY_COLOR }}>Clear All</Button>
+              sx={{ borderColor: isDark ? "rgba(255,255,255,0.18)" : PRIMARY_COLOR, color: isDark ? "#94a3b8" : PRIMARY_COLOR }}>Clear All</Button>
             <Button fullWidth variant="contained" onClick={onClose} sx={{ background: GRADIENT_BLUE, boxShadow: "0 12px 24px rgba(37,99,235,0.2)", "&:hover": { background: GRADIENT_BLUE } }}>Apply Filters</Button>
           </Stack>
         </Box>
@@ -685,16 +750,20 @@ const InfoRow = ({ label, value, icon, subValue, action, chip, chipColor }) => (
   </Box>
 );
 
-const DocumentCard = ({ title, url, icon, filename }) => (
-  <Card variant="outlined" sx={{ p: 2, borderRadius: 2.5, background: GRADIENT_CARD, borderColor: alpha(PRIMARY_COLOR, 0.14) }}>
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
-      {icon}<Typography variant="body2" fontWeight={600} noWrap>{title}</Typography>
-    </Box>
-    <Button fullWidth size="small" variant="outlined" startIcon={<OpenInNew />} onClick={() => handleDownload(url, filename || title)} sx={{ borderColor: alpha(PRIMARY_COLOR, 0.2), color: PRIMARY_COLOR }}>
-      View Document
-    </Button>
-  </Card>
-);
+const DocumentCard = ({ title, url, icon, filename }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  return (
+    <Card variant="outlined" sx={{ p: 2, borderRadius: 2.5, background: isDark ? "#172338" : GRADIENT_CARD, borderColor: isDark ? "rgba(255,255,255,0.08)" : alpha(PRIMARY_COLOR, 0.14) }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+        {icon}<Typography variant="body2" fontWeight={600} noWrap color={isDark ? "#f8fafc" : "inherit"}>{title}</Typography>
+      </Box>
+      <Button fullWidth size="small" variant="outlined" startIcon={<OpenInNew />} onClick={() => handleDownload(url, filename || title)} sx={{ borderColor: isDark ? "rgba(255,255,255,0.18)" : alpha(PRIMARY_COLOR, 0.2), color: PRIMARY_COLOR }}>
+        View Document
+      </Button>
+    </Card>
+  );
+};
 
 const LeadActionMenu = ({
   lead,
@@ -705,8 +774,11 @@ const LeadActionMenu = ({
   onCreateQuote,
   onAssign,
   onConvertToProject,
+  onViewVisitPipeline,
   onUnsupportedAction,
 }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
@@ -721,8 +793,9 @@ const LeadActionMenu = ({
     gap: 1.25,
     minHeight: 42,
     px: 2.25,
-    color: "#5f6b80",
+    color: isDark ? "#cbd5e1" : "#5f6b80",
     fontSize: "0.92rem",
+    "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.06)" : alpha(PRIMARY_COLOR, 0.04) },
     "& .MuiSvgIcon-root": {
       fontSize: 18,
       color: PRIMARY_COLOR,
@@ -742,8 +815,8 @@ const LeadActionMenu = ({
             width: 40,
             height: 40,
             borderRadius: 2,
-            bgcolor: open ? alpha(PRIMARY_COLOR, 0.12) : alpha("#64748b", 0.08),
-            color: "#0f172a",
+            bgcolor: open ? alpha(PRIMARY_COLOR, 0.12) : isDark ? "rgba(255,255,255,0.06)" : alpha("#64748b", 0.08),
+            color: isDark ? "#e2e8f0" : "#0f172a",
             "&:hover": { bgcolor: alpha(PRIMARY_COLOR, 0.12) },
           }}
         >
@@ -762,8 +835,10 @@ const LeadActionMenu = ({
             mt: 0.5,
             minWidth: 224,
             borderRadius: 3,
-            border: "1px solid #eef2f7",
-            boxShadow: "0 18px 40px rgba(15, 23, 42, 0.12)",
+            border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #eef2f7",
+            bgcolor: isDark ? "#0e1626" : "#ffffff",
+            backgroundImage: "none",
+            boxShadow: isDark ? "0 18px 40px rgba(0,0,0,0.5)" : "0 18px 40px rgba(15, 23, 42, 0.12)",
             overflow: "hidden",
             py: 1,
           },
@@ -776,6 +851,10 @@ const LeadActionMenu = ({
         <MenuItem sx={menuItemSx} onClick={() => runAction(onViewDetails)}>
           <OpenInNew />
           View Details
+        </MenuItem>
+        <MenuItem sx={menuItemSx} onClick={() => runAction(onViewVisitPipeline)}>
+          <CalendarToday />
+          Visit Pipeline
         </MenuItem>
         <MenuItem sx={menuItemSx} onClick={() => runAction(onCreateQuote)}>
           <Description />
@@ -821,6 +900,8 @@ const LeadActionMenu = ({
 };
 
 const MobileLeadCard = ({ lead, onView, onEdit, onAssign, onDelete, onConvertToProject, permissions }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const [expanded, setExpanded] = useState(false);
   const statusColor = getStatusColor(lead.status);
   const initials = `${lead.firstName?.[0] || ""}${lead.lastName?.[0] || ""}`;
@@ -830,49 +911,64 @@ const MobileLeadCard = ({ lead, onView, onEdit, onAssign, onDelete, onConvertToP
   };
 
   return (
-    <Paper sx={{ mb: 1.5, borderRadius: 3, border: `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, overflow: "hidden", background: "linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)" }}>
+    <Paper
+      elevation={0}
+      sx={{
+        mb: 1.5,
+        borderRadius: 3,
+        border: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`,
+        bgcolor: isDark ? "#0e1526" : "#ffffff",
+        color: isDark ? "#f8fafc" : "inherit",
+        overflow: "hidden",
+        boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.35)" : "0 2px 10px rgba(37,99,235,0.05)",
+        transition: "all 0.2s ease-in-out",
+        "&:hover": {
+          borderColor: isDark ? "rgba(96, 165, 250, 0.35)" : alpha(PRIMARY_COLOR, 0.25),
+        },
+      }}
+    >
       <Box sx={{ p: 2 }}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5 }}>
           <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-            <Avatar sx={{ background: statusColor.avatar, color: "#fff", width: 48, height: 48, fontWeight: 700, boxShadow: "0 10px 20px rgba(37,99,235,0.18)" }}>{initials}</Avatar>
+            <Avatar sx={{ background: statusColor.avatar, color: "#fff", width: 48, height: 48, fontWeight: 700, boxShadow: isDark ? "0 4px 14px rgba(0,0,0,0.4)" : "0 10px 20px rgba(37,99,235,0.18)" }}>{initials}</Avatar>
             <Box>
-              <Typography variant="subtitle1" fontWeight="700" color={PRIMARY_COLOR}>{lead.firstName} {lead.lastName}</Typography>
-              <Typography variant="caption" color="text.secondary">ID: {lead._id?.slice(-8) || "N/A"}</Typography>
+              <Typography variant="subtitle1" fontWeight="700" sx={{ color: isDark ? "#f8fafc" : PRIMARY_COLOR }}>{lead.firstName} {lead.lastName}</Typography>
+              <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>ID: {lead._id?.slice(-8) || "N/A"}</Typography>
             </Box>
           </Box>
-          <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.3s", bgcolor: alpha(PRIMARY_COLOR, 0.1) }}>
+          <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.3s", bgcolor: isDark ? "rgba(59, 130, 246, 0.15)" : alpha(PRIMARY_COLOR, 0.1), color: isDark ? "#60a5fa" : PRIMARY_COLOR }}>
             {expanded ? <ExpandLess /> : <ExpandMore />}
           </IconButton>
         </Box>
         <Grid container spacing={1} sx={{ mb: 1.5 }}>
-          <Grid item xs={6}><Stack direction="row" spacing={0.5} alignItems="center"><Phone sx={{ fontSize: 14, color: alpha(PRIMARY_COLOR, 0.6) }} /><Typography variant="caption" noWrap>{lead.phone || "No phone"}</Typography></Stack></Grid>
-          <Grid item xs={6}><Stack direction="row" spacing={0.5} alignItems="center"><Email sx={{ fontSize: 14, color: alpha(PRIMARY_COLOR, 0.6) }} /><Typography variant="caption" noWrap>{lead.email || "No email"}</Typography></Stack></Grid>
+          <Grid item xs={6}><Stack direction="row" spacing={0.5} alignItems="center"><Phone sx={{ fontSize: 14, color: isDark ? "#60a5fa" : alpha(PRIMARY_COLOR, 0.6) }} /><Typography variant="caption" sx={{ color: isDark ? "#cbd5e1" : "text.secondary" }} noWrap>{lead.phone || "No phone"}</Typography></Stack></Grid>
+          <Grid item xs={6}><Stack direction="row" spacing={0.5} alignItems="center"><Email sx={{ fontSize: 14, color: isDark ? "#60a5fa" : alpha(PRIMARY_COLOR, 0.6) }} /><Typography variant="caption" sx={{ color: isDark ? "#cbd5e1" : "text.secondary" }} noWrap>{lead.email || "No email"}</Typography></Stack></Grid>
         </Grid>
         <Box sx={{ mb: 1.5 }}>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-            <CalendarToday sx={{ fontSize: 14, color: alpha(PRIMARY_COLOR, 0.6) }} />
-            <Typography variant="body2" fontWeight={500}>{formatDate(lead.createdAt, "dd MMM yyyy")}</Typography>
+            <CalendarToday sx={{ fontSize: 14, color: isDark ? "#60a5fa" : alpha(PRIMARY_COLOR, 0.6) }} />
+            <Typography variant="body2" fontWeight={500} sx={{ color: isDark ? "#e2e8f0" : "inherit" }}>{formatDate(lead.createdAt, "dd MMM yyyy")}</Typography>
           </Stack>
         </Box>
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          <Chip label={lead.status} icon={statusColor.icon} size="small" sx={{ background: statusColor.bg, color: statusColor.color, fontWeight: 700, height: 24, fontSize: "0.7rem", border: `1px solid ${statusColor.border}`, "& .MuiChip-icon": { fontSize: 14, color: statusColor.color } }} />
+          <Chip label={lead.status} icon={statusColor.icon} size="small" sx={{ background: isDark ? (lead.status === "Missed Leads" ? "rgba(239, 68, 68, 0.2)" : "rgba(37, 99, 235, 0.2)") : statusColor.bg, color: isDark ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color, fontWeight: 700, height: 24, fontSize: "0.7rem", border: `1px solid ${isDark ? (lead.status === "Missed Leads" ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)") : statusColor.border}`, "& .MuiChip-icon": { fontSize: 14, color: isDark ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color } }} />
         </Box>
         <Collapse in={expanded}>
-          <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${alpha(PRIMARY_COLOR, 0.1)}` }}>
+          <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : alpha(PRIMARY_COLOR, 0.1)}` }}>
             {(() => {
               const assignedPerson = getAssignedPerson(lead);
               return assignedPerson ? (
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" display="block">Assigned To</Typography>
+                  <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }} display="block">Assigned To</Typography>
                   <Box display="flex" alignItems="center" gap={1}>
                     <Avatar sx={{ width: 24, height: 24, fontSize: 12, background: GRADIENT_BLUE, color: "#fff" }}>{assignedPerson.initial}</Avatar>
-                    <Typography variant="body2">{assignedPerson.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">({assignedPerson.role})</Typography>
+                    <Typography variant="body2" sx={{ color: isDark ? "#f8fafc" : "inherit" }}>{assignedPerson.name}</Typography>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>({assignedPerson.role})</Typography>
                   </Box>
                 </Box>
               ) : permissions.assign ? (
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" display="block">Assigned To</Typography>
+                  <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }} display="block">Assigned To</Typography>
                   <Button
                     size="small"
                     variant="outlined"
@@ -883,14 +979,14 @@ const MobileLeadCard = ({ lead, onView, onEdit, onAssign, onDelete, onConvertToP
                       py: 0.5,
                       borderRadius: 2,
                       borderStyle: "dashed",
-                      borderColor: alpha(PRIMARY_COLOR, 0.45),
-                      color: PRIMARY_COLOR,
+                      borderColor: isDark ? "rgba(96, 165, 250, 0.6)" : alpha(PRIMARY_COLOR, 0.45),
+                      color: isDark ? "#60a5fa" : PRIMARY_COLOR,
                       fontWeight: 600,
                       textTransform: "none",
                       "&:hover": {
                         borderStyle: "dashed",
-                        borderColor: PRIMARY_COLOR,
-                        bgcolor: alpha(PRIMARY_COLOR, 0.05),
+                        borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                        bgcolor: isDark ? "rgba(59, 130, 246, 0.1)" : alpha(PRIMARY_COLOR, 0.05),
                       },
                     }}
                   >
@@ -899,14 +995,14 @@ const MobileLeadCard = ({ lead, onView, onEdit, onAssign, onDelete, onConvertToP
                 </Box>
               ) : null;
             })()}
-            <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
-              <Button fullWidth size="small" variant="contained" startIcon={<Visibility sx={{ ml: 1 }} />} onClick={() => onView(lead)} sx={{ background: GRADIENT_DARK, "&:hover": { background: GRADIENT_DARK }, flex: 1, boxShadow: "0 12px 24px rgba(15,31,61,0.18)" }} />
-              {permissions.edit && (<Button fullWidth size="small" variant="contained" startIcon={<Edit sx={{ ml: 1 }} />} onClick={() => onEdit(lead)} sx={{ background: "linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%)", color: "#1d4ed8", flex: 1, boxShadow: "0 10px 20px rgba(147,197,253,0.22)" }} />)}
-              <Button fullWidth size="small" variant="outlined" startIcon={<Assignment sx={{ ml: 1 }} />} onClick={() => onConvertToProject(lead)} sx={{ borderColor: PRIMARY_COLOR, color: PRIMARY_COLOR, flex: 1 }}>
+            <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap", gap: 1 }}>
+              <Button fullWidth size="small" variant="contained" startIcon={<Visibility sx={{ ml: 1 }} />} onClick={() => onView(lead)} sx={{ background: isDark ? "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" : GRADIENT_DARK, "&:hover": { background: isDark ? "linear-gradient(135deg, #334155 0%, #1e293b 100%)" : GRADIENT_DARK }, border: isDark ? "1px solid rgba(255,255,255,0.12)" : "none", color: "#fff", flex: 1, minWidth: "90px" }} />
+              {permissions.edit && (<Button fullWidth size="small" variant="contained" startIcon={<Edit sx={{ ml: 1 }} />} onClick={() => onEdit(lead)} sx={{ background: isDark ? "rgba(37, 99, 235, 0.25)" : "linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%)", color: isDark ? "#93c5fd" : "#1d4ed8", border: isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "none", flex: 1, minWidth: "90px" }} />)}
+              <Button fullWidth size="small" variant="outlined" startIcon={<Assignment sx={{ ml: 1 }} />} onClick={() => onConvertToProject(lead)} sx={{ borderColor: isDark ? "rgba(59, 130, 246, 0.5)" : PRIMARY_COLOR, color: isDark ? "#60a5fa" : PRIMARY_COLOR, "&:hover": { borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR, bgcolor: isDark ? "rgba(59, 130, 246, 0.1)" : alpha(PRIMARY_COLOR, 0.05) }, flex: 1, minWidth: "100px" }}>
                 {lead?.isProject ? "Open Project" : "Convert"}
               </Button>
-              {permissions.assign && (<Button fullWidth size="small" variant="outlined" startIcon={<AssignmentInd sx={{ ml: 1 }} />} onClick={() => onAssign(lead)} sx={{ borderColor: PRIMARY_COLOR, color: PRIMARY_COLOR, flex: 1 }} />)}
-              {permissions.delete && (<Button fullWidth size="small" variant="outlined" color="error" startIcon={<Delete sx={{ ml: 1 }} />} onClick={handleDeleteClick} sx={{ borderColor: "#f44336", color: "#f44336", flex: 1 }} />)}
+              {permissions.assign && (<Button fullWidth size="small" variant="outlined" startIcon={<AssignmentInd sx={{ ml: 1 }} />} onClick={() => onAssign(lead)} sx={{ borderColor: isDark ? "rgba(59, 130, 246, 0.5)" : PRIMARY_COLOR, color: isDark ? "#60a5fa" : PRIMARY_COLOR, "&:hover": { borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR, bgcolor: isDark ? "rgba(59, 130, 246, 0.1)" : alpha(PRIMARY_COLOR, 0.05) }, flex: 1, minWidth: "90px" }} />)}
+              {permissions.delete && (<Button fullWidth size="small" variant="outlined" color="error" startIcon={<Delete sx={{ ml: 1 }} />} onClick={handleDeleteClick} sx={{ borderColor: isDark ? "rgba(239, 68, 68, 0.6)" : "#f44336", color: isDark ? "#f87171" : "#f44336", "&:hover": { borderColor: "#ef4444", bgcolor: isDark ? "rgba(239, 68, 68, 0.1)" : alpha("#ef4444", 0.05) }, flex: 1, minWidth: "90px" }} />)}
             </Stack>
           </Box>
         </Collapse>
@@ -919,6 +1015,7 @@ const MobileLeadCard = ({ lead, onView, onEdit, onAssign, onDelete, onConvertToP
 
 // ---- VIEW LEAD MODAL ----
 const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
+  const navigate = useNavigate();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -1024,26 +1121,44 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth fullScreen={isMobile}
-      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, maxHeight: "92vh", overflow: "hidden", boxShadow: `0 24px 64px ${alpha(PRIMARY_COLOR, 0.18)}` } }}
+      PaperProps={{
+        sx: {
+          borderRadius: isMobile ? 0 : 3,
+          maxHeight: "92vh",
+          overflow: "hidden",
+          bgcolor: isDark ? "#0e1626" : "#ffffff",
+          backgroundImage: "none",
+          boxShadow: isDark ? "0 24px 64px rgba(0,0,0,0.6)" : `0 24px 64px ${alpha(PRIMARY_COLOR, 0.18)}`,
+        },
+      }}
       TransitionComponent={isMobile ? Slide : Fade} transitionDuration={300}>
 
       <ModalHeader
         icon={<Visibility />}
         title={`${leadDetails.firstName} ${leadDetails.lastName}`}
-        subtitle={`${leadDetails.email || "No email"} Â· ID: ${leadDetails._id?.slice(-8)}`}
+        subtitle={`${leadDetails.email || "No email"} · ID: ${leadDetails._id?.slice(-8)}`}
         color={PRIMARY_COLOR}
         onClose={onClose}
       />
 
       {/* Status strip */}
-      <Box sx={{ px: 3, py: 1.5, bgcolor: "#fafbff", borderBottom: `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+      <Box sx={{
+        px: 3,
+        py: 1.5,
+        bgcolor: isDark ? "#111c30" : "#fafbff",
+        borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 2,
+        flexWrap: "wrap",
+      }}>
         <Chip label={leadDetails.status} icon={statusColor.icon} size="small"
           sx={{ background: statusColor.bg, color: statusColor.color, fontWeight: 700, fontSize: "0.75rem", border: `1px solid ${statusColor.border}`, "& .MuiChip-icon": { color: statusColor.color } }} />
         {leadDetails.assignedUser && (
           <Stack direction="row" spacing={0.75} alignItems="center">
             <Typography variant="caption" color="text.secondary">Assigned to</Typography>
             <Avatar sx={{ width: 20, height: 20, fontSize: 10, background: GRADIENT_BLUE, color: "#fff" }}>{leadDetails.assignedUser.firstName?.[0]}</Avatar>
-            <Typography variant="caption" fontWeight={600}>{leadDetails.assignedUser.firstName} {leadDetails.assignedUser.lastName}</Typography>
+            <Typography variant="caption" fontWeight={600} color={isDark ? "#f8fafc" : "inherit"}>{leadDetails.assignedUser.firstName} {leadDetails.assignedUser.lastName}</Typography>
           </Stack>
         )}
         <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
@@ -1051,23 +1166,31 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
         </Typography>
       </Box>
 
-      <Box sx={{ borderBottom: `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, bgcolor: "#fff" }}>
+      <Box sx={{ borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, bgcolor: isDark ? "#0e1626" : "#fff" }}>
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto"
-          sx={{ "& .MuiTab-root": { minHeight: { xs: 44, sm: 52 }, fontSize: { xs: "0.72rem", sm: "0.8rem" }, fontWeight: 600, textTransform: "none" },
+          sx={{
+            "& .MuiTab-root": {
+              minHeight: { xs: 44, sm: 52 },
+              fontSize: { xs: "0.72rem", sm: "0.8rem" },
+              fontWeight: 600,
+              textTransform: "none",
+              color: isDark ? "#94a3b8" : "inherit",
+            },
             "& .MuiTabs-indicator": { bgcolor: PRIMARY_COLOR, height: 3, borderRadius: "3px 3px 0 0" },
-            "& .Mui-selected": { color: `${PRIMARY_COLOR} !important` } }}>
+            "& .Mui-selected": { color: `${PRIMARY_COLOR} !important` },
+          }}>
           {availableTabs.map((tab, i) => (
             <Tab key={i} icon={React.cloneElement(tab.icon, { sx: { fontSize: { xs: 16, sm: 18 } } })} label={tab.label} iconPosition="start" />
           ))}
         </Tabs>
       </Box>
 
-      <DialogContent sx={{ p: { xs: 2, sm: 3 }, bgcolor: "#fafbff", maxHeight: { xs: "calc(100vh - 260px)", sm: "55vh" }, overflow: "auto" }}>
+      <DialogContent sx={{ p: { xs: 2, sm: 3 }, bgcolor: isDark ? "#0b101b" : "#fafbff", maxHeight: { xs: "calc(100vh - 260px)", sm: "55vh" }, overflow: "auto" }}>
         {/* Basic */}
         {activeTabKey === "basic" && (
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <Paper elevation={0} sx={modalSectionSx}>
+              <Paper elevation={0} sx={getModalSectionSx(isDark)}>
                 <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Person fontSize="small" /> Personal Information</Typography>
                 <Stack spacing={2}>
                   <InfoRow label="Full Name" value={`${leadDetails.firstName} ${leadDetails.lastName}`} icon={<AccountCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
@@ -1080,7 +1203,7 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
               </Paper>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Paper elevation={0} sx={modalSectionSx}>
+              <Paper elevation={0} sx={getModalSectionSx(isDark)}>
                 <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Timeline fontSize="small" /> Assignment & Status</Typography>
                 <Stack spacing={2}>
                   <InfoRow label="Status" value={leadDetails.status} icon={statusColor.icon} chip chipColor={statusColor} />
@@ -1092,10 +1215,10 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
               </Paper>
             </Grid>
             <Grid item xs={12}>
-              <Paper elevation={0} sx={modalSectionSx}>
+              <Paper elevation={0} sx={getModalSectionSx(isDark)}>
                 <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}><Note fontSize="small" /> Notes</Typography>
-                <Box sx={{ p: 2, borderRadius: 2.5, background: GRADIENT_SOFT_BLUE, border: `1px solid ${alpha(PRIMARY_COLOR, 0.12)}` }}>
-                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", color: leadDetails.notes ? "text.primary" : "text.disabled" }}>
+                <Box sx={{ p: 2, borderRadius: 2.5, background: isDark ? "#172338" : GRADIENT_SOFT_BLUE, border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : alpha(PRIMARY_COLOR, 0.12)}` }}>
+                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", color: leadDetails.notes ? (isDark ? "#f8fafc" : "text.primary") : "text.disabled" }}>
                     {leadDetails.notes || "No notes available"}
                   </Typography>
                 </Box>
@@ -1106,8 +1229,35 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
         {/* Visit */}
         {activeTabKey === "visit" && (
-          <Paper elevation={0} sx={modalSectionSx}>
-            <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><CalendarToday fontSize="small" /> Visit Information</Typography>
+          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <CalendarToday fontSize="small" /> Visit Information
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<OpenInNew sx={{ fontSize: 15 }} />}
+                onClick={() => {
+                  onClose();
+                  navigate("/total-visits", { state: { highlightLeadId: leadDetails?._id } });
+                }}
+                sx={{
+                  borderRadius: 2,
+                  borderColor: isDark ? "rgba(59, 130, 246, 0.4)" : alpha(PRIMARY_COLOR, 0.4),
+                  color: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                  fontWeight: 700,
+                  fontSize: "0.78rem",
+                  textTransform: "none",
+                  "&:hover": {
+                    borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                    bgcolor: isDark ? "rgba(59, 130, 246, 0.1)" : alpha(PRIMARY_COLOR, 0.06),
+                  },
+                }}
+              >
+                Open Visit Pipeline
+              </Button>
+            </Box>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}><Stack spacing={2}>
                 <InfoRow label="Visit Status" value={resolveVisitStatus(leadDetails)} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
@@ -1122,13 +1272,13 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
         {/* Registration */}
         {activeTabKey === "registration" && (
-          <Paper elevation={0} sx={modalSectionSx}>
+          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
             <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><HowToReg fontSize="small" /> Registration Information</Typography>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}><Stack spacing={2}>
                 <InfoRow label="Registration Date" value={formatDate(leadDetails.dateOfRegistration)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Registration Status" value={leadDetails.registrationStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
-                {leadDetails.uploadDocument?.url && <InfoRow label="Registration Document" value="View Document" icon={<AttachFile sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} action={<Button size="small" variant="outlined" startIcon={<OpenInNew />} onClick={() => handleDownload(leadDetails.uploadDocument.url, "registration-document")}>View</Button>} />}
+                <InfoRow label="Registration Status" value={leadDetails.registrationStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
+                {leadDetails.uploadDocument?.url && <InfoRow label="Registration Document" value="View Document" icon={<AttachFile sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} action={<Button size="small" variant="outlined" startIcon={<OpenInNew />} onClick={() => handleDownload(leadDetails.uploadDocument.url, "registration-document")} sx={{ borderColor: isDark ? "rgba(255,255,255,0.18)" : undefined }}>View</Button>} />}
               </Stack></Grid>
               <Grid item xs={12} md={6}><InfoRow label="Registration Notes" value={leadDetails.registrationNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} /></Grid>
             </Grid>
@@ -1137,14 +1287,14 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
         {/* Loan */}
         {activeTabKey === "loan" && (
-          <Paper elevation={0} sx={modalSectionSx}>
+          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
             <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><AccountBalance fontSize="small" /> Loan Information</Typography>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}><Stack spacing={2}>
-                <InfoRow label="Loan Amount" value={leadDetails.loanAmount ? `â‚¹${leadDetails.loanAmount.toLocaleString()}` : "Not set"} icon={<Money sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                <InfoRow label="Loan Amount" value={leadDetails.loanAmount ? `₹${leadDetails.loanAmount.toLocaleString()}` : "Not set"} icon={<Money sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
                 <InfoRow label="Bank" value={leadDetails.bank || "Not set"} icon={<AccountBalance sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
                 <InfoRow label="Branch Name" value={leadDetails.branchName || "Not set"} icon={<AccountBalance sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Loan Status" value={leadDetails.loanStatus || "Not Applied"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
+                <InfoRow label="Loan Status" value={leadDetails.loanStatus || "Not Applied"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
               </Stack></Grid>
               <Grid item xs={12} md={6}><Stack spacing={2}>
                 <InfoRow label="Loan Approval Date" value={formatDate(leadDetails.loanApprovalDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
@@ -1156,7 +1306,7 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
         {/* Documents */}
         {activeTabKey === "documents" && (
-          <Paper elevation={0} sx={modalSectionSx}>
+          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
             <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><FolderOpen fontSize="small" /> Documents</Typography>
             <Grid container spacing={2}>
               {leadDetails.aadhaar?.url && <Grid item xs={12} sm={6} md={4}><DocumentCard title="Aadhaar Card" url={leadDetails.aadhaar.url} icon={<PictureAsPdf sx={{ color: "#f57c00" }} />} filename="aadhaar-card" /></Grid>}
@@ -1168,7 +1318,7 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
             </Grid>
             <Box sx={{ mt: 3 }}>
               <Stack spacing={2}>
-                <InfoRow label="Document Status" value={leadDetails.documentStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
+                <InfoRow label="Document Status" value={leadDetails.documentStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
                 <InfoRow label="Document Submission Date" value={formatDate(leadDetails.documentSubmissionDate, "dd MMM yyyy, HH:mm:ss")} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
                 <InfoRow label="Document Notes" value={leadDetails.documentNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
               </Stack>
@@ -1178,10 +1328,10 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
         {/* Bank */}
         {activeTabKey === "bank" && (
-          <Paper elevation={0} sx={modalSectionSx}>
+          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
             <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Pending fontSize="small" /> Bank at Pending</Typography>
             <Stack spacing={2}>
-              <InfoRow label="Status" value={leadDetails.bankAtPendingStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
+              <InfoRow label="Status" value={leadDetails.bankAtPendingStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
               <InfoRow label="Date" value={formatDate(leadDetails.bankAtPendingDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
               <InfoRow label="Reason" value={leadDetails.reason || "No reason provided"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
               <InfoRow label="Notes" value={leadDetails.bankAtPendingNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
@@ -1191,12 +1341,12 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
         {/* Disbursement */}
         {activeTabKey === "disbursement" && (
-          <Paper elevation={0} sx={modalSectionSx}>
+          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
             <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><LocalAtm fontSize="small" /> Disbursement Information</Typography>
             <Stack spacing={2}>
-              <InfoRow label="Disbursement Amount" value={leadDetails.disbursementAmount ? `â‚¹${leadDetails.disbursementAmount.toLocaleString()}` : "Not set"} icon={<Money sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+              <InfoRow label="Disbursement Amount" value={leadDetails.disbursementAmount ? `₹${leadDetails.disbursementAmount.toLocaleString()}` : "Not set"} icon={<Money sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
               <InfoRow label="Disbursement Date" value={formatDate(leadDetails.disbursementDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-              <InfoRow label="Disbursement Status" value={leadDetails.disbursementStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
+              <InfoRow label="Disbursement Status" value={leadDetails.disbursementStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
               {leadDetails.disbursementBankDetails && <>
                 <InfoRow label="Disbursement Bank" value={leadDetails.disbursementBankDetails.bank || "Not set"} icon={<AccountBalance sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
                 <InfoRow label="Disbursement Branch" value={leadDetails.disbursementBankDetails.branchName || "Not set"} icon={<AccountBalance sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
@@ -1208,12 +1358,12 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
         {/* Installation */}
         {activeTabKey === "installation" && (
-          <Paper elevation={0} sx={modalSectionSx}>
+          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
             <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Build fontSize="small" /> Installation Information</Typography>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}><Stack spacing={2}>
                 <InfoRow label="Installation Date" value={formatDate(leadDetails.installationDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Installation Status" value={leadDetails.installationStatus || "pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
+                <InfoRow label="Installation Status" value={leadDetails.installationStatus || "pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
               </Stack></Grid>
               <Grid item xs={12} md={6}><InfoRow label="Installation Notes" value={leadDetails.installationNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} /></Grid>
             </Grid>
@@ -1222,7 +1372,7 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
         {/* Timeline */}
         {activeTabKey === "timeline" && (
-          <Paper elevation={0} sx={{ p: 2.5, borderRadius: 2.5, border: `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, bgcolor: "#fff" }}>
+          <Paper elevation={0} sx={{ p: 2.5, borderRadius: 2.5, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, bgcolor: isDark ? "#111c30" : "#fff" }}>
             <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Timeline fontSize="small" /> Lead Timeline ({leadDetails.stageTimeline?.length || 0} updates)</Typography>
             {leadDetails.stageTimeline?.length > 0 ? (
               <List sx={{ maxHeight: 420, overflow: "auto" }}>
@@ -1230,19 +1380,19 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
                   const sc = getStatusColor(group.stage);
                   const isExpanded = expandedTimelineStage === group.stage;
                   return (
-                    <ListItem key={index} sx={{ px: 0, py: 1.5, borderBottom: `1px solid ${alpha(PRIMARY_COLOR, 0.06)}`, alignItems: "flex-start" }}>
+                    <ListItem key={index} sx={{ px: 0, py: 1.5, borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${alpha(PRIMARY_COLOR, 0.06)}`, alignItems: "flex-start" }}>
                       <ListItemAvatar>
                         <Avatar sx={{ bgcolor: sc.bg, color: sc.color, width: 36, height: 36 }}>{React.cloneElement(sc.icon, { sx: { fontSize: 18 } })}</Avatar>
                       </ListItemAvatar>
                       <Box sx={{ flex: 1 }}>
                         <Box
                           onClick={() => setExpandedTimelineStage(isExpanded ? null : group.stage)}
-                          sx={{ cursor: "pointer", borderRadius: 2, p: 1, mx: -1, mt: -0.5, "&:hover": { bgcolor: alpha(PRIMARY_COLOR, 0.03) } }}
+                          sx={{ cursor: "pointer", borderRadius: 2, p: 1, mx: -1, mt: -0.5, "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.04)" : alpha(PRIMARY_COLOR, 0.03) } }}
                         >
                           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
                             <Box>
-                              <Typography variant="body2" fontWeight={700}>{group.stage}</Typography>
-                              <Typography variant="body2" sx={{ mt: 0.5, color: "text.primary" }}>
+                              <Typography variant="body2" fontWeight={700} color={isDark ? "#f8fafc" : "inherit"}>{group.stage}</Typography>
+                              <Typography variant="body2" sx={{ mt: 0.5, color: isDark ? "#cbd5e1" : "text.primary" }}>
                                 {group.entries.length > 1 ? `${group.entries.length} updates in this stage` : group.entries[0]?.notes}
                               </Typography>
                             </Box>
@@ -1252,7 +1402,7 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
                             </Stack>
                           </Box>
                           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
-                            Updated by: {group.latestUpdatedRole || "System"} â€¢ {group.latestUpdatedBy?.firstName || "System"}
+                            Updated by: {group.latestUpdatedRole || "System"} • {group.latestUpdatedBy?.firstName || "System"}
                           </Typography>
                         </Box>
                         <Collapse in={isExpanded}>
@@ -1260,12 +1410,12 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
                             {group.entries.map((timeline, entryIndex) => {
                               const stageDetails = buildTimelineStageDetails(timeline);
                               return (
-                                <Box key={`${group.stage}-${timeline.updatedAt || entryIndex}`} sx={{ p: 1.25, borderRadius: 2.5, background: GRADIENT_SOFT_BLUE, border: `1px solid ${alpha(PRIMARY_COLOR, 0.12)}` }}>
+                                <Box key={`${group.stage}-${timeline.updatedAt || entryIndex}`} sx={{ p: 1.25, borderRadius: 2.5, background: isDark ? "#172338" : GRADIENT_SOFT_BLUE, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.12)}` }}>
                                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 1, mb: 1 }}>
                                     <Box>
-                                      <Typography variant="body2" fontWeight={700}>{timeline.notes}</Typography>
+                                      <Typography variant="body2" fontWeight={700} color={isDark ? "#f8fafc" : "inherit"}>{timeline.notes}</Typography>
                                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                                        Updated by: {timeline.updatedRole || "System"} â€¢ {timeline.updatedBy?.firstName || "System"}
+                                        Updated by: {timeline.updatedRole || "System"} • {timeline.updatedBy?.firstName || "System"}
                                       </Typography>
                                     </Box>
                                     <Typography variant="caption" color="text.secondary">{formatDate(timeline.updatedAt, "dd MMM, HH:mm")}</Typography>
@@ -1276,7 +1426,7 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
                                       {stageDetails.map((detail, detailIndex) => (
                                         <Grid item xs={12} sm={6} key={`${group.stage}-${entryIndex}-${detail.label}-${detailIndex}`}>
                                           <Typography variant="caption" color="text.secondary" display="block">{detail.label}</Typography>
-                                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{detail.value || "Not set"}</Typography>
+                                          <Typography variant="body2" sx={{ fontWeight: 600, color: isDark ? "#f8fafc" : "inherit" }}>{detail.value || "Not set"}</Typography>
                                         </Grid>
                                       ))}
                                     </Grid>
@@ -1298,7 +1448,7 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
         )}
       </DialogContent>
 
-      <DialogActions sx={{ px: { xs: 2.5, sm: 3.5 }, py: 2.5, borderTop: `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`, bgcolor: "#fff" }}>
+      <DialogActions sx={{ px: { xs: 2.5, sm: 3.5 }, py: 2.5, borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`, bgcolor: isDark ? "#0e1626" : "#fff" }}>
         <Button
           onClick={onClose}
           variant="contained"
@@ -1315,6 +1465,7 @@ ViewLeadModal.displayName = "ViewLeadModal";
 
 export const EditLeadModal = React.memo(({ open, onClose, lead, onSave, userRole }) => {
   const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { fetchAPI } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -1438,39 +1589,51 @@ export const EditLeadModal = React.memo(({ open, onClose, lead, onSave, userRole
 
   if (!canEdit) {
     return (
-      <Dialog open={open} onClose={onClose} fullScreen={isMobile} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden" } }}>
+      <Dialog open={open} onClose={onClose} fullScreen={isMobile} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden", bgcolor: isDark ? "#0e1626" : "#ffffff" } }}>
         <ModalHeader icon={<Security />} title="Access Denied" subtitle="Insufficient permissions" color="#c62828" onClose={onClose} />
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ p: 3, bgcolor: isDark ? "#0b101b" : "inherit" }}>
           <Alert severity="error" sx={{ borderRadius: 2 }}>
             <Typography variant="body1" fontWeight={600}>You do not have permission to edit leads</Typography>
             <Typography variant="body2" sx={{ mt: 1 }}>Your role ({ROLE_PERMISSIONS[userRole]?.label}) only allows viewing leads.</Typography>
           </Alert>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}><Button onClick={onClose} variant="contained" sx={{ bgcolor: PRIMARY_COLOR }}>Close</Button></DialogActions>
+        <DialogActions sx={{ p: 3, bgcolor: isDark ? "#0e1626" : "inherit" }}><Button onClick={onClose} variant="contained" sx={{ bgcolor: PRIMARY_COLOR }}>Close</Button></DialogActions>
       </Dialog>
     );
   }
 
-  const fieldSx = {
-    "& .MuiOutlinedInput-root": {
-      borderRadius: 2,
-      bgcolor: "#f8fafd",
-      "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: PRIMARY_COLOR },
-      "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: PRIMARY_COLOR },
-    },
-    "& .MuiInputLabel-root.Mui-focused": { color: PRIMARY_COLOR },
-  };
+  const fieldSx = getFieldSx(isDark);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}
-      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden", boxShadow: `0 24px 64px ${alpha(PRIMARY_COLOR, 0.18)}` } }}
+      PaperProps={{
+        sx: {
+          borderRadius: isMobile ? 0 : 3,
+          overflow: "hidden",
+          bgcolor: isDark ? "#0e1626" : "#ffffff",
+          backgroundImage: "none",
+          boxShadow: isDark ? "0 24px 64px rgba(0,0,0,0.6)" : `0 24px 64px ${alpha(PRIMARY_COLOR, 0.18)}`,
+        },
+      }}
       TransitionComponent={isMobile ? Slide : Fade} transitionDuration={300}>
 
-      <ModalHeader icon={<Edit />} title="Edit Lead" subtitle={lead ? `${lead.firstName} ${lead.lastName} · ${lead.status}` : ""} color={PRIMARY_COLOR} onClose={onClose} iconGradient={GRADIENT_BLUE} />
+      <ModalHeader
+        icon={<Edit />}
+        title="Edit Lead"
+        subtitle={lead ? `${lead.firstName || ""} ${lead.lastName || ""} · ${lead.status || "Lead"}`.trim() : ""}
+        color={PRIMARY_COLOR}
+        onClose={onClose}
+        iconGradient={GRADIENT_BLUE}
+      />
       {(loading || loadingLead) && <LinearProgress sx={{ height: 3, bgcolor: alpha(PRIMARY_COLOR, 0.1), "& .MuiLinearProgress-bar": { bgcolor: PRIMARY_COLOR } }} />}
 
       {(formData.followUpAction || formData.followUpDate) && (
-        <Box sx={{ px: { xs: 2.5, sm: 3.5 }, py: 1.25, borderBottom: `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`, background: alpha(PRIMARY_COLOR, 0.02) }}>
+        <Box sx={{
+          px: { xs: 2.5, sm: 3.5 },
+          py: 1.25,
+          borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`,
+          background: isDark ? "rgba(37,99,235,0.08)" : alpha(PRIMARY_COLOR, 0.02),
+        }}>
           <Chip
             label={formData.followUpAction ? `Follow-up: ${formData.followUpAction}` : `Follow-up set for ${formatDate(formData.followUpDate)}`}
             size="small"
@@ -1484,10 +1647,10 @@ export const EditLeadModal = React.memo(({ open, onClose, lead, onSave, userRole
         </Box>
       )}
 
-      <DialogContent sx={{ py: 3, px: { xs: 2.5, sm: 3.5 }, bgcolor: "#fafbff" }}>
+      <DialogContent sx={{ py: 3, px: { xs: 2.5, sm: 3.5 }, bgcolor: isDark ? "#0b101b" : "#fafbff" }}>
         {errors.submit && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 2 }} icon={<ErrorOutline />}>{errors.submit}</Alert>}
         <Stack spacing={2.5}>
-          <Paper elevation={0} sx={{ ...modalSectionSx, p: 2.25 }}>
+          <Paper elevation={0} sx={{ ...getModalSectionSx(isDark), p: 2.25 }}>
             <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700, color: PRIMARY_COLOR }}>Basic Information</Typography>
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -1506,9 +1669,17 @@ export const EditLeadModal = React.memo(({ open, onClose, lead, onSave, userRole
               </Grid>
               <Grid item xs={12}>
                 <FormControl fullWidth size={isMobile ? "small" : "medium"} required>
-                  <InputLabel sx={{ "&.Mui-focused": { color: PRIMARY_COLOR } }}>Lead Status</InputLabel>
+                  <InputLabel sx={{ color: isDark ? "#94a3b8" : "text.secondary", "&.Mui-focused": { color: PRIMARY_COLOR } }}>Lead Status</InputLabel>
                   <Select value={formData.status} onChange={handleChange("status")} label="Lead Status"
-                    sx={{ borderRadius: 2, bgcolor: "#f8fafd", "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: PRIMARY_COLOR }, "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: PRIMARY_COLOR } }}>
+                    sx={{
+                      borderRadius: 2,
+                      bgcolor: isDark ? "#172338" : "#f8fafd",
+                      color: isDark ? "#f8fafc" : "#1e293b",
+                      "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)" },
+                      "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: PRIMARY_COLOR },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: PRIMARY_COLOR },
+                      "& .MuiSelect-icon": { color: isDark ? "#94a3b8" : "inherit" },
+                    }}>
                     {LEAD_STATUS_OPTIONS.map((status) => {
                       const sc = getStatusColor(status);
                       return (
@@ -1526,7 +1697,7 @@ export const EditLeadModal = React.memo(({ open, onClose, lead, onSave, userRole
             </Grid>
           </Paper>
 
-          <Paper elevation={0} sx={{ ...modalSectionSx, p: 2.25 }}>
+          <Paper elevation={0} sx={{ ...getModalSectionSx(isDark), p: 2.25 }}>
             <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700, color: PRIMARY_COLOR }}>Address & Requirement</Typography>
             <Grid container spacing={2}>
               <Grid item xs={12}>
@@ -1549,9 +1720,26 @@ export const EditLeadModal = React.memo(({ open, onClose, lead, onSave, userRole
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ px: { xs: 2.5, sm: 3.5 }, py: 2.5, borderTop: `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`, bgcolor: "#fff", gap: 1.5, flexDirection: { xs: "column-reverse", sm: "row" } }}>
+      <DialogActions sx={{
+        px: { xs: 2.5, sm: 3.5 },
+        py: 2.5,
+        borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`,
+        bgcolor: isDark ? "#0e1626" : "#fff",
+        gap: 1.5,
+        flexDirection: { xs: "column-reverse", sm: "row" },
+      }}>
         <Button onClick={onClose} variant="outlined" fullWidth={isMobile} disabled={loading || loadingLead}
-          sx={{ borderRadius: 2, borderColor: alpha(PRIMARY_COLOR, 0.35), color: PRIMARY_COLOR, fontWeight: 600, px: 3, "&:hover": { borderColor: PRIMARY_COLOR, bgcolor: alpha(PRIMARY_COLOR, 0.04) } }}>
+          sx={{
+            borderRadius: 2,
+            borderColor: isDark ? "rgba(255,255,255,0.18)" : alpha(PRIMARY_COLOR, 0.35),
+            color: isDark ? "#94a3b8" : PRIMARY_COLOR,
+            fontWeight: 600,
+            px: 3,
+            "&:hover": {
+              borderColor: PRIMARY_COLOR,
+              bgcolor: isDark ? "rgba(255,255,255,0.04)" : alpha(PRIMARY_COLOR, 0.04),
+            },
+          }}>
           Cancel
         </Button>
         <Button onClick={handleSubmit} variant="contained" fullWidth={isMobile} disabled={loading || loadingLead}
@@ -1568,6 +1756,7 @@ EditLeadModal.displayName = "EditLeadModal";
 // ---- ASSIGN LEAD MODAL ----
 const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, isBulkAssign = false, bulkLeads = [], showSnackbar }) => {
   const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { fetchAPI, user } = useAuth();
 
@@ -1665,22 +1854,30 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
 
   if (!canAssign) {
     return (
-      <Dialog open={open} onClose={onClose} fullScreen={isMobile} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden" } }}>
+      <Dialog open={open} onClose={onClose} fullScreen={isMobile} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden", bgcolor: isDark ? "#0e1626" : "#ffffff" } }}>
         <ModalHeader icon={<Security />} title="Access Denied" subtitle="Insufficient permissions" color="#c62828" onClose={onClose} />
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ p: 3, bgcolor: isDark ? "#0b101b" : "inherit" }}>
           <Alert severity="error" sx={{ borderRadius: 2 }}>
             <Typography variant="body1" fontWeight={600}>You do not have permission to assign leads</Typography>
             <Typography variant="body2" sx={{ mt: 1 }}>Your role ({permissions.label}) does not have assignment privileges.</Typography>
           </Alert>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}><Button onClick={onClose} variant="contained" sx={{ bgcolor: PRIMARY_COLOR }}>Close</Button></DialogActions>
+        <DialogActions sx={{ p: 3, bgcolor: isDark ? "#0e1626" : "inherit" }}><Button onClick={onClose} variant="contained" sx={{ bgcolor: PRIMARY_COLOR }}>Close</Button></DialogActions>
       </Dialog>
     );
   }
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={isMobile}
-      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,188,212,0.15)" } }}
+      PaperProps={{
+        sx: {
+          borderRadius: isMobile ? 0 : 3,
+          overflow: "hidden",
+          bgcolor: isDark ? "#0e1626" : "#ffffff",
+          backgroundImage: "none",
+          boxShadow: isDark ? "0 24px 64px rgba(0,0,0,0.6)" : "0 24px 64px rgba(0,188,212,0.15)",
+        },
+      }}
       TransitionComponent={isMobile ? Slide : Fade} transitionDuration={300}>
 
       <ModalHeader
@@ -1691,16 +1888,16 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
         onClose={onClose}
       />
 
-      <DialogContent sx={{ py: 3, px: { xs: 2.5, sm: 3.5 }, bgcolor: "#f5fdfe" }}>
+      <DialogContent sx={{ py: 3, px: { xs: 2.5, sm: 3.5 }, bgcolor: isDark ? "#0b101b" : "#f5fdfe" }}>
         {/* Lead preview */}
         {isBulkAssign ? (
-          <Box sx={{ p: 2, mb: 3, borderRadius: 2.5, border: `1.5px solid ${alpha("#00bcd4", 0.2)}`, bgcolor: "#fff" }}>
-            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: "#00838f" }}>Bulk Assignment â€” {bulkLeads.length} leads</Typography>
+          <Box sx={{ p: 2, mb: 3, borderRadius: 2.5, border: `1.5px solid ${isDark ? "rgba(0,188,212,0.3)" : alpha("#00bcd4", 0.2)}`, bgcolor: isDark ? "#111c30" : "#fff" }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5, color: "#00838f" }}>Bulk Assignment — {bulkLeads.length} leads</Typography>
             <Stack spacing={0.75} sx={{ maxHeight: 130, overflow: "auto" }}>
               {bulkLeads.slice(0, 5).map((l) => (
                 <Box key={l._id} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Avatar sx={{ bgcolor: alpha("#00bcd4", 0.15), color: "#00838f", width: 24, height: 24, fontSize: 11, fontWeight: 700 }}>{l.firstName?.[0]}</Avatar>
-                  <Typography variant="body2">{l.firstName} {l.lastName}</Typography>
+                  <Typography variant="body2" color={isDark ? "#f8fafc" : "inherit"}>{l.firstName} {l.lastName}</Typography>
                   <Chip label={l.status} size="small" sx={{ ml: "auto", height: 18, fontSize: "0.65rem", bgcolor: getStatusColor(l.status).bg, color: getStatusColor(l.status).color }} />
                 </Box>
               ))}
@@ -1708,11 +1905,11 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
             </Stack>
           </Box>
         ) : lead && (
-          <Box sx={{ p: 2, mb: 3, borderRadius: 2.5, border: `1.5px solid ${alpha("#00bcd4", 0.2)}`, bgcolor: "#fff", display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ p: 2, mb: 3, borderRadius: 2.5, border: `1.5px solid ${isDark ? "rgba(0,188,212,0.3)" : alpha("#00bcd4", 0.2)}`, bgcolor: isDark ? "#111c30" : "#fff", display: "flex", alignItems: "center", gap: 2 }}>
             <Avatar sx={{ bgcolor: alpha("#00bcd4", 0.15), color: "#00838f", width: 48, height: 48, fontWeight: 700, fontSize: "1.1rem" }}>{lead.firstName?.[0]}{lead.lastName?.[0]}</Avatar>
             <Box flex={1}>
-              <Typography variant="subtitle1" fontWeight={700}>{lead.firstName} {lead.lastName}</Typography>
-              <Typography variant="caption" color="text.secondary">{lead.email} Â· {lead.phone}</Typography>
+              <Typography variant="subtitle1" fontWeight={700} color={isDark ? "#f8fafc" : "inherit"}>{lead.firstName} {lead.lastName}</Typography>
+              <Typography variant="caption" color="text.secondary">{lead.email} · {lead.phone}</Typography>
               <Box sx={{ mt: 0.5 }}><Chip label={lead.status} size="small" sx={{ bgcolor: getStatusColor(lead.status).bg, color: getStatusColor(lead.status).color, fontWeight: 600, fontSize: "0.65rem", height: 20 }} /></Box>
             </Box>
           </Box>
@@ -1731,7 +1928,7 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
           <Stack spacing={2.5}>
             {showRoleSelection && (
               <Box>
-                <Typography variant="subtitle2" fontWeight={700} color="text.primary" sx={{ mb: 1 }}>Assign To Role</Typography>
+                <Typography variant="subtitle2" fontWeight={700} color={isDark ? "#f8fafc" : "text.primary"} sx={{ mb: 1 }}>Assign To Role</Typography>
                 <Stack direction="row" spacing={1.5}>
                   {availableRoles.map((role) => {
                     const users = role === "Incharge" ? InchargeUsers : teamUsers;
@@ -1739,14 +1936,23 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
                     const icon = role === "Incharge" ? <SupervisorAccount /> : <Groups />;
                     return (
                       <Box key={role} onClick={() => handleRoleChange({ target: { value: role } })}
-                        sx={{ flex: 1, p: 1.5, borderRadius: 2, border: `2px solid ${selected ? "#00bcd4" : alpha("#00bcd4", 0.2)}`, bgcolor: selected ? alpha("#00bcd4", 0.06) : "#fff", cursor: "pointer", transition: "all 0.2s", "&:hover": { borderColor: alpha("#00bcd4", 0.5) } }}>
+                        sx={{
+                          flex: 1,
+                          p: 1.5,
+                          borderRadius: 2,
+                          border: `2px solid ${selected ? "#00bcd4" : isDark ? "rgba(255,255,255,0.08)" : alpha("#00bcd4", 0.2)}`,
+                          bgcolor: selected ? (isDark ? "rgba(0,188,212,0.18)" : alpha("#00bcd4", 0.06)) : (isDark ? "#111c30" : "#fff"),
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          "&:hover": { borderColor: alpha("#00bcd4", 0.5) },
+                        }}>
                         <Stack direction="row" spacing={1} alignItems="center">
-                          <Box sx={{ color: selected ? "#00838f" : "text.secondary", display: "flex" }}>{icon}</Box>
+                          <Box sx={{ color: selected ? "#00bcd4" : "text.secondary", display: "flex" }}>{icon}</Box>
                           <Box>
-                            <Typography variant="body2" fontWeight={selected ? 700 : 500}>{role === "Incharge" ? "Incharge" : "Team"}</Typography>
+                            <Typography variant="body2" fontWeight={selected ? 700 : 500} color={isDark ? "#f8fafc" : "inherit"}>{role === "Incharge" ? "Incharge" : "Team"}</Typography>
                             {users.length > 0 && <Typography variant="caption" color="text.secondary">{users.length} available</Typography>}
                           </Box>
-                          {selected && <Box sx={{ ml: "auto", color: "#00838f", display: "flex" }}><CheckCircle fontSize="small" /></Box>}
+                          {selected && <Box sx={{ ml: "auto", color: "#00bcd4", display: "flex" }}><CheckCircle fontSize="small" /></Box>}
                         </Stack>
                       </Box>
                     );
@@ -1757,11 +1963,11 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
 
             {(assignToRole || !showRoleSelection) && (
               <Box>
-                <Typography variant="subtitle2" fontWeight={700} color="text.primary" sx={{ mb: 1 }}>
+                <Typography variant="subtitle2" fontWeight={700} color={isDark ? "#f8fafc" : "text.primary"} sx={{ mb: 1 }}>
                   Select {assignToRole === "TEAM" ? "Team Member" : assignToRole || "User"}
                 </Typography>
                 {getAvailableUsers().length === 0 && !fetchingUsers && assignToRole ? (
-                  <Box sx={{ p: 3, borderRadius: 2, border: `1.5px dashed ${alpha("#00bcd4", 0.3)}`, textAlign: "center" }}>
+                  <Box sx={{ p: 3, borderRadius: 2, border: `1.5px dashed ${alpha("#00bcd4", 0.3)}`, textAlign: "center", bgcolor: isDark ? "#111c30" : "inherit" }}>
                     <Groups sx={{ color: alpha("#00bcd4", 0.4), fontSize: 36, mb: 1 }} />
                     <Typography variant="body2" color="text.secondary">No {assignToRole === "TEAM" ? "team members" : "Incharge users"} available</Typography>
                   </Box>
@@ -1772,10 +1978,21 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
                       const rc = getRoleColor(userData.role);
                       return (
                         <Box key={userData._id} onClick={() => setSelectedUserId(userData._id)}
-                          sx={{ p: 1.5, borderRadius: 2, border: `2px solid ${selected ? "#00bcd4" : alpha("#00bcd4", 0.15)}`, bgcolor: selected ? alpha("#00bcd4", 0.06) : "#fff", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", gap: 1.5, "&:hover": { borderColor: alpha("#00bcd4", 0.5), bgcolor: alpha("#00bcd4", 0.04) } }}>
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2,
+                            border: `2px solid ${selected ? "#00bcd4" : isDark ? "rgba(255,255,255,0.08)" : alpha("#00bcd4", 0.15)}`,
+                            bgcolor: selected ? (isDark ? "rgba(0,188,212,0.18)" : alpha("#00bcd4", 0.06)) : (isDark ? "#111c30" : "#fff"),
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1.5,
+                            "&:hover": { borderColor: alpha("#00bcd4", 0.5), bgcolor: isDark ? "rgba(0,188,212,0.1)" : alpha("#00bcd4", 0.04) },
+                          }}>
                           <Avatar sx={{ bgcolor: rc.color, width: 36, height: 36, fontWeight: 700, fontSize: "0.875rem" }}>{userData.firstName?.[0]}{userData.lastName?.[0]}</Avatar>
                           <Box flex={1}>
-                            <Typography variant="body2" fontWeight={selected ? 700 : 500}>{userData.firstName} {userData.lastName}</Typography>
+                            <Typography variant="body2" fontWeight={selected ? 700 : 500} color={isDark ? "#f8fafc" : "inherit"}>{userData.firstName} {userData.lastName}</Typography>
                             <Typography variant="caption" color="text.secondary">{userData.email}</Typography>
                           </Box>
                           <Box sx={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${selected ? "#00bcd4" : alpha("#00bcd4", 0.3)}`, bgcolor: selected ? "#00bcd4" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}>
@@ -1790,9 +2007,9 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
             )}
 
             {selectedUserId && assignToRole && (
-              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha("#00bcd4", 0.06), border: `1px solid ${alpha("#00bcd4", 0.2)}`, display: "flex", gap: 1, alignItems: "flex-start" }}>
-                <CheckCircle sx={{ color: "#00838f", fontSize: 18, flexShrink: 0, mt: 0.1 }} />
-                <Typography variant="caption" color="#00838f">
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: isDark ? "rgba(0,188,212,0.12)" : alpha("#00bcd4", 0.06), border: `1px solid ${isDark ? "rgba(0,188,212,0.3)" : alpha("#00bcd4", 0.2)}`, display: "flex", gap: 1, alignItems: "flex-start" }}>
+                <CheckCircle sx={{ color: "#00bcd4", fontSize: 18, flexShrink: 0, mt: 0.1 }} />
+                <Typography variant="caption" color={isDark ? "#e0f2fe" : "#00838f"}>
                   {isBulkAssign ? `${bulkLeads.length} lead(s)` : "This lead"} will be assigned to <strong>{getSelectedUser()?.firstName} {getSelectedUser()?.lastName}</strong> ({assignToRole}).
                 </Typography>
               </Box>
@@ -1801,9 +2018,23 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
         )}
       </DialogContent>
 
-      <DialogActions sx={{ px: { xs: 2.5, sm: 3.5 }, py: 2.5, borderTop: `1px solid ${alpha("#00bcd4", 0.12)}`, bgcolor: "#fff", gap: 1.5, flexDirection: { xs: "column-reverse", sm: "row" } }}>
+      <DialogActions sx={{
+        px: { xs: 2.5, sm: 3.5 },
+        py: 2.5,
+        borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha("#00bcd4", 0.12)}`,
+        bgcolor: isDark ? "#0e1626" : "#fff",
+        gap: 1.5,
+        flexDirection: { xs: "column-reverse", sm: "row" },
+      }}>
         <Button onClick={onClose} variant="outlined" fullWidth={isMobile} disabled={loading || fetchingUsers}
-          sx={{ borderRadius: 2, borderColor: alpha("#00bcd4", 0.4), color: "#00838f", fontWeight: 600, px: 3, "&:hover": { borderColor: "#00bcd4", bgcolor: alpha("#00bcd4", 0.04) } }}>
+          sx={{
+            borderRadius: 2,
+            borderColor: isDark ? "rgba(255,255,255,0.18)" : alpha("#00bcd4", 0.4),
+            color: isDark ? "#94a3b8" : "#00838f",
+            fontWeight: 600,
+            px: 3,
+            "&:hover": { borderColor: "#00bcd4", bgcolor: isDark ? "rgba(0,188,212,0.08)" : alpha("#00bcd4", 0.04) },
+          }}>
           Cancel
         </Button>
         <Button onClick={handleSubmit} variant="contained" fullWidth={isMobile}
@@ -1821,6 +2052,7 @@ AssignLeadModal.displayName = "AssignLeadModal";
 // ---- DELETE CONFIRMATION DIALOG ----
 const DeleteConfirmationDialog = React.memo(({ open, onClose, leadsToDelete, onDelete, userRole }) => {
   const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const permissions = ROLE_PERMISSIONS[userRole] || ROLE_PERMISSIONS.TEAM;
   const canDelete = permissions.delete;
@@ -1842,22 +2074,30 @@ const DeleteConfirmationDialog = React.memo(({ open, onClose, leadsToDelete, onD
 
   if (!canDelete) {
     return (
-      <Dialog open={open} onClose={onClose} fullScreen={isMobile} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden" } }}>
+      <Dialog open={open} onClose={onClose} fullScreen={isMobile} PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden", bgcolor: isDark ? "#0e1626" : "#ffffff" } }}>
         <ModalHeader icon={<Security />} title="Access Denied" subtitle="Delete permission required" color="#c62828" onClose={onClose} />
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ p: 3, bgcolor: isDark ? "#0b101b" : "inherit" }}>
           <Alert severity="error" sx={{ borderRadius: 2 }}>
             <Typography variant="body1" fontWeight={600}>Delete permission required</Typography>
             <Typography variant="body2" sx={{ mt: 1 }}>Only Admin Panel administrators can delete leads. Your role ({permissions.label}) does not have delete privileges.</Typography>
           </Alert>
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}><Button onClick={onClose} variant="contained" sx={{ bgcolor: PRIMARY_COLOR }}>Close</Button></DialogActions>
+        <DialogActions sx={{ p: 3, bgcolor: isDark ? "#0e1626" : "inherit" }}><Button onClick={onClose} variant="contained" sx={{ bgcolor: PRIMARY_COLOR }}>Close</Button></DialogActions>
       </Dialog>
     );
   }
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth fullScreen={isMobile}
-      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden", boxShadow: "0 24px 64px rgba(244,67,54,0.18)" } }}
+      PaperProps={{
+        sx: {
+          borderRadius: isMobile ? 0 : 3,
+          overflow: "hidden",
+          bgcolor: isDark ? "#0e1626" : "#ffffff",
+          backgroundImage: "none",
+          boxShadow: isDark ? "0 24px 64px rgba(0,0,0,0.6)" : "0 24px 64px rgba(244,67,54,0.18)",
+        },
+      }}
       TransitionComponent={isMobile ? Slide : Fade} transitionDuration={300}>
 
       <ModalHeader
@@ -1868,12 +2108,12 @@ const DeleteConfirmationDialog = React.memo(({ open, onClose, leadsToDelete, onD
         onClose={handleClose}
       />
 
-      <DialogContent sx={{ py: 3, px: { xs: 2.5, sm: 3 }, bgcolor: "#fff9f9" }}>
+      <DialogContent sx={{ py: 3, px: { xs: 2.5, sm: 3 }, bgcolor: isDark ? "#0b101b" : "#fff9f9" }}>
         <Stack spacing={2.5}>
           {/* Warning */}
-          <Box sx={{ display: "flex", gap: 1.5, p: 2, borderRadius: 2, bgcolor: alpha("#f44336", 0.06), border: `1px solid ${alpha("#f44336", 0.2)}` }}>
-            <ErrorOutline sx={{ color: "#c62828", fontSize: 20, flexShrink: 0, mt: 0.1 }} />
-            <Typography variant="body2" color="#c62828" fontWeight={500}>
+          <Box sx={{ display: "flex", gap: 1.5, p: 2, borderRadius: 2, bgcolor: isDark ? "rgba(244,67,54,0.12)" : alpha("#f44336", 0.06), border: `1px solid ${isDark ? "rgba(244,67,54,0.3)" : alpha("#f44336", 0.2)}` }}>
+            <ErrorOutline sx={{ color: isDark ? "#f87171" : "#c62828", fontSize: 20, flexShrink: 0, mt: 0.1 }} />
+            <Typography variant="body2" color={isDark ? "#fca5a5" : "#c62828"} fontWeight={500}>
               {isMultiple
                 ? `All ${leadsToDelete.length} selected leads and their associated data will be permanently erased.`
                 : "All data associated with this lead will be permanently erased."}
@@ -1881,12 +2121,12 @@ const DeleteConfirmationDialog = React.memo(({ open, onClose, leadsToDelete, onD
           </Box>
 
           {/* Lead count/summary card */}
-          <Box sx={{ p: 2, borderRadius: 2.5, border: `1.5px solid ${alpha("#f44336", 0.2)}`, bgcolor: "#fff", display: "flex", alignItems: "center", gap: 2 }}>
-            <Box sx={{ width: 48, height: 48, borderRadius: 2, bgcolor: alpha("#f44336", 0.1), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <DeleteForever sx={{ color: "#c62828", fontSize: 24 }} />
+          <Box sx={{ p: 2, borderRadius: 2.5, border: `1.5px solid ${isDark ? "rgba(244,67,54,0.25)" : alpha("#f44336", 0.2)}`, bgcolor: isDark ? "#111c30" : "#fff", display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ width: 48, height: 48, borderRadius: 2, bgcolor: alpha("#f44336", 0.15), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <DeleteForever sx={{ color: isDark ? "#f87171" : "#c62828", fontSize: 24 }} />
             </Box>
             <Box>
-              <Typography fontWeight={700} variant="subtitle1" color="#c62828">
+              <Typography fontWeight={700} variant="subtitle1" color={isDark ? "#f87171" : "#c62828"}>
                 {isMultiple ? `${leadsToDelete.length} Leads` : "1 Lead"}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -1898,7 +2138,7 @@ const DeleteConfirmationDialog = React.memo(({ open, onClose, leadsToDelete, onD
           {/* Confirm input */}
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Type <strong style={{ color: "#c62828" }}>{isMultiple ? leadsToDelete.length : "delete"}</strong> to confirm:
+              Type <strong style={{ color: isDark ? "#f87171" : "#c62828" }}>{isMultiple ? leadsToDelete.length : "delete"}</strong> to confirm:
             </Typography>
             <TextField
               fullWidth size="small"
@@ -1906,16 +2146,39 @@ const DeleteConfirmationDialog = React.memo(({ open, onClose, leadsToDelete, onD
               value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
               error={confirmText.length > 0 && !isConfirmed}
               helperText={confirmText.length > 0 && !isConfirmed ? "Text doesn't match" : ""}
-              sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2, "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: isConfirmed ? "#4caf50" : "#f44336" } } }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 2,
+                  bgcolor: isDark ? "#172338" : "#fff",
+                  color: isDark ? "#f8fafc" : "#1e293b",
+                  "& input": { color: isDark ? "#f8fafc" : "#1e293b" },
+                  "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)" },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: isConfirmed ? "#4caf50" : "#f44336" },
+                },
+              }}
               InputProps={{ endAdornment: isConfirmed ? <InputAdornment position="end"><CheckCircle sx={{ color: "#4caf50" }} /></InputAdornment> : null }}
             />
           </Box>
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ px: { xs: 2.5, sm: 3 }, py: 2.5, borderTop: `1px solid ${alpha("#f44336", 0.1)}`, bgcolor: "#fff", gap: 1.5, flexDirection: { xs: "column-reverse", sm: "row" } }}>
+      <DialogActions sx={{
+        px: { xs: 2.5, sm: 3 },
+        py: 2.5,
+        borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha("#f44336", 0.1)}`,
+        bgcolor: isDark ? "#0e1626" : "#fff",
+        gap: 1.5,
+        flexDirection: { xs: "column-reverse", sm: "row" },
+      }}>
         <Button onClick={handleClose} variant="outlined" fullWidth={isMobile} disabled={deleting}
-          sx={{ borderRadius: 2, borderColor: alpha("#f44336", 0.35), color: "#c62828", fontWeight: 600, px: 3, "&:hover": { borderColor: "#f44336", bgcolor: alpha("#f44336", 0.04) } }}>
+          sx={{
+            borderRadius: 2,
+            borderColor: isDark ? "rgba(255,255,255,0.18)" : alpha("#f44336", 0.35),
+            color: isDark ? "#94a3b8" : "#c62828",
+            fontWeight: 600,
+            px: 3,
+            "&:hover": { borderColor: "#f44336", bgcolor: isDark ? "rgba(244,67,54,0.08)" : alpha("#f44336", 0.04) },
+          }}>
           Cancel
         </Button>
         <Button onClick={handleDelete} variant="contained" fullWidth={isMobile}
@@ -2398,13 +2661,23 @@ const LeadOverview = () => {
       return;
     }
 
+    if (card.key === "siteVisitScheduled") {
+      navigate("/total-visits");
+      return;
+    }
+
+    if (card.key === "projectConverted") {
+      navigate("/projects");
+      return;
+    }
+
     setStatusFilter("all");
     if ((card.value || 0) === 0) {
       setLeads([]);
       setTotalLeads(0);
     }
     setQuickFilter(`pipeline:${card.key}`);
-  }, []);
+  }, [navigate]);
 
   const handleCreateQuote = useCallback((lead) => {
     navigate("/quotation/create", { state: { mode: "create", lead } });
@@ -2590,6 +2863,7 @@ const LeadOverview = () => {
             onEdit={openEditDialog}
             onQuickView={openViewDialog}
             onViewDetails={openLeadDetailsPage}
+            onViewVisitPipeline={(item) => navigate("/total-visits", { state: { highlightLeadId: item._id } })}
             onCreateQuote={handleCreateQuote}
             onAssign={openAssignDialog}
             onConvertToProject={handleConvertToProject}
@@ -2598,7 +2872,7 @@ const LeadOverview = () => {
         </TableCell>
       </TableRow>
     );
-  }, [selectedLeads, permissions, handleSelectLead, openLeadDetailsPage, openViewDialog, openAssignDialog, handleCreateQuote, handleConvertToProject, handleUnsupportedLeadAction, isDark]);
+  }, [selectedLeads, permissions, handleSelectLead, openLeadDetailsPage, openViewDialog, openAssignDialog, handleCreateQuote, handleConvertToProject, handleUnsupportedLeadAction, navigate, isDark]);
 
   const renderCardView = useCallback(() => {
     if (loading) return <LoadingSkeleton count={6} isMobile={isMobile} />;

@@ -81,28 +81,36 @@ import ConvertProjectDialog from "../components/ConvertProjectDialog";
 import { EditLeadModal, ROLE_PERMISSIONS, normalizeUserRole } from "./LeadOverview";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
+const getIsDark = () => {
+  try {
+    const saved = localStorage.getItem("appThemeMode");
+    if (saved) return saved === "dark";
+  } catch {}
+  return true;
+};
+
 const TOKEN = {
-  primary: "#3b5bdb",
-  primaryLight: "#4c6ef5",
-  primaryMuted: alpha("#3b5bdb", 0.10),
-  accent: "#1971c2",
-  teal: "#0ca678",
-  tealMuted: alpha("#0ca678", 0.12),
-  surface: "#ffffff",
-  surfaceAlt: "#f8f9fe",
-  border: "#e8ecf4",
-  borderMid: "#d4daf0",
-  text: "#0f1b35",
-  textSub: "#4a5568",
-  textMuted: "#94a3b8",
-  shadow: "0 1px 3px rgba(15,27,53,0.06), 0 4px 16px rgba(15,27,53,0.04)",
-  shadowHover: "0 4px 20px rgba(59,91,219,0.12)",
+  get primary() { return "#3b82f6"; },
+  get primaryLight() { return "#60a5fa"; },
+  get primaryMuted() { return getIsDark() ? "rgba(59, 130, 246, 0.16)" : alpha("#3b5bdb", 0.10); },
+  get accent() { return "#1971c2"; },
+  get teal() { return "#0ca678"; },
+  get tealMuted() { return getIsDark() ? "rgba(12, 166, 120, 0.18)" : alpha("#0ca678", 0.12); },
+  get surface() { return getIsDark() ? "#0e1626" : "#ffffff"; },
+  get surfaceAlt() { return getIsDark() ? "#050811" : "#f8f9fe"; },
+  get border() { return getIsDark() ? "rgba(255, 255, 255, 0.08)" : "#e8ecf4"; },
+  get borderMid() { return getIsDark() ? "rgba(255, 255, 255, 0.14)" : "#d4daf0"; },
+  get text() { return getIsDark() ? "#f8fafc" : "#0f1b35"; },
+  get textSub() { return getIsDark() ? "#cbd5e1" : "#4a5568"; },
+  get textMuted() { return "#94a3b8"; },
+  get shadow() { return getIsDark() ? "0 4px 20px rgba(0,0,0,0.4)" : "0 1px 3px rgba(15,27,53,0.06), 0 4px 16px rgba(15,27,53,0.04)"; },
+  get shadowHover() { return getIsDark() ? "0 8px 24px rgba(0,0,0,0.5)" : "0 4px 20px rgba(59,91,219,0.12)"; },
   radius: 14,
   radiusSm: 10,
 };
 
-const GRADIENT_HEADER = "#0f1b35";
-const GRADIENT_SCORE  = "#0f1b35";
+const GRADIENT_HEADER = "linear-gradient(135deg, #0e1626 0%, #172338 100%)";
+const GRADIENT_SCORE  = "linear-gradient(135deg, #0e1626 0%, #172338 100%)";
 
 const DETAIL_TABS = [
   { key: "activity",   label: "Activity"    },
@@ -601,8 +609,10 @@ function WorkOrderDialog({ open, onClose, lead, quotations, siteSurveyRecord, sh
         sx: {
           borderRadius: 3.5,
           overflow: "hidden",
-          bgcolor: "#f8fafc",
-          boxShadow: "0 28px 60px rgba(15, 23, 42, 0.18)",
+          bgcolor: TOKEN.surfaceAlt,
+          backgroundImage: "none",
+          border: `1px solid ${TOKEN.border}`,
+          boxShadow: TOKEN.shadow,
         },
       }}
     >
@@ -610,7 +620,7 @@ function WorkOrderDialog({ open, onClose, lead, quotations, siteSurveyRecord, sh
         sx={{
           px: 3,
           py: 2,
-          bgcolor: "#ffffff",
+          bgcolor: TOKEN.surface,
           borderBottom: `1px solid ${TOKEN.border}`,
           display: "flex",
           alignItems: "center",
@@ -621,7 +631,7 @@ function WorkOrderDialog({ open, onClose, lead, quotations, siteSurveyRecord, sh
         <Typography sx={{ fontSize: "1.2rem", fontWeight: 800, color: TOKEN.text }}>
           Work Order
         </Typography>
-        <IconButton onClick={onClose} disabled={downloading} size="small">
+        <IconButton onClick={onClose} disabled={downloading} size="small" sx={{ color: TOKEN.textMuted }}>
           <Close fontSize="small" />
         </IconButton>
       </DialogTitle>
@@ -635,7 +645,7 @@ function WorkOrderDialog({ open, onClose, lead, quotations, siteSurveyRecord, sh
             mx: "auto",
             p: { xs: 2, sm: 2.5 },
             borderRadius: 3,
-            bgcolor: "#ffffff",
+            bgcolor: TOKEN.surface,
             border: `1px solid ${TOKEN.border}`,
           }}
         >
@@ -647,9 +657,9 @@ function WorkOrderDialog({ open, onClose, lead, quotations, siteSurveyRecord, sh
                 mb: 2.25,
                 alignItems: "flex-start",
                 borderRadius: 2.5,
-                bgcolor: "#fff7ed",
-                color: "#b45309",
-                border: "1px solid rgba(245, 158, 11, 0.18)",
+                bgcolor: getIsDark() ? "rgba(245, 158, 11, 0.1)" : "#fff7ed",
+                color: getIsDark() ? "#fbbf24" : "#b45309",
+                border: `1px solid ${alpha("#f59e0b", getIsDark() ? 0.3 : 0.18)}`,
                 "& .MuiAlert-message": { width: "100%" },
               }}
             >
@@ -773,7 +783,7 @@ function WorkOrderDialog({ open, onClose, lead, quotations, siteSurveyRecord, sh
                 display: "grid",
                 gridTemplateColumns: { xs: "48px 1.2fr 1fr 0.8fr 40px", md: "56px 1.6fr 1fr 0.95fr 44px" },
                 gap: 0,
-                bgcolor: "#f8fafc",
+                bgcolor: TOKEN.surfaceAlt,
                 borderBottom: `1px solid ${TOKEN.border}`,
               }}
             >
@@ -861,7 +871,7 @@ function WorkOrderDialog({ open, onClose, lead, quotations, siteSurveyRecord, sh
           px: 3,
           py: 2,
           borderTop: `1px solid ${TOKEN.border}`,
-          bgcolor: "#ffffff",
+          bgcolor: TOKEN.surface,
           justifyContent: "space-between",
         }}
       >
@@ -892,11 +902,11 @@ function WorkOrderDialog({ open, onClose, lead, quotations, siteSurveyRecord, sh
               borderRadius: 2,
               px: 2.2,
               py: 1,
-              bgcolor: "#0f172a",
+              bgcolor: getIsDark() ? TOKEN.primary : "#0f172a",
               color: "#ffffff",
               textTransform: "none",
               fontWeight: 800,
-              "&:hover": { bgcolor: "#111827" },
+              "&:hover": { bgcolor: getIsDark() ? TOKEN.primaryLight : "#111827" },
             }}
           >
             {downloading ? "Generating PDF..." : "Download PDF"}
@@ -1184,9 +1194,9 @@ const PipelineActionBanner = ({ card }) => {
         mb: 2.25,
         p: { xs: 1.35, md: 1.65 },
         borderRadius: TOKEN.radiusSm,
-        border: `1px solid ${alpha("#f59e0b", 0.55)}`,
-        bgcolor: "#fff7ed",
-        boxShadow: `0 12px 24px ${alpha("#f97316", 0.08)}`,
+        border: `1px solid ${alpha("#f59e0b", getIsDark() ? 0.35 : 0.55)}`,
+        bgcolor: getIsDark() ? "rgba(245, 158, 11, 0.08)" : "#fff7ed",
+        boxShadow: `0 12px 24px ${alpha("#f97316", getIsDark() ? 0.04 : 0.08)}`,
       }}
     >
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} alignItems={{ xs: "stretch", md: "center" }} justifyContent="space-between">
@@ -1212,7 +1222,7 @@ const PipelineActionBanner = ({ card }) => {
                 fontSize: "0.68rem",
                 fontWeight: 900,
                 letterSpacing: "0.12em",
-                color: "#b45309",
+                color: getIsDark() ? "#fbbf24" : "#b45309",
                 textTransform: "uppercase",
                 lineHeight: 1.3,
               }}
@@ -1232,11 +1242,11 @@ const PipelineActionBanner = ({ card }) => {
                     px: 0.9,
                     py: 0.25,
                     borderRadius: 999,
-                    bgcolor: alpha("#dc2626", 0.08),
+                    bgcolor: alpha("#dc2626", getIsDark() ? 0.18 : 0.08),
                     border: `1px solid ${alpha("#dc2626", 0.3)}`,
                   }}
                 >
-                  <Typography sx={{ fontSize: "0.68rem", fontWeight: 900, color: "#b91c1c", lineHeight: 1.25 }}>
+                  <Typography sx={{ fontSize: "0.68rem", fontWeight: 900, color: getIsDark() ? "#f87171" : "#b91c1c", lineHeight: 1.25 }}>
                     Assign the lead
                   </Typography>
                 </Box>
@@ -1256,13 +1266,13 @@ const PipelineActionBanner = ({ card }) => {
                 height: 38,
                 borderRadius: TOKEN.radiusSm,
                 px: 1.65,
-                bgcolor: "#fff",
+                bgcolor: getIsDark() ? "#172338" : "#fff",
                 color: TOKEN.text,
                 borderColor: TOKEN.borderMid,
                 fontWeight: 800,
                 fontSize: "0.78rem",
                 textTransform: "none",
-                "&:hover": { bgcolor: "#fff", borderColor: alpha("#d97706", 0.55) },
+                "&:hover": { bgcolor: getIsDark() ? "#1e2d48" : "#fff", borderColor: alpha("#d97706", 0.55) },
               }}
             >
               Call now
@@ -1298,7 +1308,7 @@ const PipelineActionBanner = ({ card }) => {
   );
 };
 
-const PipelineStepper = ({ currentIndex, stages, actionCard }) => {
+const PipelineStepper = ({ currentIndex, stages, actionCard, onStageClick }) => {
   const safeIdx = currentIndex < 0 ? 0 : currentIndex;
   const progressPct = stages.length > 1 ? Math.round((safeIdx / (stages.length - 1)) * 100) : 0;
 
@@ -1326,7 +1336,18 @@ const PipelineStepper = ({ currentIndex, stages, actionCard }) => {
 
             return (
               <React.Fragment key={stage.key}>
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: { xs: 68, sm: 80 }, flexShrink: 0 }}>
+                <Box
+                  onClick={() => onStageClick?.(stage)}
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "6px",
+                    width: { xs: 68, sm: 80 },
+                    flexShrink: 0,
+                    cursor: onStageClick ? "pointer" : "default",
+                  }}
+                >
                   <Tooltip title={stage.label} placement="top" arrow>
                     <Box sx={{
                       width: 32,
@@ -1341,6 +1362,7 @@ const PipelineStepper = ({ currentIndex, stages, actionCard }) => {
                       ...(isDone   && { bgcolor: TOKEN.primary, color: "#fff", boxShadow: `0 4px 12px ${alpha(TOKEN.primary, 0.25)}` }),
                       ...(isActive && { bgcolor: TOKEN.surface, border: `2px solid ${TOKEN.primary}`, color: TOKEN.primary, boxShadow: `0 0 0 4px ${alpha(TOKEN.primary, 0.1)}` }),
                       ...(!isDone && !isActive && { bgcolor: TOKEN.surfaceAlt, border: `0.5px solid ${TOKEN.border}`, color: TOKEN.textMuted }),
+                      "&:hover": { transform: onStageClick ? "scale(1.08)" : "none" },
                     }}>
                       {isDone
                         ? <CheckCircle sx={{ fontSize: 16, color: "#fff" }} />
@@ -1421,8 +1443,9 @@ const card = (extra = {}) => ({
   sx: {
     borderRadius: TOKEN.radius,
     border: `0.5px solid ${TOKEN.border}`,
-    boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.05)",
+    boxShadow: getIsDark() ? "0 4px 20px rgba(0,0,0,0.3)" : "0 0 0 0.5px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.05)",
     bgcolor: TOKEN.surface,
+    backgroundImage: "none",
     overflow: "hidden",
     ...extra,
   },
@@ -1521,32 +1544,32 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, s
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={isMobile}
-      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden" } }}>
-      <Box sx={{ p: 2.5, bgcolor: "#0f172a", color: "#fff" }}>
+      PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, overflow: "hidden", bgcolor: TOKEN.surface, backgroundImage: "none", border: `1px solid ${TOKEN.border}` } }}>
+      <Box sx={{ p: 2.5, bgcolor: getIsDark() ? "#111c30" : "#0f172a", color: "#fff", borderBottom: `1px solid ${TOKEN.border}` }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h6" fontWeight={700}>Assign Lead</Typography>
           <IconButton onClick={onClose} sx={{ color: "#fff" }}><Close /></IconButton>
         </Stack>
       </Box>
-      <DialogContent sx={{ py: 3, px: 3 }}>
+      <DialogContent sx={{ py: 3, px: 3, bgcolor: TOKEN.surface }}>
         {error && !fetchingUsers && (
           <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} action={<Button color="inherit" size="small" onClick={() => fetchUsers(assignToRole)}>Retry</Button>}>{error}</Alert>
         )}
         {fetchingUsers ? (
           <Box display="flex" flexDirection="column" alignItems="center" py={4} gap={1.5}>
             <CircularProgress size={32} />
-            <Typography variant="body2">Loading available users...</Typography>
+            <Typography variant="body2" sx={{ color: TOKEN.textMuted }}>Loading available users...</Typography>
           </Box>
         ) : (
           <Stack spacing={2.5}>
             {showRoleSelection && (
               <Box>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Assign To Role</Typography>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: TOKEN.text }}>Assign To Role</Typography>
                 <Stack direction="row" spacing={1.5}>
                   {availableRoles.map((role) => (
                     <Box key={role} onClick={() => handleRoleChange({ target: { value: role } })}
-                      sx={{ flex: 1, p: 1.5, borderRadius: 2, border: `2px solid ${assignToRole === role ? "#f97316" : "#cbd5e1"}`, cursor: "pointer" }}>
-                      <Typography variant="body2" fontWeight={700}>{role}</Typography>
+                      sx={{ flex: 1, p: 1.5, borderRadius: 2, border: `2px solid ${assignToRole === role ? "#f97316" : TOKEN.borderMid}`, bgcolor: assignToRole === role ? alpha("#f97316", 0.08) : TOKEN.surfaceAlt, cursor: "pointer" }}>
+                      <Typography variant="body2" fontWeight={700} sx={{ color: assignToRole === role ? "#f97316" : TOKEN.text }}>{role}</Typography>
                     </Box>
                   ))}
                 </Stack>
@@ -1554,15 +1577,15 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, s
             )}
             {(assignToRole || !showRoleSelection) && (
               <Box>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Select User</Typography>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: TOKEN.text }}>Select User</Typography>
                 <Stack spacing={1} sx={{ maxHeight: 220, overflow: "auto" }}>
                   {getAvailableUsers().map((u) => (
                     <Box key={u._id} onClick={() => setSelectedUserId(u._id)}
-                      sx={{ p: 1.5, borderRadius: 2, border: `2px solid ${selectedUserId === u._id ? "#f97316" : "#e2e8f0"}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 1.5 }}>
+                      sx={{ p: 1.5, borderRadius: 2, border: `2px solid ${selectedUserId === u._id ? "#f97316" : TOKEN.border}`, bgcolor: selectedUserId === u._id ? alpha("#f97316", 0.08) : TOKEN.surfaceAlt, cursor: "pointer", display: "flex", alignItems: "center", gap: 1.5 }}>
                       <Avatar sx={{ bgcolor: "#f97316", width: 32, height: 32, fontSize: 13 }}>{u.firstName?.[0]}</Avatar>
                       <Box flex={1}>
-                        <Typography variant="body2" fontWeight={600}>{u.firstName} {u.lastName}</Typography>
-                        <Typography variant="caption" color="text.secondary">{u.email}</Typography>
+                        <Typography variant="body2" fontWeight={600} sx={{ color: TOKEN.text }}>{u.firstName} {u.lastName}</Typography>
+                        <Typography variant="caption" sx={{ color: TOKEN.textMuted }}>{u.email}</Typography>
                       </Box>
                     </Box>
                   ))}
@@ -1572,8 +1595,8 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, s
           </Stack>
         )}
       </DialogContent>
-      <DialogActions sx={{ p: 2.5 }}>
-        <Button onClick={onClose} variant="outlined">Cancel</Button>
+      <DialogActions sx={{ p: 2.5, bgcolor: getIsDark() ? "#0e1626" : "#f8fafc", borderTop: `1px solid ${TOKEN.border}` }}>
+        <Button onClick={onClose} variant="outlined" sx={{ borderColor: TOKEN.borderMid, color: TOKEN.textSub }}>Cancel</Button>
         <Button onClick={handleSubmit} variant="contained" disabled={loading || !selectedUserId} sx={{ bgcolor: "#f97316", "&:hover": { bgcolor: "#ea580c" } }}>
           {loading ? "Assigning..." : "Assign Lead"}
         </Button>
@@ -2401,6 +2424,21 @@ export default function LeadDetailsPage() {
     setProjectDialogOpen(true);
   }, [hasSiteSurvey, leadDetails, navigate]);
 
+  const handleDealPipelineStageClick = useCallback((stage) => {
+    if (!stage?.key) return;
+    if (stage.key === "site_visit_scheduled") {
+      setTab("siteVisits");
+    } else if (stage.key === "site_survey") {
+      setTab("siteSurvey");
+    } else if (stage.key === "proposal_sent") {
+      setTab("quotations");
+    } else if (stage.key === "project_converted") {
+      handleConvertToProject();
+    } else if (stage.key === "new" || stage.key === "contacted" || stage.key === "qualified") {
+      setTab("overview");
+    }
+  }, [handleConvertToProject]);
+
   const openProjectTypeDialog = useCallback(() => {
     setRecoveryProjectType(PROJECT_TYPES.includes(leadDetails?.projectType) ? leadDetails.projectType : "");
     setProjectTypeDialogOpen(true);
@@ -2966,6 +3004,7 @@ export default function LeadDetailsPage() {
         }
         return { label: "UPDATE", color: "#64748b", bg: alpha("#64748b", 0.08), dot: "#94a3b8" };
       };
+      const seenActivityKeys = new Set();
       const allEntries = [
         ...customActivities.map((entry) => ({
           ...entry,
@@ -2979,7 +3018,17 @@ export default function LeadDetailsPage() {
         })),
         ...timelineEntries
           .map((entry) => ({ ...entry, source: "timeline" })),
-      ].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+      ].filter((entry) => {
+        const time = entry.updatedAt || entry.createdAt;
+        const timeBucket = time ? Math.floor(new Date(time).getTime() / 60000) : "";
+        const text = String(entry.notes || entry.message || entry.title || "").trim().toLowerCase();
+        const key = `${timeBucket}|${text}`;
+        if (timeBucket && text) {
+          if (seenActivityKeys.has(key)) return false;
+          seenActivityKeys.add(key);
+        }
+        return true;
+      }).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
 
       const getDayGroupLabel = (value) => {
         if (!value) return "UNKNOWN";
@@ -3095,7 +3144,9 @@ export default function LeadDetailsPage() {
                     alignItems: "flex-start",
                     borderRadius: 0,
                     fontSize: "0.95rem",
-                    bgcolor: "#fff",
+                    bgcolor: TOKEN.surface,
+                    color: TOKEN.text,
+                    "& input, & textarea": { color: TOKEN.text },
                     "& fieldset": { border: "none" },
                   },
                 }}
@@ -3107,13 +3158,13 @@ export default function LeadDetailsPage() {
                   value={activityForm.subject}
                   onChange={handleActivityFieldChange("subject")}
                   fullWidth
-                  sx={{ mt: 1.5, "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: TOKEN.surfaceAlt } }}
+                  sx={{ mt: 1.5, "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: TOKEN.surfaceAlt, color: TOKEN.text, "& input": { color: TOKEN.text } } }}
                 />
               )}
             </Box>
 
             {(activityMode === "Comment" || activityMode === "Log call") && (
-              <Box sx={{ px: 2, py: 1.5, bgcolor: "#f1f5f9", display: "flex", justifyContent: "flex-end" }}>
+              <Box sx={{ px: 2, py: 1.5, bgcolor: getIsDark() ? "#111c30" : "#f1f5f9", display: "flex", justifyContent: "flex-end", borderTop: `1px solid ${TOKEN.border}` }}>
                 <Button
                   variant="contained"
                   disableElevation
@@ -3122,13 +3173,14 @@ export default function LeadDetailsPage() {
                   endIcon={<ArrowForward sx={{ fontSize: 14 }} />}
                   sx={{
                     borderRadius: 1.5,
-                    bgcolor: "#6b7280",
+                    bgcolor: getIsDark() ? TOKEN.primary : "#6b7280",
+                    color: "#fff",
                     px: 2.25,
                     py: 0.9,
                     fontSize: "0.82rem",
                     fontWeight: 700,
                     textTransform: "none",
-                    "&:hover": { bgcolor: "#4b5563" },
+                    "&:hover": { bgcolor: getIsDark() ? TOKEN.primaryLight : "#4b5563" },
                   }}
                 >
                   {savingActivity ? "Saving..." : activityMode === "Log call" ? "Save call log" : "Post comment"}
@@ -3152,8 +3204,8 @@ export default function LeadDetailsPage() {
                     return (
                       <Box key={`${groupLabel}-${entry.updatedAt || index}`} sx={{ display: "flex", gap: 1.5 }}>
                         <Box sx={{ width: 28, display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                          <Box sx={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${meta.dot}`, bgcolor: "#fff", mt: 0.45 }} />
-                          {index < entries.length - 1 ? <Box sx={{ width: 2, flex: 1, minHeight: 40, bgcolor: "#e2e8f0", mt: 0.5 }} /> : null}
+                          <Box sx={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${meta.dot}`, bgcolor: TOKEN.surface, mt: 0.45 }} />
+                          {index < entries.length - 1 ? <Box sx={{ width: 2, flex: 1, minHeight: 40, bgcolor: TOKEN.border, mt: 0.5 }} /> : null}
                         </Box>
 
                         <Box sx={{ flex: 1, pb: 0.5 }}>
@@ -3227,19 +3279,7 @@ export default function LeadDetailsPage() {
     }
 
     if (tab === "comments") {
-      const timelineCommentEntries = timelineEntries
-        .filter((entry) => ["comment", "call"].includes(String(entry.activityType || "").toLowerCase()))
-        .map((entry) => ({
-          id: entry._id || entry.updatedAt,
-          type: entry.activityType === "call" ? "Log call" : "Comment",
-          message: entry.notes,
-          actorName: `${entry.updatedBy?.firstName || "System"} ${entry.updatedBy?.lastName || ""}`.trim(),
-          createdAt: entry.updatedAt,
-        }));
-      const commentEntries = [
-        ...customActivities.filter((entry) => entry.type === "Comment" || isCallActivity(entry)),
-        ...timelineCommentEntries,
-      ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      const commentEntries = combinedComments;
       const latestEntry = commentEntries[0] || null;
 
       return (
@@ -3269,14 +3309,16 @@ export default function LeadDetailsPage() {
                     alignItems: "flex-start",
                     borderRadius: 0,
                     fontSize: "0.95rem",
-                    bgcolor: "#fff",
+                    bgcolor: TOKEN.surface,
+                    color: TOKEN.text,
+                    "& input, & textarea": { color: TOKEN.text },
                     "& fieldset": { border: "none" },
                   },
                 }}
               />
             </Box>
 
-            <Box sx={{ px: 2, py: 1.5, bgcolor: "#f1f5f9", display: "flex", justifyContent: "flex-end" }}>
+            <Box sx={{ px: 2, py: 1.5, bgcolor: getIsDark() ? "#111c30" : "#f1f5f9", display: "flex", justifyContent: "flex-end", borderTop: `1px solid ${TOKEN.border}` }}>
               <Button
                 variant="contained"
                 disableElevation
@@ -3285,13 +3327,14 @@ export default function LeadDetailsPage() {
                 endIcon={<ArrowForward sx={{ fontSize: 14 }} />}
                 sx={{
                   borderRadius: 1.5,
-                  bgcolor: "#0f172a",
+                  bgcolor: getIsDark() ? TOKEN.primary : "#0f172a",
+                  color: "#fff",
                   px: 2.25,
                   py: 0.9,
                   fontSize: "0.82rem",
                   fontWeight: 700,
                   textTransform: "none",
-                  "&:hover": { bgcolor: "#111827" },
+                  "&:hover": { bgcolor: getIsDark() ? TOKEN.primaryLight : "#111827" },
                 }}
               >
                 {savingActivity ? "Saving..." : "Post"}
@@ -3369,7 +3412,7 @@ export default function LeadDetailsPage() {
           </Typography>
         </Stack>
         {documentUploadLinks.map((link) => (
-          <Paper key={link} elevation={0} sx={{ px: 1, py: 0.85, borderRadius: 2, border: `1px solid ${TOKEN.border}`, bgcolor: "#f8fafc" }}>
+          <Paper key={link} elevation={0} sx={{ px: 1, py: 0.85, borderRadius: 2, border: `1px solid ${TOKEN.border}`, bgcolor: TOKEN.surfaceAlt }}>
             <Stack direction="row" spacing={1} alignItems="center">
               <LinkIcon sx={{ fontSize: 14, color: TOKEN.primary, flexShrink: 0 }} />
               <Typography
@@ -3705,25 +3748,44 @@ export default function LeadDetailsPage() {
                   {scheduledCount} scheduled · inspector visits and on-site assessments
                 </Typography>
               </Box>
-              <Button
-                variant="contained"
-                disableElevation
-                startIcon={<AccessTime sx={{ fontSize: 16 }} />}
-                onClick={openSiteVisitDialog}
-                sx={{
-                  borderRadius: 2.5,
-                  px: 2.5,
-                  py: 1.1,
-                  bgcolor: "#d97706",
-                  color: "#fff",
-                  fontWeight: 800,
-                  textTransform: "none",
-                  boxShadow: "0 10px 24px rgba(217, 119, 6, 0.22)",
-                  "&:hover": { bgcolor: "#b45309" },
-                }}
-              >
-                Schedule
-              </Button>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Button
+                  variant="outlined"
+                  startIcon={<OpenInNew sx={{ fontSize: 15 }} />}
+                  onClick={() => navigate("/total-visits", { state: { highlightLeadId: leadDetails?._id } })}
+                  sx={{
+                    borderRadius: 2.5,
+                    px: 2,
+                    py: 1.1,
+                    borderColor: TOKEN.borderMid,
+                    color: TOKEN.text,
+                    fontWeight: 700,
+                    textTransform: "none",
+                    "&:hover": { borderColor: TOKEN.primary, color: TOKEN.primary },
+                  }}
+                >
+                  Visit Pipeline
+                </Button>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  startIcon={<AccessTime sx={{ fontSize: 16 }} />}
+                  onClick={openSiteVisitDialog}
+                  sx={{
+                    borderRadius: 2.5,
+                    px: 2.5,
+                    py: 1.1,
+                    bgcolor: "#d97706",
+                    color: "#fff",
+                    fontWeight: 800,
+                    textTransform: "none",
+                    boxShadow: "0 10px 24px rgba(217, 119, 6, 0.22)",
+                    "&:hover": { bgcolor: "#b45309" },
+                  }}
+                >
+                  Schedule
+                </Button>
+              </Stack>
             </Stack>
 
             <Box sx={{ px: 3, pb: 3 }}>
@@ -3769,7 +3831,7 @@ export default function LeadDetailsPage() {
                           p: 2.5,
                           borderRadius: 3,
                           border: `1px solid ${TOKEN.border}`,
-                          bgcolor: "#fff",
+                          bgcolor: TOKEN.surface,
                         }}
                       >
                         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }}>
@@ -4524,7 +4586,7 @@ export default function LeadDetailsPage() {
                                 height: 24,
                                 borderRadius: "50%",
                                 border: `2px solid ${status.color}`,
-                                bgcolor: "#fff",
+                                bgcolor: TOKEN.surface,
                                 position: "relative",
                                 zIndex: 1,
                               }}
@@ -4584,14 +4646,14 @@ export default function LeadDetailsPage() {
                             px: 2,
                             py: 0.9,
                             borderColor: TOKEN.borderMid,
-                            color: "#0f1b35",
+                            color: TOKEN.text,
                             fontWeight: 700,
                             fontSize: "0.98rem",
                             textTransform: "none",
-                            bgcolor: "#fff",
+                            bgcolor: getIsDark() ? "#172338" : "#fff",
                             "&:hover": {
                               borderColor: TOKEN.borderMid,
-                              bgcolor: alpha(TOKEN.primary, 0.03),
+                              bgcolor: getIsDark() ? "#1e2d48" : alpha(TOKEN.primary, 0.03),
                             },
                           }}
                         >
@@ -4827,7 +4889,12 @@ export default function LeadDetailsPage() {
           </Stack>
         </Box>
 
-        <PipelineStepper currentIndex={dealPipelineStageIndex} stages={DEAL_PIPELINE_STAGES} actionCard={pipelineActionCard} />
+        <PipelineStepper
+          currentIndex={dealPipelineStageIndex}
+          stages={DEAL_PIPELINE_STAGES}
+          actionCard={pipelineActionCard}
+          onStageClick={handleDealPipelineStageClick}
+        />
       </Paper>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "260px minmax(0,1fr)" }, gap: 2 }}>
@@ -5171,7 +5238,9 @@ export default function LeadDetailsPage() {
             borderRadius: 4,
             overflow: "hidden",
             border: `1px solid ${TOKEN.border}`,
-            boxShadow: "0 24px 60px rgba(15, 23, 42, 0.16)",
+            bgcolor: TOKEN.surface,
+            backgroundImage: "none",
+            boxShadow: TOKEN.shadow,
           },
         }}
       >
@@ -5183,32 +5252,39 @@ export default function LeadDetailsPage() {
             px: 3.5,
             py: 2.5,
             fontWeight: 800,
-            color: "#2d3748",
+            color: TOKEN.text,
             borderBottom: `1px solid ${TOKEN.border}`,
           }}
         >
           Add Reminder
-          <IconButton onClick={closeReminderDialog} size="small" sx={{ color: "#6b7280" }}>
+          <IconButton onClick={closeReminderDialog} size="small" sx={{ color: TOKEN.textMuted }}>
             <Close />
           </IconButton>
         </DialogTitle>
 
-        <Box sx={{ px: 3.5, py: 3 }}>
+        <Box sx={{ px: 3.5, py: 3, bgcolor: TOKEN.surface }}>
           <Stack spacing={3}>
             <Box>
-              <Typography sx={{ mb: 1, fontSize: "1rem", color: "#4a5568", fontWeight: 500 }}>
+              <Typography sx={{ mb: 1, fontSize: "1rem", color: TOKEN.textSub, fontWeight: 500 }}>
                 Description
               </Typography>
               <TextField
                 fullWidth
                 value={activityForm.message}
                 onChange={handleActivityFieldChange("message")}
-                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2.5, bgcolor: "#fff" } }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2.5,
+                    bgcolor: getIsDark() ? "#172338" : "#fff",
+                    color: TOKEN.text,
+                    "& .MuiOutlinedInput-notchedOutline": { borderColor: TOKEN.borderMid },
+                  },
+                }}
               />
             </Box>
 
             <Box>
-              <Typography sx={{ mb: 1, fontSize: "1rem", color: "#4a5568", fontWeight: 500 }}>
+              <Typography sx={{ mb: 1, fontSize: "1rem", color: TOKEN.textSub, fontWeight: 500 }}>
                 Date
               </Typography>
               <TextField
@@ -5222,7 +5298,14 @@ export default function LeadDetailsPage() {
                     scheduledAt: value ? `${value}T09:00` : "",
                   }));
                 }}
-                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2.5, bgcolor: "#fff" } }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2.5,
+                    bgcolor: getIsDark() ? "#172338" : "#fff",
+                    color: TOKEN.text,
+                    "& .MuiOutlinedInput-notchedOutline": { borderColor: TOKEN.borderMid },
+                  },
+                }}
               />
             </Box>
           </Stack>
@@ -5233,7 +5316,7 @@ export default function LeadDetailsPage() {
             px: 3.5,
             py: 2.75,
             borderTop: `1px solid ${TOKEN.border}`,
-            bgcolor: "#f8fafc",
+            bgcolor: getIsDark() ? "#0e1626" : "#f8fafc",
             gap: 1.25,
           }}
         >
@@ -5243,9 +5326,9 @@ export default function LeadDetailsPage() {
               borderRadius: 2,
               px: 2.5,
               py: 1,
-              color: "#64748b",
+              color: TOKEN.textSub,
               border: `1px solid ${TOKEN.borderMid}`,
-              bgcolor: "#fff",
+              bgcolor: getIsDark() ? "#172338" : "#fff",
               fontWeight: 700,
               textTransform: "none",
             }}
@@ -5260,11 +5343,11 @@ export default function LeadDetailsPage() {
               borderRadius: 2,
               px: 2.5,
               py: 1,
-              bgcolor: "#2d3748",
+              bgcolor: getIsDark() ? TOKEN.primary : "#2d3748",
               color: "#fff",
               fontWeight: 700,
               textTransform: "none",
-              "&:hover": { bgcolor: "#1f2937" },
+              "&:hover": { bgcolor: getIsDark() ? TOKEN.primaryLight : "#1f2937" },
             }}
           >
             {savingActivity ? "Saving..." : "Set Reminder"}
@@ -5282,7 +5365,9 @@ export default function LeadDetailsPage() {
             borderRadius: 4,
             overflow: "hidden",
             border: `1px solid ${TOKEN.border}`,
-            boxShadow: "0 24px 60px rgba(15, 23, 42, 0.16)",
+            bgcolor: TOKEN.surface,
+            backgroundImage: "none",
+            boxShadow: TOKEN.shadow,
           },
         }}
       >
@@ -5294,17 +5379,17 @@ export default function LeadDetailsPage() {
             px: 3.5,
             py: 2.5,
             fontWeight: 800,
-            color: "#2d3748",
+            color: TOKEN.text,
             borderBottom: `1px solid ${TOKEN.border}`,
           }}
         >
           Schedule Site Visit
-          <IconButton onClick={closeSiteVisitDialog} size="small" sx={{ color: "#6b7280" }}>
+          <IconButton onClick={closeSiteVisitDialog} size="small" sx={{ color: TOKEN.textMuted }}>
             <Close />
           </IconButton>
         </DialogTitle>
 
-        <Box sx={{ px: 3.5, py: 3 }}>
+        <Box sx={{ px: 3.5, py: 3, bgcolor: TOKEN.surface }}>
           <Stack spacing={3}>
             {siteVisitUserError && (
               <Alert severity="warning" sx={{ borderRadius: 2 }}>
@@ -5313,7 +5398,7 @@ export default function LeadDetailsPage() {
             )}
 
             <Box>
-              <Typography sx={{ mb: 1, fontSize: "1rem", color: "#4a5568", fontWeight: 500 }}>
+              <Typography sx={{ mb: 1, fontSize: "1rem", color: TOKEN.textSub, fontWeight: 500 }}>
                 Assign To *
               </Typography>
               <Autocomplete
@@ -5328,14 +5413,21 @@ export default function LeadDetailsPage() {
                   <TextField
                     {...params}
                     placeholder="Search user..."
-                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2.5, bgcolor: "#fff" } }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: 2.5,
+                        bgcolor: getIsDark() ? "#172338" : "#fff",
+                        color: TOKEN.text,
+                        "& .MuiOutlinedInput-notchedOutline": { borderColor: TOKEN.borderMid },
+                      },
+                    }}
                   />
                 )}
               />
             </Box>
 
             <Box>
-              <Typography sx={{ mb: 1, fontSize: "1rem", color: "#4a5568", fontWeight: 500 }}>
+              <Typography sx={{ mb: 1, fontSize: "1rem", color: TOKEN.textSub, fontWeight: 500 }}>
                 Site Visit Date *
               </Typography>
               <TextField
@@ -5349,7 +5441,14 @@ export default function LeadDetailsPage() {
                     scheduledAt: value ? `${value}T09:00` : "",
                   }));
                 }}
-                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2.5, bgcolor: "#fff" } }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2.5,
+                    bgcolor: getIsDark() ? "#172338" : "#fff",
+                    color: TOKEN.text,
+                    "& .MuiOutlinedInput-notchedOutline": { borderColor: TOKEN.borderMid },
+                  },
+                }}
               />
             </Box>
           </Stack>
@@ -5360,7 +5459,7 @@ export default function LeadDetailsPage() {
             px: 3.5,
             py: 2.75,
             borderTop: `1px solid ${TOKEN.border}`,
-            bgcolor: "#f8fafc",
+            bgcolor: getIsDark() ? "#0e1626" : "#f8fafc",
             gap: 1.25,
           }}
         >
@@ -5370,9 +5469,9 @@ export default function LeadDetailsPage() {
               borderRadius: 2,
               px: 2.5,
               py: 1,
-              color: "#64748b",
+              color: TOKEN.textSub,
               border: `1px solid ${TOKEN.borderMid}`,
-              bgcolor: "#fff",
+              bgcolor: getIsDark() ? "#172338" : "#fff",
               fontWeight: 700,
               textTransform: "none",
             }}
@@ -5387,11 +5486,11 @@ export default function LeadDetailsPage() {
               borderRadius: 2,
               px: 2.5,
               py: 1,
-              bgcolor: "#2d3748",
+              bgcolor: getIsDark() ? TOKEN.primary : "#2d3748",
               color: "#fff",
               fontWeight: 700,
               textTransform: "none",
-              "&:hover": { bgcolor: "#1f2937" },
+              "&:hover": { bgcolor: getIsDark() ? TOKEN.primaryLight : "#1f2937" },
             }}
           >
             {savingActivity ? "Saving..." : "Schedule Site Visit"}
@@ -5427,8 +5526,9 @@ export default function LeadDetailsPage() {
             borderRadius: "16px",
             p: 0,
             overflow: "hidden",
-            boxShadow: "0 20px 50px rgba(0,0,0,0.25)",
-            bgcolor: "#ffffff",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+            bgcolor: TOKEN.surface,
+            backgroundImage: "none",
           },
         }}
       >
@@ -5439,8 +5539,8 @@ export default function LeadDetailsPage() {
             justifyContent: "space-between",
             px: 3,
             py: 2,
-            bgcolor: alpha("#ef4444", 0.05),
-            borderBottom: `1px solid ${alpha("#ef4444", 0.12)}`,
+            bgcolor: alpha("#ef4444", getIsDark() ? 0.12 : 0.05),
+            borderBottom: `1px solid ${alpha("#ef4444", 0.18)}`,
           }}
         >
           <Stack direction="row" spacing={1.5} alignItems="center">
@@ -5449,8 +5549,8 @@ export default function LeadDetailsPage() {
                 width: 34,
                 height: 34,
                 borderRadius: "50%",
-                bgcolor: alpha("#ef4444", 0.12),
-                color: "#dc2626",
+                bgcolor: alpha("#ef4444", 0.15),
+                color: "#ef4444",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -5459,16 +5559,16 @@ export default function LeadDetailsPage() {
             >
               <Cancel sx={{ fontSize: 20 }} />
             </Box>
-            <Typography variant="h6" fontWeight={700} fontSize="1.05rem" color="#1e293b">
+            <Typography variant="h6" fontWeight={700} fontSize="1.05rem" color={TOKEN.text}>
               Mark Lead as Lost
             </Typography>
           </Stack>
-          <IconButton size="small" onClick={() => setLoseLeadDialogOpen(false)} disabled={submittingLoseLead}>
+          <IconButton size="small" onClick={() => setLoseLeadDialogOpen(false)} disabled={submittingLoseLead} sx={{ color: TOKEN.textMuted }}>
             <Close sx={{ fontSize: 18 }} />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ px: 3, pt: 2.5, pb: 1 }}>
-          <Typography variant="body2" color="#475569" sx={{ mb: 2, lineHeight: 1.6, fontSize: "0.875rem" }}>
+        <DialogContent sx={{ px: 3, pt: 2.5, pb: 1, bgcolor: TOKEN.surface }}>
+          <Typography variant="body2" color={TOKEN.textSub} sx={{ mb: 2, lineHeight: 1.6, fontSize: "0.875rem" }}>
             Are you sure you want to mark <strong>{leadDetails?.firstName} {leadDetails?.lastName}</strong> as lost? This will update the lead status to <strong>Missed Leads</strong>.
           </Typography>
           <TextField
@@ -5484,13 +5584,16 @@ export default function LeadDetailsPage() {
             sx={{
               "& .MuiOutlinedInput-root": {
                 borderRadius: "10px",
-                bgcolor: "#f8fafc",
+                bgcolor: getIsDark() ? "#172338" : "#f8fafc",
+                color: TOKEN.text,
                 fontSize: "0.875rem",
+                "& .MuiOutlinedInput-notchedOutline": { borderColor: TOKEN.borderMid },
               },
+              "& .MuiInputLabel-root": { color: TOKEN.textMuted },
             }}
           />
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #f1f5f9", bgcolor: "#fafafa", gap: 1 }}>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${TOKEN.border}`, bgcolor: getIsDark() ? "#0e1626" : "#fafafa", gap: 1 }}>
           <Button
             onClick={() => setLoseLeadDialogOpen(false)}
             disabled={submittingLoseLead}
@@ -5498,11 +5601,11 @@ export default function LeadDetailsPage() {
             sx={{
               textTransform: "none",
               fontWeight: 600,
-              color: "#64748b",
-              borderColor: "#cbd5e1",
+              color: TOKEN.textSub,
+              borderColor: TOKEN.borderMid,
               borderRadius: "8px",
               px: 2,
-              "&:hover": { borderColor: "#94a3b8", bgcolor: "#f1f5f9" },
+              "&:hover": { borderColor: TOKEN.textMuted, bgcolor: getIsDark() ? "rgba(255,255,255,0.04)" : "#f1f5f9" },
             }}
           >
             Cancel

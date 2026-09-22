@@ -6,16 +6,16 @@ import { useState, useCallback, useRef } from "react";
 const GOOGLE_API_KEY =
   (typeof process !== "undefined" && process.env?.REACT_APP_GOOGLE_MAPS_API_KEY) ||
   (typeof process !== "undefined" && process.env?.VITE_GOOGLE_MAPS_API_KEY) ||
-  "AIzaSyDQYrvUxQPWUrpqWIy-tLg4f3DGrr4GTlg";
+  "AIzaSyBtLSQIyNMFIy5PzrnzP3pGstDkLViwxiw";
 
 export const useGeo = () => {
   const [state, setState] = useState({
-    latitude:  null,
+    latitude: null,
     longitude: null,
-    accuracy:  null,
-    address:   null,
-    error:     null,
-    loading:   false,
+    accuracy: null,
+    address: null,
+    error: null,
+    loading: false,
   });
 
   // Keep a ref to avoid stale closures in async callbacks
@@ -39,22 +39,22 @@ export const useGeo = () => {
       const data = await response.json();
       if (!data.results?.length) return null;
 
-      const result     = data.results[0];
+      const result = data.results[0];
       const components = result.address_components || [];
 
       const getComp = (type) =>
         components.find((c) => c.types.includes(type))?.long_name || "";
 
       return {
-        full:        result.formatted_address,
-        short:       result.formatted_address.split(",")[0].trim(),
-        road:        getComp("route"),
+        full: result.formatted_address,
+        short: result.formatted_address.split(",")[0].trim(),
+        road: getComp("route"),
         houseNumber: getComp("street_number"),
         city:
           getComp("locality") || getComp("administrative_area_level_2"),
-        state:       getComp("administrative_area_level_1"),
-        country:     getComp("country"),
-        postcode:    getComp("postal_code"),
+        state: getComp("administrative_area_level_1"),
+        country: getComp("country"),
+        postcode: getComp("postal_code"),
       };
     } catch (err) {
       console.error("Google reverse geocode error:", err);
@@ -83,7 +83,7 @@ export const useGeo = () => {
       if (!navigator.geolocation) {
         setState((s) => ({
           ...s,
-          error:   "Geolocation is not supported by your browser",
+          error: "Geolocation is not supported by your browser",
           loading: false,
         }));
         return null;
@@ -95,9 +95,9 @@ export const useGeo = () => {
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
             const coords = {
-              latitude:  pos.coords.latitude,
+              latitude: pos.coords.latitude,
               longitude: pos.coords.longitude,
-              accuracy:  pos.coords.accuracy,
+              accuracy: pos.coords.accuracy,
             };
 
             let address = null;
@@ -114,16 +114,16 @@ export const useGeo = () => {
               err.code === 1
                 ? "Location permission denied. Please allow location access."
                 : err.code === 2
-                ? "Location unavailable. Please check your GPS settings."
-                : "Location request timed out. Please try again.";
+                  ? "Location unavailable. Please check your GPS settings."
+                  : "Location request timed out. Please try again.";
 
             setState((s) => ({ ...s, loading: false, error: msg }));
             reject(new Error(msg));
           },
           {
             enableHighAccuracy: true,
-            timeout:            20_000,
-            maximumAge:         0,
+            timeout: 20_000,
+            maximumAge: 0,
           }
         );
       });
@@ -136,12 +136,12 @@ export const useGeo = () => {
   ============================== */
   const reset = useCallback(() => {
     setState({
-      latitude:  null,
+      latitude: null,
       longitude: null,
-      accuracy:  null,
-      address:   null,
-      error:     null,
-      loading:   false,
+      accuracy: null,
+      address: null,
+      error: null,
+      loading: false,
     });
   }, []);
 

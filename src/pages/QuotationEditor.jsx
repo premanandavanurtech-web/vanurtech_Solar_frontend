@@ -493,6 +493,39 @@ function StepComponents({ form, updateField, updateValue }) {
 
   const [liveItems, setLiveItems] = useState(inventoryItemsCatalog);
   const [fetchingInventory, setFetchingInventory] = useState(false);
+  const getItemStock = (item) => {
+    const stockRows = Array.isArray(item?.warehouseStock) ? item.warehouseStock : [];
+    const rowStock = stockRows.reduce(
+      (sum, row) => sum + Number(row.availableQty ?? row.quantity ?? row.qty ?? 0),
+      0,
+    );
+    return Number(item?.availableStock ?? item?.totalStock ?? item?.openingStock ?? rowStock ?? 0);
+  };
+  const renderInventoryOption = (props, option) => (
+    <Box component="li" {...props} key={option.id || option.itemName}>
+      <Stack spacing={0.4} sx={{ width: "100%", minWidth: 0 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+          <Typography fontWeight={800} noWrap sx={{ color: isDark ? "#f8fafc" : "#0f172a" }}>
+            {option.itemName}
+          </Typography>
+          <Chip
+            size="small"
+            label={`Stock: ${option.stock}`}
+            sx={{
+              flexShrink: 0,
+              height: 22,
+              fontWeight: 800,
+              bgcolor: option.stock > 0 ? alpha("#22c55e", isDark ? 0.18 : 0.12) : alpha("#ef4444", isDark ? 0.18 : 0.12),
+              color: option.stock > 0 ? (isDark ? "#86efac" : "#15803d") : "#ef4444",
+            }}
+          />
+        </Stack>
+        <Typography variant="caption" noWrap sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+          Category: {option.category || "-"} | Subcategory: {option.subcategory || "-"}
+        </Typography>
+      </Stack>
+    </Box>
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -505,7 +538,7 @@ function StepComponents({ form, updateField, updateValue }) {
           const parsed = data.map((item) => {
             const rawCat = typeof item.category === "object" ? item.category?.category : item.category;
             const priceVal = item.pricing?.sellingPrice || item.pricing?.purchaseCost || item.price || 0;
-            const stockVal = item.totalStock ?? item.openingStock ?? (Array.isArray(item.warehouseStock) ? item.warehouseStock.reduce((acc, w) => acc + (w.quantity || 0), 0) : 0);
+            const stockVal = getItemStock(item);
             return {
               id: item._id,
               category: rawCat || "Solar Panels",
@@ -536,277 +569,284 @@ function StepComponents({ form, updateField, updateValue }) {
     return () => { isMounted = false; };
   }, []);
 
-  // Category filter state
-  const [panelCategoryFilter, setPanelCategoryFilter] = useState("Solar Panels");
-  const [panelSubcategoryFilter, setPanelSubcategoryFilter] = useState(form.panelCategory || "TopCon (N-Type)");
-  const [selectedPanelItem, setSelectedPanelItem] = useState(() => {
-    return liveItems.find((i) => i.brand === form.panelBrand && i.wattPeak === String(form.wattPeak)) || liveItems[0];
-  });
-
-  const [inverterCategoryFilter, setInverterCategoryFilter] = useState("Inverters");
-  const [inverterSubcategoryFilter, setInverterSubcategoryFilter] = useState("On-Grid String");
-  const [selectedInverterItem, setSelectedInverterItem] = useState(() => {
-    return liveItems.find((i) => i.category === "Inverters") || null;
-  });
+  const componentItems = Array.isArray(form.componentItems) ? form.componentItems : [];
+  const [componentCategory, setComponentCategory] = useState("");
+  const [componentSubcategory, setComponentSubcategory] = useState("");
+  const [selectedComponentItem, setSelectedComponentItem] = useState(null);
+  const [componentQty, setComponentQty] = useState("1");
 
   const allCategoriesList = useMemo(() => {
-    const set = new Set(liveItems.map((i) => i.category));
-    return Array.from(set);
+    const set = new Set(liveItems.map((i) => i.category).filter(Boolean));
+    return Array.from(set).sort();
   }, [liveItems]);
 
-  const panelCategoriesList = useMemo(() => {
-    const set = new Set(liveItems.filter((i) => !panelCategoryFilter || i.category === panelCategoryFilter).map((i) => i.subcategory));
-    return Array.from(set);
-  }, [liveItems, panelCategoryFilter]);
-
-  const availablePanelItems = useMemo(() => {
-    return liveItems.filter(
-      (i) => (!panelCategoryFilter || i.category === panelCategoryFilter) && (!panelSubcategoryFilter || i.subcategory === panelSubcategoryFilter)
+  const subcategoryOptions = useMemo(() => {
+    const set = new Set(
+      liveItems
+        .filter((i) => !componentCategory || i.category === componentCategory)
+        .map((i) => i.subcategory)
+        .filter(Boolean),
     );
-  }, [liveItems, panelCategoryFilter, panelSubcategoryFilter]);
+    return Array.from(set).sort();
+  }, [liveItems, componentCategory]);
 
-  const inverterSubcategoriesList = useMemo(() => {
-    const set = new Set(liveItems.filter((i) => !inverterCategoryFilter || i.category === inverterCategoryFilter).map((i) => i.subcategory));
-    return Array.from(set);
-  }, [liveItems, inverterCategoryFilter]);
-
-  const availableInverterItems = useMemo(() => {
+  const availableComponentItems = useMemo(() => {
     return liveItems.filter(
-      (i) => (!inverterCategoryFilter || i.category === inverterCategoryFilter) && (!inverterSubcategoryFilter || i.subcategory === inverterSubcategoryFilter)
+      (i) =>
+        (!componentCategory || i.category === componentCategory) &&
+        (!componentSubcategory || i.subcategory === componentSubcategory),
     );
-  }, [liveItems, inverterCategoryFilter, inverterSubcategoryFilter]);
+  }, [liveItems, componentCategory, componentSubcategory]);
 
-  const handleSelectPanelItem = (item) => {
-    if (!item) return;
-    setSelectedPanelItem(item);
-    if (item.wattPeak) updateValue("wattPeak")(item.wattPeak);
-    if (item.brand) updateValue("panelBrand")(item.brand);
-    if (item.subcategory) updateValue("panelCategory")(item.subcategory);
-    if (item.price) updateValue("panelUnitPrice")(item.price);
+  const componentTotal = useMemo(
+    () => componentItems.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.price) || 0), 0),
+    [componentItems],
+  );
+
+  const syncLegacyComponentFields = (item, qty) => {
+    const categoryText = `${item.category || ""} ${item.subcategory || ""}`.toLowerCase();
+    if (categoryText.includes("solar") || categoryText.includes("panel")) {
+      if (item.wattPeak) updateValue("wattPeak")(item.wattPeak);
+      if (qty) updateValue("panelQty")(String(qty));
+      if (item.brand) updateValue("panelBrand")(item.brand);
+      if (item.subcategory) updateValue("panelCategory")(item.subcategory);
+      if (item.price) updateValue("panelUnitPrice")(item.price);
+    }
+    if (categoryText.includes("inverter")) {
+      if (item.size) updateValue("inverterSize")(item.size);
+      if (qty) updateValue("inverterQty")(String(qty));
+      if (item.brand) updateValue("inverterBrand")(item.brand);
+      if (item.phase) updateValue("phase")(item.phase);
+      if (item.type) updateValue("inverterType")(item.type);
+      if (item.price) updateValue("inverterUnitPrice")(item.price);
+    }
   };
 
-  const handleSelectInverterItem = (item) => {
-    if (!item) return;
-    setSelectedInverterItem(item);
-    if (item.size) updateValue("inverterSize")(item.size);
-    if (item.brand) updateValue("inverterBrand")(item.brand);
-    if (item.phase) updateValue("phase")(item.phase);
-    if (item.type) updateValue("inverterType")(item.type);
-    if (item.price) updateValue("inverterUnitPrice")(item.price);
+  const handleAddComponentItem = () => {
+    if (!selectedComponentItem) return;
+    const qty = Math.max(1, Number(componentQty) || 1);
+    const nextRow = {
+      id: `${selectedComponentItem.id || selectedComponentItem.itemName}-${Date.now()}`,
+      inventoryId: selectedComponentItem.id || "",
+      itemName: selectedComponentItem.itemName || "",
+      category: selectedComponentItem.category || "",
+      subcategory: selectedComponentItem.subcategory || "",
+      brand: selectedComponentItem.brand || "",
+      qty,
+      price: Number(selectedComponentItem.price || 0),
+      stock: Number(selectedComponentItem.stock || 0),
+      wattPeak: selectedComponentItem.wattPeak || "",
+      size: selectedComponentItem.size || "",
+    };
+
+    updateValue("componentItems")([...componentItems, nextRow]);
+    syncLegacyComponentFields(selectedComponentItem, qty);
+    setSelectedComponentItem(null);
+    setComponentQty("1");
+  };
+
+  const handleRemoveComponentItem = (rowId) => {
+    updateValue("componentItems")(componentItems.filter((item) => item.id !== rowId));
+  };
+
+  const InventorySummary = ({ item, stockWarningAt = 20 }) => {
+    if (!item) {
+      return (
+        <Paper elevation={0} sx={{ p: 2, borderRadius: 2.5, bgcolor: isDark ? "rgba(15,23,42,0.82)" : "#f8fafc", border: `1px dashed ${isDark ? "rgba(148,163,184,0.28)" : "#cbd5e1"}` }}>
+          <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+            Select an inventory item to see category, subcategory, price, and stock.
+          </Typography>
+        </Paper>
+      );
+    }
+
+    const stock = Number(item.stock || 0);
+    const stockColor = stock <= 0 ? "#ef4444" : stock <= stockWarningAt ? "#f59e0b" : "#22c55e";
+
+    return (
+      <Paper elevation={0} sx={{ p: 2, borderRadius: 2.5, bgcolor: isDark ? "rgba(15,23,42,0.84)" : "#f8fafc", border: `1px solid ${isDark ? "rgba(148,163,184,0.22)" : "#dbe5ef"}` }}>
+        <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "center" }} justifyContent="space-between" spacing={2}>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+            <Box sx={{ width: 42, height: 42, borderRadius: 2, bgcolor: alpha(BRAND, isDark ? 0.22 : 0.12), color: isDark ? "#93c5fd" : BRAND, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <Inventory2 fontSize="small" />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2" fontWeight={900} noWrap color={isDark ? "#f8fafc" : "#0f172a"}>
+                {item.itemName}
+              </Typography>
+              <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 0.8 }}>
+                <Chip size="small" label={item.category || "-"} sx={{ height: 23, fontWeight: 800, bgcolor: alpha("#3b82f6", isDark ? 0.18 : 0.1), color: isDark ? "#93c5fd" : "#1d4ed8" }} />
+                <Chip size="small" label={item.subcategory || "-"} sx={{ height: 23, fontWeight: 800, bgcolor: isDark ? "rgba(148,163,184,0.12)" : "#eef2f7", color: isDark ? "#cbd5e1" : "#475569" }} />
+                <Chip size="small" label={`Brand: ${item.brand || "-"}`} sx={{ height: 23, fontWeight: 800, bgcolor: isDark ? "rgba(148,163,184,0.12)" : "#eef2f7", color: isDark ? "#cbd5e1" : "#475569" }} />
+              </Stack>
+            </Box>
+          </Stack>
+          <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent={{ xs: "flex-start", md: "flex-end" }}>
+            <Chip icon={<PaymentsOutlined sx={{ fontSize: 16 }} />} label={`Price: Rs ${Number(item.price || 0).toLocaleString("en-IN")}`} sx={{ fontWeight: 900, bgcolor: alpha("#10b981", isDark ? 0.18 : 0.12), color: isDark ? "#86efac" : "#047857", border: `1px solid ${alpha("#10b981", 0.32)}` }} />
+            <Chip icon={<LayersOutlined sx={{ fontSize: 16 }} />} label={`Stock: ${stock} units`} sx={{ fontWeight: 900, bgcolor: alpha(stockColor, isDark ? 0.18 : 0.12), color: stockColor, border: `1px solid ${alpha(stockColor, 0.38)}` }} />
+          </Stack>
+        </Stack>
+      </Paper>
+    );
   };
 
   return (
     <Stack spacing={0}>
       <SectionHeader icon={<LayersOutlined />} title="Components" />
 
-      <Block label="Solar panels">
-        <G cols={3} sx={{ mb: 2 }}>
-          <ChipAC
-            label="Item Category"
-            options={allCategoriesList}
-            value={panelCategoryFilter}
-            onChange={(val) => setPanelCategoryFilter(val || "Solar Panels")}
-          />
-          <ChipAC
-            label="Subcategory"
-            options={panelCategoriesList}
-            value={panelSubcategoryFilter}
-            onChange={(val) => {
-              setPanelSubcategoryFilter(val || "");
-              updateValue("panelCategory")(val || "");
-            }}
-          />
-          <Autocomplete
-            options={availablePanelItems}
-            getOptionLabel={(opt) => (typeof opt === "string" ? opt : `${opt.itemName} (Stock: ${opt.stock})`)}
-            value={selectedPanelItem}
-            onChange={(_, newItem) => handleSelectPanelItem(newItem)}
-            size="small"
-            fullWidth
-            renderInput={(p) => <TextField {...p} label="Select Item" placeholder="Choose panel item..." sx={getInputSx(isDark)} />}
-            PaperComponent={(props) => (
-              <Paper
-                {...props}
-                sx={{
-                  bgcolor: isDark ? "#1e293b" : "#fff",
-                  color: isDark ? "#f1f5f9" : "#1f2937",
-                  border: isDark ? "1px solid rgba(255,255,255,0.1)" : undefined,
-                }}
-              />
-            )}
-          />
-        </G>
+      <Block sx={{ p: 0, overflow: "hidden", bgcolor: isDark ? "#172033" : "#fff", border: isDark ? "1px solid rgba(148,163,184,0.16)" : "1px solid #e2e8f0" }}>
+        <Box sx={{ px: 2.5, py: 2, borderBottom: isDark ? "1px solid rgba(148,163,184,0.14)" : "1px solid #e2e8f0" }}>
+          <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "flex-start", sm: "center" }} justifyContent="space-between" spacing={1.5}>
+            <Box>
+              <Typography fontWeight={900} color={isDark ? "#f8fafc" : "#0f172a"}>Add inventory items</Typography>
+              <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+                Select an item, enter quantity, then press Add item. Repeat for multiple products.
+              </Typography>
+            </Box>
+            <Chip size="small" label={`${componentItems.length} added`} sx={{ fontWeight: 900, bgcolor: alpha(BRAND, isDark ? 0.2 : 0.1), color: isDark ? "#93c5fd" : BRAND }} />
+          </Stack>
+        </Box>
 
-        <G cols={4}>
-          <TF label="Watt peak (Wp)" value={form.wattPeak} onChange={updateField("wattPeak")} />
-          <TF label="Panel qty" value={form.panelQty} onChange={updateField("panelQty")} />
-          <ChipAC label="Panel brand" options={panelBrands} value={form.panelBrand} onChange={updateValue("panelBrand")} />
-          <ChipAC label="Panel category" options={panelCategories} value={form.panelCategory} onChange={updateValue("panelCategory")} />
-        </G>
-
-        {selectedPanelItem && (
-          <Paper
-            elevation={0}
-            sx={{
-              mt: 2,
-              p: 1.75,
-              borderRadius: 2.5,
-              bgcolor: isDark ? "rgba(30, 41, 59, 0.7)" : "#f8fafc",
-              border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1"}`,
-            }}
-          >
-            <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
-              <Stack direction="row" alignItems="center" spacing={1.5}>
-                <Box
+        <Box sx={{ p: 2.5 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "0.8fr 0.8fr 1.6fr 0.45fr auto" }, gap: 1.5, alignItems: "center" }}>
+            <ChipAC
+              label="Category"
+              options={allCategoriesList}
+              value={componentCategory}
+              onChange={(val) => {
+                setComponentCategory(val || "");
+                setComponentSubcategory("");
+                setSelectedComponentItem(null);
+              }}
+            />
+            <ChipAC
+              label="Subcategory"
+              options={subcategoryOptions}
+              value={componentSubcategory}
+              onChange={(val) => {
+                setComponentSubcategory(val || "");
+                setSelectedComponentItem(null);
+              }}
+            />
+            <Autocomplete
+              options={availableComponentItems}
+              getOptionLabel={(opt) => (typeof opt === "string" ? opt : `${opt.itemName} (Stock: ${opt.stock})`)}
+              renderOption={renderInventoryOption}
+              value={selectedComponentItem}
+              onChange={(_, newItem) => {
+                setSelectedComponentItem(newItem);
+                if (newItem?.category) setComponentCategory(newItem.category);
+                if (newItem?.subcategory) setComponentSubcategory(newItem.subcategory);
+              }}
+              size="small"
+              fullWidth
+              loading={fetchingInventory}
+              renderInput={(p) => <TextField {...p} label="Item" placeholder="Search inventory item" sx={getInputSx(isDark)} />}
+              PaperComponent={(props) => (
+                <Paper
+                  {...props}
                   sx={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 2,
-                    bgcolor: alpha(BRAND, 0.12),
-                    color: BRAND,
-                    display: "grid",
-                    placeItems: "center",
-                  }}
-                >
-                  <Inventory2 fontSize="small" />
-                </Box>
-                <Box>
-                  <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : "#1e293b"}>
-                    {selectedPanelItem.itemName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Category: <strong>{selectedPanelItem.category}</strong> • Subcategory: <strong>{selectedPanelItem.subcategory}</strong> • Brand: <strong>{selectedPanelItem.brand}</strong>
-                  </Typography>
-                </Box>
-              </Stack>
-
-              <Stack direction="row" alignItems="center" spacing={1.5}>
-                <Chip
-                  icon={<PaymentsOutlined sx={{ fontSize: 16 }} />}
-                  label={`Price: ₹${selectedPanelItem.price.toLocaleString("en-IN")}`}
-                  sx={{
-                    fontWeight: 800,
-                    bgcolor: alpha("#10b981", 0.12),
-                    color: "#047857",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    bgcolor: isDark ? "#1e293b" : "#fff",
+                    color: isDark ? "#f1f5f9" : "#1f2937",
+                    border: isDark ? "1px solid rgba(255,255,255,0.1)" : undefined,
                   }}
                 />
-                <Chip
-                  icon={<LayersOutlined sx={{ fontSize: 16 }} />}
-                  label={`Stock: ${selectedPanelItem.stock} Units`}
-                  color={selectedPanelItem.stock > 100 ? "success" : selectedPanelItem.stock > 20 ? "warning" : "error"}
-                  variant="outlined"
-                  sx={{ fontWeight: 800 }}
-                />
-              </Stack>
-            </Stack>
-          </Paper>
-        )}
+              )}
+            />
+            <TF label="Qty" type="number" value={componentQty} onChange={(e) => setComponentQty(e.target.value)} inputProps={{ min: 1 }} />
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleAddComponentItem}
+              disabled={!selectedComponentItem}
+              sx={{ minHeight: 40, px: 2.5, borderRadius: 2, fontWeight: 900, whiteSpace: "nowrap", bgcolor: BRAND, "&:hover": { bgcolor: "#1d4ed8" } }}
+            >
+              Add item
+            </Button>
+          </Box>
+
+          <Box sx={{ mt: 2 }}>
+            <InventorySummary item={selectedComponentItem} stockWarningAt={20} />
+          </Box>
+        </Box>
       </Block>
 
-      <Block label="Inverter">
-        <G cols={3} sx={{ mb: 2 }}>
-          <ChipAC
-            label="Item Category"
-            options={allCategoriesList}
-            value={inverterCategoryFilter}
-            onChange={(val) => setInverterCategoryFilter(val || "Inverters")}
-          />
-          <ChipAC
-            label="Subcategory"
-            options={inverterSubcategoriesList}
-            value={inverterSubcategoryFilter}
-            onChange={(val) => setInverterSubcategoryFilter(val || "")}
-          />
-          <Autocomplete
-            options={availableInverterItems}
-            getOptionLabel={(opt) => (typeof opt === "string" ? opt : `${opt.itemName} (Stock: ${opt.stock})`)}
-            value={selectedInverterItem}
-            onChange={(_, newItem) => handleSelectInverterItem(newItem)}
-            size="small"
-            fullWidth
-            renderInput={(p) => <TextField {...p} label="Select Item" placeholder="Choose inverter item..." sx={getInputSx(isDark)} />}
-            PaperComponent={(props) => (
-              <Paper
-                {...props}
-                sx={{
-                  bgcolor: isDark ? "#1e293b" : "#fff",
-                  color: isDark ? "#f1f5f9" : "#1f2937",
-                  border: isDark ? "1px solid rgba(255,255,255,0.1)" : undefined,
-                }}
-              />
-            )}
-          />
-        </G>
-
-        <G cols={4}>
-          <TF label="Size (kW)" value={form.inverterSize} onChange={updateField("inverterSize")} />
-          <TF label="Qty" value={form.inverterQty} onChange={updateField("inverterQty")} />
-          <Sel label="Phase" value={form.phase} onChange={updateField("phase")} options={phaseOptions} />
-          <Sel label="Type" value={form.inverterType} onChange={updateField("inverterType")} options={inverterTypes} />
-          <ChipAC label="Inverter brand" options={inverterBrands} value={form.inverterBrand} onChange={updateValue("inverterBrand")} />
-        </G>
-
-        {selectedInverterItem && (
-          <Paper
-            elevation={0}
-            sx={{
-              mt: 2,
-              p: 1.75,
-              borderRadius: 2.5,
-              bgcolor: isDark ? "rgba(30, 41, 59, 0.7)" : "#f8fafc",
-              border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1"}`,
-            }}
-          >
-            <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
-              <Stack direction="row" alignItems="center" spacing={1.5}>
-                <Box
+      <Block label="Added items">
+        {componentItems.length === 0 ? (
+          <Paper elevation={0} sx={{ p: 2, borderRadius: 2, bgcolor: isDark ? "rgba(15,23,42,0.65)" : "#f8fafc", border: `1px dashed ${isDark ? "rgba(148,163,184,0.25)" : "#cbd5e1"}` }}>
+            <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+              No item added yet. Use the form above to add solar panels, inverters, cables, or any other inventory item.
+            </Typography>
+          </Paper>
+        ) : (
+          <Stack spacing={1.25}>
+            {componentItems.map((row, index) => {
+              const amount = (Number(row.qty) || 0) * (Number(row.price) || 0);
+              return (
+                <Paper
+                  key={row.id || `${row.itemName}-${index}`}
+                  elevation={0}
                   sx={{
-                    width: 38,
-                    height: 38,
+                    p: 1.5,
                     borderRadius: 2,
-                    bgcolor: alpha(BRAND, 0.12),
-                    color: BRAND,
-                    display: "grid",
-                    placeItems: "center",
+                    bgcolor: isDark ? "rgba(15,23,42,0.72)" : "#f8fafc",
+                    border: `1px solid ${isDark ? "rgba(148,163,184,0.18)" : "#e2e8f0"}`,
                   }}
                 >
-                  <Inventory2 fontSize="small" />
-                </Box>
-                <Box>
-                  <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : "#1e293b"}>
-                    {selectedInverterItem.itemName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Category: <strong>{selectedInverterItem.category}</strong> • Subcategory: <strong>{selectedInverterItem.subcategory}</strong> • Brand: <strong>{selectedInverterItem.brand}</strong>
-                  </Typography>
-                </Box>
-              </Stack>
+                  <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "center" }} spacing={1.5}>
+                    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flex: 1, minWidth: 0 }}>
+                      <Box sx={{ width: 38, height: 38, borderRadius: 2, bgcolor: alpha(BRAND, isDark ? 0.2 : 0.1), color: isDark ? "#93c5fd" : BRAND, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                        <Inventory2 fontSize="small" />
+                      </Box>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography fontWeight={900} noWrap color={isDark ? "#f8fafc" : "#0f172a"}>
+                          {row.itemName}
+                        </Typography>
+                        <Stack direction="row" flexWrap="wrap" gap={0.75} sx={{ mt: 0.6 }}>
+                          <Chip size="small" label={row.category || "-"} sx={{ height: 22, fontWeight: 800, bgcolor: alpha("#3b82f6", isDark ? 0.18 : 0.1), color: isDark ? "#93c5fd" : "#1d4ed8" }} />
+                          <Chip size="small" label={row.subcategory || "-"} sx={{ height: 22, fontWeight: 800, bgcolor: isDark ? "rgba(148,163,184,0.12)" : "#eef2f7", color: isDark ? "#cbd5e1" : "#475569" }} />
+                          {row.brand && <Chip size="small" label={row.brand} sx={{ height: 22, fontWeight: 800, bgcolor: isDark ? "rgba(148,163,184,0.12)" : "#eef2f7", color: isDark ? "#cbd5e1" : "#475569" }} />}
+                        </Stack>
+                      </Box>
+                    </Stack>
 
-              <Stack direction="row" alignItems="center" spacing={1.5}>
-                <Chip
-                  icon={<PaymentsOutlined sx={{ fontSize: 16 }} />}
-                  label={`Price: ₹${selectedInverterItem.price.toLocaleString("en-IN")}`}
-                  sx={{
-                    fontWeight: 800,
-                    bgcolor: alpha("#10b981", 0.12),
-                    color: "#047857",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                  }}
-                />
-                <Chip
-                  icon={<LayersOutlined sx={{ fontSize: 16 }} />}
-                  label={`Stock: ${selectedInverterItem.stock} Units`}
-                  color={selectedInverterItem.stock > 30 ? "success" : selectedInverterItem.stock > 10 ? "warning" : "error"}
-                  variant="outlined"
-                  sx={{ fontWeight: 800 }}
-                />
-              </Stack>
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "repeat(4, minmax(88px, 1fr))" }, gap: 1, minWidth: { md: 430 } }}>
+                      <Box>
+                        <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>Qty</Typography>
+                        <Typography fontWeight={900} color={isDark ? "#f8fafc" : "#0f172a"}>{row.qty}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>Price</Typography>
+                        <Typography fontWeight={900} color={isDark ? "#f8fafc" : "#0f172a"}>Rs {Number(row.price || 0).toLocaleString("en-IN")}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>Stock</Typography>
+                        <Typography fontWeight={900} color={Number(row.stock) > 0 ? (isDark ? "#86efac" : "#15803d") : "#ef4444"}>{row.stock}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>Amount</Typography>
+                        <Typography fontWeight={900} color={isDark ? "#f8fafc" : "#0f172a"}>Rs {amount.toLocaleString("en-IN")}</Typography>
+                      </Box>
+                    </Box>
+
+                    <Tooltip title="Remove item">
+                      <IconButton onClick={() => handleRemoveComponentItem(row.id)} color="error" sx={{ alignSelf: { xs: "flex-end", md: "center" } }}>
+                        <DeleteOutline />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </Paper>
+              );
+            })}
+
+            <Divider sx={{ borderColor: isDark ? "rgba(148,163,184,0.14)" : "#e2e8f0" }} />
+            <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={1}>
+              <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>Items total</Typography>
+              <Typography fontWeight={900} color={isDark ? "#f8fafc" : "#0f172a"}>Rs {componentTotal.toLocaleString("en-IN")}</Typography>
             </Stack>
-          </Paper>
+          </Stack>
         )}
       </Block>
-
       <Block label="Cables & structure">
         <G cols={4} sx={{ mb: 2 }}>
           <ChipAC label="Cable brand" options={cableBrands} value={form.cableBrand} onChange={updateValue("cableBrand")} />
@@ -1146,6 +1186,7 @@ export default function QuotationEditor({ initialMode = null }) {
     inverterSize: "200.00", inverterQty: "1", phase: "Three Phase", inverterType: "String",
     inverterBrand: "Havells Solar", cableBrand: "Havells", dcCableSpec: "4 sq mm",
     acCableSpec: "As per design", structureType: "", structureSize: "120*40", structureBrand: "Apollo",
+    componentItems: [],
     panelWarrantyYears: "12", inverterWarrantyYears: "7", bosWarrantyYears: "5",
     cableWarrantyYears: "1", performanceGuarantee: "", netSolarMeter: "",
     dcCablesConduits: "Reputed Make", dcdbAcdb: "Reputed Make",

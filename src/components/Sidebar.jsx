@@ -44,6 +44,9 @@ import {
   Close as CloseIcon,
   RequestQuote,
   Settings as SettingsIcon,
+  ReceiptLong,
+  AccountBalance,
+  AccountBalanceWallet,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
@@ -138,9 +141,13 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         path: TEAM_ATTENDANCE_ROLES.includes(userRole) ? "/team-attendance" : "/attendance",
         roles: ["Admin_panel","ZSM","Incharge","TEAM"],
       },
-      { text: "Leave Management",   icon: <EventBusy />,          path: "/leave-management",   roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
+      { text: "Employees",          icon: <AdminPanelSettings />, path: "/user-management",    roles: ["Admin_panel","ZSM","Incharge"] },
+      { text: "Leave",              icon: <EventBusy />,          path: "/leave-management",   roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Leave Types",        icon: <Inventory2Outlined />, path: "/leave-types",        roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Holiday Management", icon: <Celebration />,        path: "/holiday-management", roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
+      { text: "Payroll",            icon: <Paid />,               path: "/payroll",            roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
+      { text: "Salary Structure",   icon: <ReceiptLong />,        path: "/payroll/salaries",   roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
+      { text: "Salary Slips",       icon: <AccountBalanceWallet />,path: "/payroll/payslips",   roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
       {
         text: "Location Visit",
         icon: <LocationOnIcon />,
@@ -149,7 +156,6 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
       },
       { text: "Expense",       icon: <Paid />,              path: "/expense",          roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Import Leads",  icon: <CloudUpload />,       path: "/import-leads",     roles: ["Admin_panel","ZSM"] },
-      { text: "Users",         icon: <AdminPanelSettings />,path: "/user-management",  roles: ["Admin_panel","ZSM","Incharge"] },
       { text: "Reports",       icon: <Insights />,          path: "/reports",          roles: ["Admin_panel","ZSM","Incharge"] },
       { text: "Installer Work Register", icon: <Insights />, path: "/work-register", roles: ["ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","Admin_panel","ZSM","Incharge"] },
       { text: "Notifications", icon: <Notifications />,     path: "/notifications",    roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
@@ -159,7 +165,16 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
   );
 
   const filteredItems = useMemo(
-    () => menuItems.filter((item) => item.roles.map(normalizeRole).includes(userRole)),
+    () =>
+      menuItems.filter((item) => {
+        const itemRoles = item.roles.map((r) => normalizeRole(r).toUpperCase());
+        const uRole = normalizeRole(userRole).toUpperCase();
+        if (["ADMIN", "ADMIN_PANEL"].includes(uRole)) return true;
+        if (["MANAGER", "PROJECT_HEAD", "ZSM"].includes(uRole)) {
+          return true;
+        }
+        return itemRoles.includes(uRole);
+      }),
     [menuItems, userRole],
   );
 
@@ -170,8 +185,10 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         { text: "Leads",       icon: <FilterAlt />,    itemNames: ["All Leads","Missed Leads","Import Leads"] },
         { text: "Projects",    icon: <TaskAlt />,      itemNames: ["Projects","Total Visits","3D Design","Add Quotation","All Quotes"] },
         { text: "Inventory",   icon: <Inventory2Outlined />, itemNames: ["Category","Items"] },
-        { text: "Attendance",  icon: <CalendarMonth />,itemNames: ["Team Attendance","My Attendance","Leave Management","Leave Types","Holiday Management"] },
-        { text: "Team",        icon: <Groups />,       itemNames: ["Location Visit","Expense","Users"] },
+        { text: "Attendance",  icon: <CalendarMonth />,itemNames: ["Team Attendance","My Attendance","Leave Types","Holiday Management"] },
+        { text: "Salary",      icon: <AccountBalanceWallet />, itemNames: ["Payroll","Salary Structure","Salary Slips"] },
+        { text: "HR",          icon: <Groups />,       itemNames: ["Employees","Leave"] },
+        { text: "Team",        icon: <Groups />,       itemNames: ["Location Visit","Expense"] },
         { text: "Insights",    icon: <Insights />,     itemNames: ["Reports","Installer Work Register","Notifications"] },
         { text: "Settings",    icon: <SettingsIcon />, itemNames: ["Settings"] },
       ]
@@ -194,7 +211,9 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
     if (active) setOpenSection(active.text);
   }, [location.pathname, menuSections]);
 
-  const isActive  = (path) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+  const isActive  = (path) =>
+    location.pathname === path ||
+    (path !== "/payroll" && location.pathname.startsWith(`${path}/`));
 
   const handleNavigate = useCallback(
     (path) => {
