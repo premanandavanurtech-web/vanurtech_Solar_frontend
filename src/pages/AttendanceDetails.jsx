@@ -51,10 +51,12 @@ import {
   Print,
   ContentCopy,
   ExpandMore,
+  TouchApp,
 } from "@mui/icons-material";
 import { useAttendance } from "../hooks/useAttendance";
 import { format } from "date-fns";
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
+import axiosInstance from "../utils/axiosConfig";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PRIMARY = "#0f1f3d";
@@ -485,6 +487,27 @@ export default function AttendanceDetails({
     }
   };
 
+  const [allowingPunchIn, setAllowingPunchIn] = useState(false);
+
+  const handleAllowMobilePunchIn = async () => {
+    const id = a._id || a.id;
+    if (!id) {
+      showSnack("Invalid record ID", "error");
+      return;
+    }
+    setAllowingPunchIn(true);
+    try {
+      const res = await axiosInstance.post(`/attendance/${id}/allow-mobile-punch-in`);
+      const updatedAttendance = res.data?.data?.attendance || res.data?.attendance;
+      showSnack(res.data?.message || "Mobile punch-in allowed & notification sent to mobile!", "success");
+      if (onEdit && updatedAttendance) onEdit(updatedAttendance);
+    } catch (err) {
+      showSnack(err.response?.data?.message || err.message || "Failed to allow mobile punch-in", "error");
+    } finally {
+      setAllowingPunchIn(false);
+    }
+  };
+
   const handleDelete = () => {
     if (onDelete) { onDelete(a); onClose(); }
   };
@@ -722,8 +745,26 @@ export default function AttendanceDetails({
                 </Button>
               </Stack>
 
-              {/* Right group: Edit + Delete */}
+              {/* Right group: Allow Mobile Punch-In + Edit + Delete */}
               <Stack direction="row" spacing={1} flexWrap="wrap">
+                {(!a.punchIn?.time || a.status === "absent" || a.status === "Absent") && (
+                  <Button
+                    variant="contained"
+                    disabled={allowingPunchIn}
+                    startIcon={allowingPunchIn ? <CircularProgress size={16} color="inherit" /> : <TouchApp />}
+                    onClick={handleAllowMobilePunchIn}
+                    sx={{
+                      borderRadius: 2,
+                      bgcolor: "#10B981",
+                      color: "#ffffff",
+                      fontWeight: 700,
+                      textTransform: "none",
+                      "&:hover": { bgcolor: "#059669" },
+                    }}
+                  >
+                    {allowingPunchIn ? "Allowing..." : "Allow Mobile Punch-In"}
+                  </Button>
+                )}
                 {canEdit && (
                   <Button
                     variant="outlined"
@@ -734,7 +775,7 @@ export default function AttendanceDetails({
                       "&:hover": { bgcolor: alpha(WARNING, 0.06) },
                     }}
                   >
-                    Edit
+                    Manual Edit
                   </Button>
                 )}
                 {canDelete && (

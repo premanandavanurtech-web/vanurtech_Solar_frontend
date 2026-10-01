@@ -1,11 +1,11 @@
 const normalizeOrigin = (value) => (value || "").trim().replace(/\/+$/, "");
 
 export const API_ORIGIN = normalizeOrigin(
-  process.env.REACT_APP_API_URL || "http://localhost:9001"
+  process.env.REACT_APP_API_URL || "https://efilx-solar-backend-1.onrender.com"
 );
 
 export const LEGACY_API_ORIGINS = [
-  "http://localhost:9001",
+  "https://efilx-solar-backend-1.onrender.com",
 ];
 
 export const KNOWN_API_HOSTS = new Set(
