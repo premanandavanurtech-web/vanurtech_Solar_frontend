@@ -2,6 +2,7 @@ const normalizeOrigin = (value) => (value || "").trim().replace(/\/+$/, "");
 
 const resolveApiOrigin = () => {
   const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl) return envUrl;
   if (typeof window !== "undefined" && window.location) {
     const host = window.location.hostname;
     if (host && host !== "localhost" && host !== "127.0.0.1") {
@@ -11,13 +12,13 @@ const resolveApiOrigin = () => {
       return `${protocol}//${host}:${port}`;
     }
   }
-  return envUrl || "http://localhost:9001";
+  return "https://vanurtech-solar-backend-1.onrender.com";
 };
 
 export const API_ORIGIN = normalizeOrigin(resolveApiOrigin());
 
 export const LEGACY_API_ORIGINS = [
-  "http://localhost:9001",
+  "https://vanurtech-solar-backend-1.onrender.com",
 ];
 
 export const KNOWN_API_HOSTS = new Set(

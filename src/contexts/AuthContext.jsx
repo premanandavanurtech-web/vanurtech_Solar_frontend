@@ -1,4 +1,3 @@
-// contexts/AuthContext.js
 import React, {
   createContext,
   useState,
@@ -28,7 +27,6 @@ const normalizeLegacyRole = (role) => {
   return map[canonicalRole] || canonicalRole || null;
 };
 
-
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within an AuthProvider");
@@ -41,9 +39,6 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  /* ===============================
-     CHECK AUTHENTICATION
-  =============================== */
 
   const isAuthenticated = useCallback(() => {
     const token = localStorage.getItem("token");

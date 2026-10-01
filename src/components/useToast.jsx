@@ -14,9 +14,22 @@ import { useEffect, useRef, useState } from "react";
 // ── Singleton event bus ───────────────────────────────────────────────────────
 const listeners = new Set();
 let toastId = 0;
+const recentMessages = new Map();
 
-function emit(toast) {
-  listeners.forEach((fn) => fn(toast));
+function emit(toastItem) {
+  if (!toastItem || !toastItem.message) return;
+
+  const key = `${toastItem.type}:${toastItem.message}`;
+  const now = Date.now();
+  const lastTime = recentMessages.get(key) || 0;
+
+  // Throttle identical toast messages within 3 seconds
+  if (now - lastTime < 3000) {
+    return;
+  }
+  recentMessages.set(key, now);
+
+  listeners.forEach((fn) => fn(toastItem));
 }
 
 // ── Public API — call these anywhere (no hook needed) ─────────────────────────
@@ -79,14 +92,22 @@ const THEMES = {
   },
 };
 
-const DURATION = 4200; // ms
+const DURATION = 3800; // ms
+const MAX_VISIBLE_TOASTS = 3;
 
 export function ToastContainer() {
   const [toasts, setToasts] = useState([]);
 
   useEffect(() => {
     const handler = (t) => {
-      setToasts((prev) => [...prev, { ...t, visible: true }]);
+      setToasts((prev) => {
+        const next = [...prev, { ...t, visible: true }];
+        if (next.length > MAX_VISIBLE_TOASTS) {
+          return next.slice(-MAX_VISIBLE_TOASTS);
+        }
+        return next;
+      });
+
       setTimeout(() => {
         setToasts((prev) =>
           prev.map((x) => (x.id === t.id ? { ...x, visible: false } : x))

@@ -1,9 +1,10 @@
 // pages/MemberVisitHistory.jsx
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Box, Typography, Button, Chip, IconButton, Tooltip, alpha,
   useTheme, useMediaQuery, CircularProgress, Alert, Skeleton,
   SwipeableDrawer, Badge, Checkbox, FormControlLabel,
+  Dialog, DialogContent, DialogTitle,
 } from "@mui/material";
 import {
   LocationOn, Refresh, MyLocation, FilterList,
@@ -14,6 +15,7 @@ import {
   ArrowDownward, DirectionsCar, Schedule,
   ArrowBack, OpenInNew, ReceiptLong,
   Wifi, WifiOff, SignalCellularAlt, SignalCellularOff, Lan, LocationOff,
+  Speed,
 } from "@mui/icons-material";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -26,11 +28,13 @@ const BACKEND_ORIGIN = API_ORIGIN;
 const PHOTO_BACKEND_ORIGINS = [
   BACKEND_ORIGIN,
   ...LEGACY_API_ORIGINS,
+  "https://vanurtech-solar-backend-1.onrender.com",
 ].filter((origin, index, list) => origin && list.indexOf(origin) === index);
 const KNOWN_BACKEND_HOSTS = new Set([
   "localhost",
   "127.0.0.1",
   "::1",
+  "vanurtech-solar-backend-1.onrender.com",
   ...KNOWN_API_HOSTS,
 ]);
 
@@ -527,6 +531,66 @@ const RouteConnector = ({ visit }) => {
   );
 };
 
+// ─── Odometer Photo Thumbnail ────────────────────────────────────────────────
+const OdometerThumb = ({ rawUrl, alt, onClick }) => {
+  const [candidateIdx, setCandidateIdx] = useState(0);
+  const candidates = useMemo(() => getPhotoUrlCandidates(rawUrl), [rawUrl]);
+  const currentSrc = candidates[candidateIdx] || rawUrl;
+
+  useEffect(() => {
+    setCandidateIdx(0);
+  }, [rawUrl]);
+
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        width: "100%",
+        height: { xs: 150, sm: 180 },
+        borderRadius: "14px",
+        overflow: "hidden",
+        position: "relative",
+        cursor: "pointer",
+        bgcolor: "#000",
+        border: "1px solid rgba(255,255,255,0.1)",
+        "&:hover img": { transform: "scale(1.05)" },
+        "&:hover .zoom-overlay": { opacity: 1 },
+      }}
+    >
+      <Box
+        component="img"
+        src={currentSrc}
+        alt={alt}
+        onError={() => setCandidateIdx((i) => i + 1 < candidates.length ? i + 1 : i)}
+        sx={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transition: "transform 0.3s ease",
+        }}
+      />
+      <Box
+        className="zoom-overlay"
+        sx={{
+          position: "absolute",
+          inset: 0,
+          bgcolor: "rgba(0,0,0,0.45)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 0.75,
+          color: "#fff",
+          opacity: 0,
+          transition: "opacity 0.2s ease",
+        }}
+      >
+        <PhotoCamera sx={{ fontSize: 20 }} />
+        <Typography sx={{ fontSize: "0.8rem", fontWeight: 700 }}>Click to Enlarge</Typography>
+      </Box>
+    </Box>
+  );
+};
+
 // ─── Visit Card ───────────────────────────────────────────────────────────────
 const VisitCard = ({ visit: v, index, isLast, fixedBatteryInfo, fixedBatteryChip }) => {
   const cur = v.status === "InProgress";
@@ -955,6 +1019,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
   const [isPunchedIn,      setIsPunchedIn]      = useState(false);
   const [hasPunchedOut,    setHasPunchedOut]    = useState(false);
   const [attendanceRecord, setAttendanceRecord] = useState(null);
+  const [odometerPreview,  setOdometerPreview]  = useState(null);
   const [punchInLocation,  setPunchInLocation]  = useState(null);
   const [punchOutLocation, setPunchOutLocation] = useState(null);
   const [expenses,         setExpenses]         = useState([]);
@@ -1246,7 +1311,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
       const selectedDay = getSelectedDayKey(filters.dateRange);
       const res   = await apiFetch("/attendance", {
         startDate: selectedDay, endDate: selectedDay, limit: 1,
-        ...(isAdminView ? { userId: targetUserId } : {}),
+        ...(targetUserId ? { userId: targetUserId } : {}),
       });
       const list = res?.data?.attendances || res?.result?.attendances || res?.data || [];
       const att  = Array.isArray(list) ? list[0] : list;
@@ -1536,6 +1601,86 @@ export default function MemberVisitHistory({ userId: propUserId }) {
   const batteryChip = currentBatteryChip;
   const expenseTotal = expenses.reduce((sum, item) => sum + (Number(item?.amount) || 0), 0);
   const expenseCount = expenses.length;
+
+  // ── Multi-Trip Data for Map Navigation (Requirements 1 - 9) ────────────────
+  const memberTrips = useMemo(() => {
+    const meta = attendanceRecord?.metadata || {};
+    const backendTrips = meta.vehicleTrips || meta.trips || [];
+    if (Array.isArray(backendTrips) && backendTrips.length > 0) {
+      return backendTrips.map((t, idx) => ({
+        tripNumber: t.tripNumber || idx + 1,
+        title: t.destination?.name || t.title || `Trip ${t.tripNumber || idx + 1}`,
+        subtitle: t.destination?.address || t.subtitle || "",
+        destination: {
+          latitude: t.destination?.latitude ?? t.destination?.lat,
+          longitude: t.destination?.longitude ?? t.destination?.lng,
+          name: t.destination?.name || t.title,
+          address: t.destination?.address || t.subtitle,
+        },
+        start: t.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
+        selectedRoute: t.selectedRoute || null,
+        availableRoutes: t.availableRoutes || (t.selectedRoute ? [t.selectedRoute] : []),
+        status: t.status || "in_progress",
+      }));
+    }
+
+    const lastTrip = meta.lastTrip;
+    if (lastTrip && (lastTrip.destination || lastTrip.selectedRoute)) {
+      return [{
+        tripNumber: lastTrip.tripNumber || 1,
+        title: lastTrip.destination?.name || "Trip 1",
+        subtitle: lastTrip.destination?.address || "",
+        destination: {
+          latitude: lastTrip.destination?.latitude ?? lastTrip.destination?.lat,
+          longitude: lastTrip.destination?.longitude ?? lastTrip.destination?.lng,
+          name: lastTrip.destination?.name || "Destination",
+          address: lastTrip.destination?.address || "",
+        },
+        start: lastTrip.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
+        selectedRoute: lastTrip.selectedRoute || null,
+        availableRoutes: lastTrip.availableRoutes || (lastTrip.selectedRoute ? [lastTrip.selectedRoute] : []),
+        status: lastTrip.tripStatus || "in_progress",
+      }];
+    }
+
+    if (meta.destination) {
+      return [{
+        tripNumber: meta.tripNumber || 1,
+        title: meta.destination.name || "Trip 1",
+        subtitle: meta.destination.address || "",
+        destination: {
+          latitude: meta.destination.latitude ?? meta.destination.lat,
+          longitude: meta.destination.longitude ?? meta.destination.lng,
+          name: meta.destination.name || "Destination",
+          address: meta.destination.address || "",
+        },
+        start: meta.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
+        selectedRoute: meta.selectedRoute || null,
+        availableRoutes: meta.availableRoutes || (meta.selectedRoute ? [meta.selectedRoute] : []),
+        status: "in_progress",
+      }];
+    }
+
+    if (Array.isArray(visibleVisits) && visibleVisits.length > 0) {
+      return visibleVisits.map((v, idx) => ({
+        tripNumber: idx + 1,
+        title: v.partyName || v.clientName || v.purpose || `Trip ${idx + 1}`,
+        subtitle: v.address || "",
+        destination: {
+          latitude: v.coordinates?.lat ?? v.location?.lat ?? v.location?.latitude ?? v.lat,
+          longitude: v.coordinates?.lng ?? v.location?.lng ?? v.location?.longitude ?? v.lng,
+          name: v.partyName || v.clientName || v.purpose || `Trip ${idx + 1}`,
+          address: v.address || "",
+        },
+        start: punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null,
+        selectedRoute: null,
+        availableRoutes: [],
+        status: v.status || "completed",
+      }));
+    }
+
+    return [];
+  }, [attendanceRecord, visibleVisits, punchInLocation]);
   const selectedStatusLabel = formatStatusLabel(attendanceRecord?.status, isPunchedIn, hasPunchedOut);
   const selectedDayLabel = getDateRangeLabel(filters.dateRange);
   const punchInTimeValue = punchInLocation?.time || attendanceRecord?.punchIn?.time || null;
@@ -1767,6 +1912,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     visits={visibleVisits}
     selectedDate={selectedMapDate}
     preferVisitTrail={useVisitTrailOnly}
+    trips={memberTrips}
   />
 ) : (
   <Box
@@ -2093,6 +2239,230 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                 </Box>
               </Box>
             </Box>
+
+            {/* Odometer Trip Verification Card */}
+            {(() => {
+              const startOdo = attendanceRecord?.startOdometer || null;
+              const endOdo = attendanceRecord?.endOdometer || null;
+
+              const startPhoto = startOdo?.photoUrl || attendanceRecord?.startOdometerPhotoUrl || null;
+              const startReading = startOdo?.reading ?? attendanceRecord?.startOdometerReading ?? null;
+              const startTime = startOdo?.recordedAt ? fmt(startOdo.recordedAt) : (attendanceRecord?.punchIn?.time ? fmt(attendanceRecord.punchIn.time) : null);
+
+              const endPhoto = endOdo?.photoUrl || attendanceRecord?.endOdometerPhotoUrl || (attendanceRecord?.punchOut?.photos && attendanceRecord.punchOut.photos[0]) || null;
+              const endReading = endOdo?.reading ?? attendanceRecord?.endOdometerReading ?? null;
+              const endTime = (endOdo?.recordedAt || attendanceRecord?.punchOut?.time) ? fmt(endOdo?.recordedAt || attendanceRecord?.punchOut?.time) : null;
+
+              const hasOdoDiff = Number.isFinite(Number(startReading)) && Number.isFinite(Number(endReading));
+              const odoKmDiff = hasOdoDiff ? Math.max(0, Number(endReading) - Number(startReading)) : null;
+
+              return (
+                <Box sx={{
+                  bgcolor: cardBg,
+                  borderRadius: "20px",
+                  border: `1px solid ${cardBorder}`,
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
+                  p: { xs: 2.5, sm: 3 },
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1.5 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Box sx={{
+                        width: 42, height: 42, borderRadius: "14px",
+                        bgcolor: alpha("#6366f1", 0.12),
+                        color: "#6366f1",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: "0 4px 12px rgba(99, 102, 241, 0.2)",
+                      }}>
+                        <Speed sx={{ fontSize: 22 }} />
+                      </Box>
+                      <Box>
+                        <Typography sx={{ fontWeight: 800, fontSize: "0.98rem", color: textTitle, lineHeight: 1.2 }}>
+                          Odometer Trip Verification
+                        </Typography>
+                        <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: textSub, mt: 0.3 }}>
+                          Start trip photo & pre-punch out odometer reading
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {odoKmDiff !== null && (
+                      <Chip
+                        icon={<Route sx={{ fontSize: "14px !important", color: "#16a34a !important" }} />}
+                        label={`+${odoKmDiff.toFixed(1)} km by odometer`}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(SUCCESS, 0.12),
+                          color: SUCCESS,
+                          fontWeight: 800,
+                          fontSize: "0.75rem",
+                          height: 28,
+                          px: 1,
+                          border: `1px solid ${alpha(SUCCESS, 0.3)}`,
+                        }}
+                      />
+                    )}
+                  </Box>
+
+                  {/* Two Column Grid: Start Odometer & End Odometer */}
+                  <Box sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                    gap: 2,
+                  }}>
+                    {/* Card 1: Start Trip Odometer */}
+                    <Box sx={{
+                      bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
+                      borderRadius: "16px",
+                      p: 2,
+                      border: `1px solid ${dividerBorder}`,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1.5,
+                    }}>
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "#2563eb" }} />
+                          <Typography sx={{ fontSize: "0.78rem", fontWeight: 800, color: textTitle, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            Start Trip Odometer
+                          </Typography>
+                        </Box>
+                        {startTime && (
+                          <Typography sx={{ fontSize: "0.72rem", color: textSub, fontWeight: 600 }}>
+                            {startTime}
+                          </Typography>
+                        )}
+                      </Box>
+
+                      {startPhoto ? (
+                        <OdometerThumb
+                          rawUrl={startPhoto}
+                          alt="Start Odometer"
+                          onClick={() => setOdometerPreview({
+                            title: "Start Trip Odometer Photo",
+                            url: startPhoto,
+                            reading: startReading,
+                            time: startTime,
+                          })}
+                        />
+                      ) : (
+                        <Box sx={{
+                          width: "100%",
+                          height: { xs: 130, sm: 150 },
+                          borderRadius: "14px",
+                          bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f1f5f9",
+                          border: "1.5px dashed #cbd5e1",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 1,
+                          p: 2,
+                          textAlign: "center",
+                        }}>
+                          <PhotoCamera sx={{ fontSize: 28, color: "#94a3b8" }} />
+                          <Typography sx={{ fontSize: "0.75rem", color: textSub, fontWeight: 600 }}>
+                            No start odometer photo uploaded
+                          </Typography>
+                        </Box>
+                      )}
+
+                      <Box sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        bgcolor: isDark ? "rgba(0,0,0,0.2)" : "#ffffff",
+                        p: 1.25,
+                        borderRadius: "12px",
+                        border: `1px solid ${dividerBorder}`,
+                      }}>
+                        <Typography sx={{ fontSize: "0.72rem", color: textSub, fontWeight: 600 }}>Reading</Typography>
+                        <Typography sx={{ fontSize: "0.95rem", fontWeight: 800, color: textTitle }}>
+                          {startReading != null ? `${Number(startReading).toLocaleString("en-IN")} KM` : "Not entered"}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Card 2: Ending Odometer (Before Punch Out) */}
+                    <Box sx={{
+                      bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
+                      borderRadius: "16px",
+                      p: 2,
+                      border: `1px solid ${dividerBorder}`,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1.5,
+                    }}>
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "#16a34a" }} />
+                          <Typography sx={{ fontSize: "0.78rem", fontWeight: 800, color: textTitle, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                            Ending Odometer (Punch Out)
+                          </Typography>
+                        </Box>
+                        {endTime && (
+                          <Typography sx={{ fontSize: "0.72rem", color: textSub, fontWeight: 600 }}>
+                            {endTime}
+                          </Typography>
+                        )}
+                      </Box>
+
+                      {endPhoto ? (
+                        <OdometerThumb
+                          rawUrl={endPhoto}
+                          alt="Ending Odometer"
+                          onClick={() => setOdometerPreview({
+                            title: "Ending Odometer Photo (Punch Out)",
+                            url: endPhoto,
+                            reading: endReading,
+                            time: endTime,
+                          })}
+                        />
+                      ) : (
+                        <Box sx={{
+                          width: "100%",
+                          height: { xs: 130, sm: 150 },
+                          borderRadius: "14px",
+                          bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f1f5f9",
+                          border: "1.5px dashed #cbd5e1",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 1,
+                          p: 2,
+                          textAlign: "center",
+                        }}>
+                          <PhotoCamera sx={{ fontSize: 28, color: "#94a3b8" }} />
+                          <Typography sx={{ fontSize: "0.75rem", color: textSub, fontWeight: 600 }}>
+                            {isPunchedIn && !hasPunchedOut
+                              ? "Pending (Required before Punch Out)"
+                              : "No ending odometer photo uploaded"}
+                          </Typography>
+                        </Box>
+                      )}
+
+                      <Box sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        bgcolor: isDark ? "rgba(0,0,0,0.2)" : "#ffffff",
+                        p: 1.25,
+                        borderRadius: "12px",
+                        border: `1px solid ${dividerBorder}`,
+                      }}>
+                        <Typography sx={{ fontSize: "0.72rem", color: textSub, fontWeight: 600 }}>Reading</Typography>
+                        <Typography sx={{ fontSize: "0.95rem", fontWeight: 800, color: textTitle }}>
+                          {endReading != null ? `${Number(endReading).toLocaleString("en-IN")} KM` : "Not entered"}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+              );
+            })()}
           </Box>
 
           {/* ── RIGHT — Visit Timeline ── */}
@@ -2366,6 +2736,64 @@ export default function MemberVisitHistory({ userId: propUserId }) {
           </Box>
         </Box>
       </Box>
+
+      {/* Odometer Photo Enlarge Dialog */}
+      <Dialog
+        open={Boolean(odometerPreview)}
+        onClose={() => setOdometerPreview(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "20px",
+            bgcolor: cardBg,
+            overflow: "hidden",
+          },
+        }}
+      >
+        <DialogTitle sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: `1px solid ${dividerBorder}`,
+          py: 2,
+          px: 3,
+        }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Speed sx={{ color: "#6366f1" }} />
+            <Box>
+              <Typography sx={{ fontWeight: 800, fontSize: "1rem", color: textTitle }}>
+                {odometerPreview?.title || "Odometer Photo"}
+              </Typography>
+              {(odometerPreview?.reading != null || odometerPreview?.time) && (
+                <Typography sx={{ fontSize: "0.75rem", color: textSub, fontWeight: 600 }}>
+                  {odometerPreview?.reading != null ? `Odometer Reading: ${Number(odometerPreview.reading).toLocaleString("en-IN")} KM` : ""}
+                  {odometerPreview?.reading != null && odometerPreview?.time ? " • " : ""}
+                  {odometerPreview?.time ? `Recorded at ${odometerPreview.time}` : ""}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+          <IconButton onClick={() => setOdometerPreview(null)} size="small">
+            <Close sx={{ fontSize: 20 }} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, display: "flex", justifyContent: "center", bgcolor: "#000" }}>
+          {odometerPreview?.url && (
+            <Box
+              component="img"
+              src={getPhotoUrlCandidates(odometerPreview.url)[0] || odometerPreview.url}
+              alt="Enlarged Odometer"
+              sx={{
+                maxWidth: "100%",
+                maxHeight: "75vh",
+                objectFit: "contain",
+                borderRadius: "12px",
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

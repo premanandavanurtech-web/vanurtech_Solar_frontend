@@ -299,6 +299,80 @@ function distMetres(lat1, lng1, lat2, lng2) {
   return calcKm([{ lat: lat1, lng: lng1 }, { lat: lat2, lng: lng2 }]) * 1000;
 }
 
+// ── Trip Route Progress Helpers ────────────────────────────────────────────────
+// Given a user position and a route (array of [lat, lng]), finds the closest
+// point on the route and returns { segIdx, fraction, snappedLat, snappedLng }
+function findClosestPointOnRoute(userLat, userLng, routeCoords) {
+  if (!Array.isArray(routeCoords) || routeCoords.length < 2) {
+    return { segIdx: 0, fraction: 0, snappedLat: userLat, snappedLng: userLng };
+  }
+
+  let bestDist = Infinity;
+  let bestSeg = 0;
+  let bestFrac = 0;
+  let bestLat = routeCoords[0][0];
+  let bestLng = routeCoords[0][1];
+
+  for (let i = 0; i < routeCoords.length - 1; i++) {
+    const [aLat, aLng] = routeCoords[i];
+    const [bLat, bLng] = routeCoords[i + 1];
+
+    // Project user onto segment AB
+    const abLat = bLat - aLat;
+    const abLng = bLng - aLng;
+    const abLen2 = abLat * abLat + abLng * abLng;
+
+    let t = 0;
+    if (abLen2 > 0) {
+      t = ((userLat - aLat) * abLat + (userLng - aLng) * abLng) / abLen2;
+      t = Math.max(0, Math.min(1, t));
+    }
+
+    const pLat = aLat + t * abLat;
+    const pLng = aLng + t * abLng;
+    const d = distMetres(userLat, userLng, pLat, pLng);
+
+    if (d < bestDist) {
+      bestDist = d;
+      bestSeg = i;
+      bestFrac = t;
+      bestLat = pLat;
+      bestLng = pLng;
+    }
+  }
+
+  return { segIdx: bestSeg, fraction: bestFrac, snappedLat: bestLat, snappedLng: bestLng };
+}
+
+// Splits routeCoords at the closest point to the user.
+// Returns { covered: [[lat,lng]...], remaining: [[lat,lng]...], progressRatio: 0-1 }
+function splitRouteAtProgress(userLat, userLng, routeCoords) {
+  const { segIdx, fraction, snappedLat, snappedLng } = findClosestPointOnRoute(
+    userLat, userLng, routeCoords
+  );
+
+  // Total route length for progress ratio
+  let totalLen = 0;
+  let coveredLen = 0;
+  for (let i = 0; i < routeCoords.length - 1; i++) {
+    const d = distMetres(routeCoords[i][0], routeCoords[i][1], routeCoords[i+1][0], routeCoords[i+1][1]);
+    totalLen += d;
+    if (i < segIdx) coveredLen += d;
+    else if (i === segIdx) {
+      const segLen = distMetres(routeCoords[i][0], routeCoords[i][1], routeCoords[i+1][0], routeCoords[i+1][1]);
+      coveredLen += segLen * fraction;
+    }
+  }
+  const progressRatio = totalLen > 0 ? Math.min(1, coveredLen / totalLen) : 0;
+
+  const snap = [snappedLat, snappedLng];
+  const covered = [...routeCoords.slice(0, segIdx + 1), snap];
+  const remaining = [snap, ...routeCoords.slice(segIdx + 1)];
+
+  return { covered, remaining, progressRatio };
+}
+
+
 function resolvePunchInMarkerPosition(punchInLocation, trailPoints = []) {
   if (!punchInLocation?.lat || !punchInLocation?.lng) return null;
 
@@ -407,6 +481,7 @@ export default function LiveTrackingMap({
   visits          = [],
   preferVisitTrail = false,
   punchInPopupTrigger = 0,
+  trips           = [],
 }) {
   const mapDivRef  = useRef(null);
   const gMapRef    = useRef(null);
@@ -425,6 +500,15 @@ export default function LiveTrackingMap({
   const drawRequestSeqRef = useRef(0);
   const lastEmittedLocationRef = useRef(null);
   const visitMkRef = useRef([]);
+  const tripMarkersRef = useRef([]);
+  const tripAltPolylinesRef = useRef([]);
+  // Per-trip progress layers: Map<tripKey, { coveredCasing, covered, remainingCasing, remaining }>
+  const tripProgressLayersRef = useRef(new Map());
+  const tripsRef = useRef([]);
+  const [internalTrips, setInternalTrips] = useState([]);
+  const effectiveTrips = Array.isArray(trips) && trips.length > 0 ? trips : internalTrips;
+  const [activeTripIdx, setActiveTripIdx] = useState(0);
+  const [activeRouteIdx, setActiveRouteIdx] = useState(0);
   const userAdjustedViewportRef = useRef(false);
   const suppressViewportEventsRef = useRef(false);
   const [mapLoaded,  setMapLoaded]  = useState(false);
@@ -757,11 +841,369 @@ export default function LiveTrackingMap({
     return "#dc2626";
   }
 
+  // ── Render Multi-Trip Markers & Routes (Point A to Point B in Faded Gray Color) ──
+  useEffect(() => {
+    const lMap = leafletMapRef.current;
+    if (!mapLoaded || !lMap) return;
+
+    // 1. Clear old trip markers and alternate polylines
+    tripMarkersRef.current.forEach((m) => m.remove());
+    tripMarkersRef.current = [];
+    tripAltPolylinesRef.current.forEach((p) => p.remove());
+    tripAltPolylinesRef.current = [];
+
+    if (!Array.isArray(effectiveTrips) || effectiveTrips.length === 0) return;
+
+    const currentTrip = effectiveTrips[activeTripIdx] || effectiveTrips[0];
+    const available = currentTrip?.availableRoutes || (currentTrip?.selectedRoute ? [currentTrip.selectedRoute] : []);
+    const validRouteIdx = activeRouteIdx >= 0 && activeRouteIdx < available.length ? activeRouteIdx : 0;
+
+    const extractCoordList = (routeObj) => {
+      if (!routeObj) return [];
+      const list = routeObj.coordinates || routeObj.points || routeObj.path || routeObj;
+      if (!Array.isArray(list)) return [];
+      return list.map((pt) => {
+        if (Array.isArray(pt) && pt.length >= 2) {
+          const lat = Number(pt[0]);
+          const lng = Number(pt[1]);
+          return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+        }
+        const lat = Number(pt.latitude ?? pt.lat);
+        const lng = Number(pt.longitude ?? pt.lng);
+        return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+      }).filter(Boolean);
+    };
+
+    // Draw Point A (Start) and Point B (Destination) markers for all trips
+    const allTripPoints = [];
+
+    effectiveTrips.forEach((t, idx) => {
+      const isCurrent = idx === activeTripIdx;
+      const tripNum = t.tripNumber || idx + 1;
+
+      // ── Point A: Start Location Marker ─────────────────────────────
+      const startLat = Number(
+        t.start?.latitude ??
+        t.start?.lat ??
+        punchInLocation?.lat ??
+        punchInLocationRef.current?.lat ??
+        allPtsRef.current[0]?.lat ??
+        lastEmittedLocationRef.current?.lat
+      );
+      const startLng = Number(
+        t.start?.longitude ??
+        t.start?.lng ??
+        punchInLocation?.lng ??
+        punchInLocationRef.current?.lng ??
+        allPtsRef.current[0]?.lng ??
+        lastEmittedLocationRef.current?.lng
+      );
+
+      if (Number.isFinite(startLat) && Number.isFinite(startLng) && Math.abs(startLat) > 0.01) {
+        allTripPoints.push([startLat, startLng]);
+        const startIcon = L.divIcon({
+          className: "",
+          html: `<div style="
+            display:flex;flex-direction:column;align-items:center;cursor:pointer;
+          ">
+            <div style="
+              background:#065f46;color:#ffffff;border:2px solid #34d399;
+              padding:3px 9px;border-radius:12px;font-size:11px;font-weight:900;
+              box-shadow:0 3px 10px rgba(0,0,0,0.3);white-space:nowrap;display:flex;align-items:center;gap:4px;
+            ">
+              <span style="width:7px;height:7px;border-radius:50%;background:#34d399"></span>
+              Point A: Start (${tripNum})
+            </div>
+            <div style="width:2px;height:10px;background:#065f46"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:#10b981;border:2px solid #ffffff"></div>
+          </div>`,
+          iconSize: [110, 44],
+          iconAnchor: [55, 44],
+        });
+
+        const startMarker = L.marker([startLat, startLng], {
+          icon: startIcon,
+          zIndexOffset: isCurrent ? 540 : 490,
+          title: `Trip ${tripNum} - Point A (Start): ${t.start?.locationName || "Start Location"}`,
+        }).addTo(lMap);
+
+        startMarker.bindPopup(`
+          <div style="font-family:sans-serif;padding:6px 8px;min-width:170px">
+            <div style="font-weight:800;font-size:13px;color:#065f46;margin-bottom:2px">
+              Trip ${tripNum} • Point A (Start Point)
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:4px">
+              ${t.start?.locationName || "Start Location"}
+            </div>
+            ${t.start?.time ? `<div style="font-size:10px;font-weight:700;color:#0f172a">Departed: ${t.start.time}</div>` : ""}
+          </div>
+        `);
+        tripMarkersRef.current.push(startMarker);
+      }
+
+      // ── Point B: Destination Marker ────────────────────────────────
+      const dest = t.destination;
+      const destLat = Number(dest?.latitude ?? dest?.lat);
+      const destLng = Number(dest?.longitude ?? dest?.lng);
+      if (Number.isFinite(destLat) && Number.isFinite(destLng) && Math.abs(destLat) > 0.01) {
+        allTripPoints.push([destLat, destLng]);
+        const destIcon = L.divIcon({
+          className: "",
+          html: `<div style="
+            display:flex;flex-direction:column;align-items:center;cursor:pointer;
+          ">
+            <div style="
+              background:${isCurrent ? "#0f172a" : "#1e293b"};
+              color:${isCurrent ? "#f8fafc" : "#cbd5e1"};
+              border:2px solid ${isCurrent ? "#f59e0b" : "#94a3b8"};
+              padding:3px 9px;border-radius:12px;
+              font-size:11px;font-weight:900;
+              box-shadow:0 3px 10px rgba(0,0,0,0.3);
+              white-space:nowrap;display:flex;align-items:center;gap:4px;
+            ">
+              <span style="width:7px;height:7px;border-radius:50%;background:#ef4444"></span>
+              Point B: ${dest?.name || t.title || "Destination"}
+            </div>
+            <div style="width:2px;height:10px;background:#0f172a"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:#ef4444;border:2px solid #ffffff"></div>
+          </div>`,
+          iconSize: [120, 44],
+          iconAnchor: [60, 44],
+        });
+
+        const destMarker = L.marker([destLat, destLng], {
+          icon: destIcon,
+          zIndexOffset: isCurrent ? 550 : 500,
+          title: `Trip ${tripNum} - Point B (Destination): ${dest?.name || t.title || "Destination"}`,
+        }).addTo(lMap);
+
+        destMarker.on("click", () => {
+          setActiveTripIdx(idx);
+          setActiveRouteIdx(0);
+          lMap.panTo([destLat, destLng]);
+        });
+
+        destMarker.bindPopup(`
+          <div style="font-family:sans-serif;padding:6px 8px;min-width:170px">
+            <div style="font-weight:800;font-size:13px;color:#0f172a;margin-bottom:2px">
+              Trip ${tripNum} • Point B (Destination)
+            </div>
+            <div style="font-size:12px;font-weight:700;color:#2563eb;margin-bottom:2px">
+              ${dest?.name || t.title || "Destination"}
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:6px">
+              ${dest?.address || t.subtitle || "Target destination"}
+            </div>
+            <div style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">
+              Where user is heading
+            </div>
+          </div>
+        `);
+
+        tripMarkersRef.current.push(destMarker);
+      }
+    });
+
+    // Helper to render the A to B faded gray route line
+    const renderFadedGrayRoute = (coords) => {
+      if (!coords || coords.length < 2) return;
+
+      const tripKey = `trip_${currentTrip?.tripNumber ?? activeTripIdx}`;
+
+      // Clean up previous layers for this trip
+      const old = tripProgressLayersRef.current.get(tripKey);
+      if (old) {
+        old.coveredCasing?.remove();
+        old.covered?.remove();
+        old.remainingCasing?.remove();
+        old.remaining?.remove();
+        tripProgressLayersRef.current.delete(tripKey);
+      }
+
+      // Determine initial split point if live user GPS is active
+      const livePt = lastEmittedLocationRef.current;
+      let coveredCoords = [];
+      let remainingCoords = coords;
+
+      if (livePt && Number.isFinite(livePt.lat) && Number.isFinite(livePt.lng)) {
+        const split = splitRouteAtProgress(livePt.lat, livePt.lng, coords);
+        coveredCoords = split.covered;
+        remainingCoords = split.remaining;
+      }
+
+      // ── Faded Gray Planned Route (Point A to Point B) ────────────────
+      const remainingCasing = remainingCoords.length >= 2
+        ? L.polyline(remainingCoords, { color: "#475569", weight: 9, opacity: 0.45, lineCap: "round", lineJoin: "round" }).addTo(lMap)
+        : null;
+      const remainingLine = remainingCoords.length >= 2
+        ? L.polyline(remainingCoords, { color: "#94a3b8", weight: 5.5, opacity: 0.85, lineCap: "round", lineJoin: "round" }).addTo(lMap)
+        : null;
+
+      // ── Covered / Travelled portion (Dark Black as user moves towards destination) ──
+      const coveredCasing = coveredCoords.length >= 2
+        ? L.polyline(coveredCoords, { color: "#27272a", weight: 9.5, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(lMap)
+        : null;
+      const coveredLine = coveredCoords.length >= 2
+        ? L.polyline(coveredCoords, { color: "#09090b", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }).addTo(lMap)
+        : null;
+
+      tripProgressLayersRef.current.set(tripKey, {
+        coveredCasing,
+        covered: coveredLine,
+        remainingCasing,
+        remaining: remainingLine,
+        routeCoords: coords,
+      });
+
+      [remainingCasing, remainingLine, coveredCasing, coveredLine].forEach((l) => {
+        if (l) tripAltPolylinesRef.current.push(l);
+      });
+    };
+
+    // If available routes exist for active trip, draw them
+    if (available.length > 0) {
+      // 1. Draw alternate routes in lighter muted faded slate grey (#cbd5e1)
+      available.forEach((r, rIdx) => {
+        if (rIdx === validRouteIdx) return;
+        const coords = extractCoordList(r);
+        if (coords.length < 2) return;
+
+        const altLine = L.polyline(coords, {
+          color: "#cbd5e1",
+          weight: 4,
+          opacity: 0.65,
+          dashArray: "6, 6",
+          lineCap: "round",
+          lineJoin: "round",
+        }).addTo(lMap);
+
+        altLine.on("click", () => {
+          setActiveRouteIdx(rIdx);
+          toast.success(`Selected Route ${String.fromCharCode(65 + rIdx)} • Highlighted in Faded Gray`);
+        });
+
+        tripAltPolylinesRef.current.push(altLine);
+      });
+
+      // 2. Draw active route in FADED GRAY COLOR (ahead) & DARK BLACK (covered)
+      const activeR = available[validRouteIdx];
+      const activeCoords = extractCoordList(activeR);
+
+      if (activeCoords.length >= 2) {
+        renderFadedGrayRoute(activeCoords);
+      } else {
+        // Fetch route dynamically if empty coordinates array
+        const sLat = Number(currentTrip?.start?.latitude ?? currentTrip?.start?.lat ?? punchInLocation?.lat ?? allPtsRef.current[0]?.lat);
+        const sLng = Number(currentTrip?.start?.longitude ?? currentTrip?.start?.lng ?? punchInLocation?.lng ?? allPtsRef.current[0]?.lng);
+        const dLat = Number(currentTrip?.destination?.latitude ?? currentTrip?.destination?.lat);
+        const dLng = Number(currentTrip?.destination?.longitude ?? currentTrip?.destination?.lng);
+        if (Number.isFinite(sLat) && Number.isFinite(sLng) && Number.isFinite(dLat) && Number.isFinite(dLng)) {
+          renderFadedGrayRoute([[sLat, sLng], [dLat, dLng]]);
+          fetch(`https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${dLng},${dLat}?overview=full&geometries=geojson`)
+            .then(res => res.json())
+            .then(data => {
+              const rawCoords = data?.routes?.[0]?.geometry?.coordinates;
+              if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
+                renderFadedGrayRoute(rawCoords.map(([lng, lat]) => [lat, lng]));
+              }
+            })
+            .catch(() => {});
+        }
+      }
+    } else {
+      // Fallback: If no pre-calculated polyline, connect Point A to Point B
+      const sLat = Number(currentTrip?.start?.latitude ?? currentTrip?.start?.lat ?? punchInLocation?.lat ?? allPtsRef.current[0]?.lat);
+      const sLng = Number(currentTrip?.start?.longitude ?? currentTrip?.start?.lng ?? punchInLocation?.lng ?? allPtsRef.current[0]?.lng);
+      const dLat = Number(currentTrip?.destination?.latitude ?? currentTrip?.destination?.lat);
+      const dLng = Number(currentTrip?.destination?.longitude ?? currentTrip?.destination?.lng);
+
+      if (Number.isFinite(sLat) && Number.isFinite(sLng) && Number.isFinite(dLat) && Number.isFinite(dLng)) {
+        const straightCoords = [[sLat, sLng], [dLat, dLng]];
+        renderFadedGrayRoute(straightCoords);
+
+        // Fetch OSRM road coordinates asynchronously to refine the line
+        fetch(`https://router.project-osrm.org/route/v1/driving/${sLng},${sLat};${dLng},${dLat}?overview=full&geometries=geojson`)
+          .then((res) => res.json())
+          .then((data) => {
+            const rawCoords = data?.routes?.[0]?.geometry?.coordinates;
+            if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
+              const roadCoords = rawCoords.map(([lng, lat]) => [lat, lng]);
+              renderFadedGrayRoute(roadCoords);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
+    // Auto-fit bounds if trip points exist
+    if (allTripPoints.length >= 2 && !userAdjustedViewportRef.current) {
+      try {
+        const bounds = L.latLngBounds(allTripPoints);
+        lMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      } catch {}
+    }
+  }, [mapLoaded, effectiveTrips, activeTripIdx, activeRouteIdx, punchInLocation]);
+
+  // Keep tripsRef in sync for use inside updateTripProgress
+  useEffect(() => { tripsRef.current = effectiveTrips; }, [effectiveTrips]);
+
+  // ── Live Route Progress: update covered (Dark Black) / remaining (Faded Gray) on GPS update ─────
+  const updateTripProgress = useCallback((userLat, userLng) => {
+    const lMap = leafletMapRef.current;
+    if (!lMap || !Number.isFinite(userLat) || !Number.isFinite(userLng)) return;
+
+    const currentTrips = tripsRef.current;
+    if (!Array.isArray(currentTrips) || currentTrips.length === 0) return;
+
+    currentTrips.forEach((t, idx) => {
+      if (t.status === "completed") return;
+
+      const tripKey = `trip_${t?.tripNumber ?? idx}`;
+      const layers = tripProgressLayersRef.current.get(tripKey);
+      if (!layers) return;
+
+      const routeCoords = layers.routeCoords;
+      if (!routeCoords || routeCoords.length < 2) return;
+
+      const { covered, remaining } = splitRouteAtProgress(userLat, userLng, routeCoords);
+
+      // Update covered (Dark Black as user moves towards destination)
+      if (layers.covered) {
+        if (covered.length >= 2) {
+          layers.covered.setLatLngs(covered);
+          if (!lMap.hasLayer(layers.covered)) layers.covered.addTo(lMap);
+        } else {
+          layers.covered.setLatLngs([]);
+        }
+      } else if (covered.length >= 2) {
+        layers.coveredCasing = L.polyline(covered, { color: "#27272a", weight: 9.5, opacity: 0.95, lineCap: "round", lineJoin: "round" }).addTo(lMap);
+        layers.covered = L.polyline(covered, { color: "#09090b", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }).addTo(lMap);
+      }
+      if (layers.coveredCasing) {
+        layers.coveredCasing.setLatLngs(covered.length >= 2 ? covered : []);
+      }
+
+      // Update remaining (Faded Gray color towards destination)
+      if (layers.remaining) {
+        if (remaining.length >= 2) {
+          layers.remaining.setLatLngs(remaining);
+          if (!lMap.hasLayer(layers.remaining)) layers.remaining.addTo(lMap);
+        } else {
+          layers.remaining.setLatLngs([]);
+        }
+      }
+      if (layers.remainingCasing) {
+        layers.remainingCasing.setLatLngs(remaining.length >= 2 ? remaining : []);
+      }
+    });
+  }, []);
+
+
   function getLineStyle(mode) {
     if (mode === ROUTE_MODE_RAW) {
       return {
         casingColor: "#ffffff",
-        casingWeight: 8,
+        casingWeight: 7,
         mainColor: "#2563eb",
         mainWeight: 4,
         mainOpacity: 0.9,
@@ -769,11 +1211,11 @@ export default function LiveTrackingMap({
     }
 
     return {
-      casingColor: "#ffffff",
-      casingWeight: 10,
-      mainColor: "#2563eb",
-      mainWeight: 6,
-      mainOpacity: 1,
+      casingColor: "#1e40af",
+      casingWeight: 7,
+      mainColor: "#2563eb", // Clean vibrant blue for live/historical travelled trail
+      mainWeight: 4.5,
+      mainOpacity: 0.9,
     };
   }
 
@@ -821,7 +1263,8 @@ export default function LiveTrackingMap({
 
     const lineStyle = getLineStyle(routeMode);
     const latlngs = points.map((p) => [p.lat, p.lng]);
-    const shouldDrawLine = latlngs.length >= 2;
+    const hasActiveTrip = Array.isArray(effectiveTrips) && effectiveTrips.length > 0 && effectiveTrips.some(t => t.destination && (t.status === "in_progress" || t.status === "active" || !t.status));
+    const shouldDrawLine = latlngs.length >= 2 && !hasActiveTrip;
 
     if (shouldDrawLine) {
       if (!polyRef.current.casing) {
@@ -912,6 +1355,8 @@ export default function LiveTrackingMap({
     const { allowSparse = false, preserveDetail = false } = options;
     if (!Array.isArray(raw)) return [];
     const cleaned = [];
+    let currentAnchor = null;
+
     for (const p of orderPointsByTime(raw)) {
       const lat = Number(p.lat);
       const lng = Number(p.lng);
@@ -921,32 +1366,26 @@ export default function LiveTrackingMap({
       const accuracyLimit = allowSparse ? 150 : preserveDetail ? 100 : 80;
 
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      if (Math.abs(lat) < 0.001 && Math.abs(lng) < 0.001) continue;
       if (accuracy && accuracy > accuracyLimit) continue;
 
-      if (cleaned.length === 0) {
+      if (!currentAnchor) {
+        currentAnchor = { lat, lng, accuracy, recordedAt };
         cleaned.push({ lat, lng, accuracy, distanceFromPrevious, recordedAt });
         continue;
       }
 
-      const prev = cleaned[cleaned.length - 1];
-      const distM = distMetres(prev.lat, prev.lng, lat, lng);
-      const requiredMove = allowSparse
-        ? Math.max(5, Math.min(getEffectiveMoveThreshold(accuracy, prev.accuracy), 18))
-        : preserveDetail
-          ? Math.max(3, Math.min(getEffectiveMoveThreshold(accuracy, prev.accuracy), 12))
-        : Math.max(
-            getEffectiveMoveThreshold(accuracy, prev.accuracy),
-            distanceFromPrevious > 0 ? 10 : 14
-          );
-      const gpsNoiseRadius = allowSparse
-        ? Math.max(5, Math.min(getGpsNoiseRadiusMetres(accuracy, prev.accuracy), 18))
-        : preserveDetail
-          ? 0
-        : getGpsNoiseRadiusMetres(accuracy, prev.accuracy);
+      // Calculate distance from the stationary anchor
+      const distFromAnchor = distMetres(currentAnchor.lat, currentAnchor.lng, lat, lng);
 
-      if (distanceFromPrevious <= 0 && distM < (allowSparse ? 5 : preserveDetail ? 3 : 8)) continue;
-      if (distM < requiredMove && distanceFromPrevious <= 0) continue;
-      if (!allowSparse && !preserveDetail && distM < gpsNoiseRadius) continue;
+      // Stationary drift filter: ignore movements under 30 meters as indoor/office jitter
+      if (!preserveDetail && distFromAnchor < 30) {
+        continue;
+      }
+
+      // Teleportation / speed guard
+      const prev = cleaned[cleaned.length - 1];
+      const distFromPrev = distMetres(prev.lat, prev.lng, lat, lng);
       const prevTime = new Date(prev.recordedAt || prev.time || 0).getTime();
       const currTime = new Date(recordedAt || 0).getTime();
       const elapsedHours =
@@ -956,8 +1395,11 @@ export default function LiveTrackingMap({
       const maxBySpeed = elapsedHours
         ? Math.max(150, elapsedHours * MAX_COUNTED_SPEED_KMH * 1000)
         : MAX_COUNTED_SEGMENT_METRES;
-      if (!allowSparse && distM > Math.min(MAX_COUNTED_SEGMENT_METRES, maxBySpeed)) continue;
 
+      if (!allowSparse && distFromPrev > Math.min(MAX_COUNTED_SEGMENT_METRES, maxBySpeed)) continue;
+
+      // Confirmed real movement: advance anchor and record point
+      currentAnchor = { lat, lng, accuracy, recordedAt };
       cleaned.push({ lat, lng, accuracy, distanceFromPrevious, recordedAt });
     }
 
@@ -1020,6 +1462,61 @@ export default function LiveTrackingMap({
     } catch { /* non-fatal */ }
   }, [userId, selectedDate, updateDistanceStats]);
 
+  // ── OSRM Road Snapping ─────────────────────────────────────────────────────
+  // Snaps a GPS trail to actual roads using the free OSRM match API.
+  // Falls back to raw points if the API fails or returns no geometry.
+  const snapToRoadsOSRM = useCallback(async (points) => {
+    if (!Array.isArray(points) || points.length < 2) return points;
+
+    // Sub-sample to OSRM limit (100 coords per request) while keeping shape
+    const subsample = (pts, maxPts) => {
+      if (pts.length <= maxPts) return pts;
+      const step = pts.length / maxPts;
+      const result = [];
+      for (let i = 0; i < maxPts - 1; i++) {
+        result.push(pts[Math.round(i * step)]);
+      }
+      result.push(pts[pts.length - 1]); // always keep last point
+      return result;
+    };
+
+    const sampled = subsample(points, SNAP_TO_ROADS_MAX_POINTS);
+    const coordStr = sampled.map(p => `${p.lng},${p.lat}`).join(";");
+
+    // Build timestamps (OSRM requires them for map matching)
+    const timestamps = sampled.map((p, i) => {
+      if (p.recordedAt || p.time) {
+        return Math.floor(new Date(p.recordedAt || p.time).getTime() / 1000);
+      }
+      return Math.floor(Date.now() / 1000) + i;
+    });
+    const tsStr = timestamps.join(";");
+
+    try {
+      const url =
+        `https://router.project-osrm.org/match/v1/driving/${coordStr}` +
+        `?overview=full&geometries=geojson&timestamps=${tsStr}&gaps=split&tidy=true`;
+
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return points; // fallback
+
+      const data = await res.json();
+      if (data.code !== "Ok" || !data.matchings?.length) return points;
+
+      // Flatten all matching segments into one coordinate list
+      const snapped = [];
+      for (const matching of data.matchings) {
+        const coords = matching.geometry?.coordinates || [];
+        for (const [lng, lat] of coords) {
+          snapped.push({ lat, lng });
+        }
+      }
+      return snapped.length >= 2 ? snapped : points;
+    } catch {
+      return points; // network error → fall back to raw points
+    }
+  }, []);
+
   const loadTrailFromDB = useCallback(async (options = {}) => {
     const { autoFit = false } = options;
     if (!userId || !mapLoaded) return;
@@ -1076,7 +1573,27 @@ export default function LiveTrackingMap({
             appendSequentialPoint(merged, lp);
           }
         }
-        drawTrail(merged, { autoFit, autoPanLive: isLive, rawPoints: rawAfterPunchIn });
+
+        // In Road Mode: snap the trail to roads via OSRM only if confirmed movement has occurred
+        const hasConfirmedTravel = hasConfirmedMovement(rawAfterPunchIn) && calcFilteredKm(merged) >= 0.035;
+
+        if (routeMode === ROUTE_MODE_ROAD && merged.length >= 2 && hasConfirmedTravel) {
+          const cacheKey = merged.map(p => `${p.lat},${p.lng}`).join("|");
+          let roadPath;
+          if (snappedTrailCacheRef.current.key === cacheKey) {
+            roadPath = snappedTrailCacheRef.current.path;
+          } else {
+            roadPath = await snapToRoadsOSRM(merged);
+            snappedTrailCacheRef.current = { key: cacheKey, path: roadPath };
+          }
+          drawTrail(roadPath, { autoFit, autoPanLive: isLive, rawPoints: rawAfterPunchIn });
+        } else if (hasConfirmedTravel) {
+          drawTrail(merged, { autoFit, autoPanLive: isLive, rawPoints: rawAfterPunchIn });
+        } else {
+          // Stationary / indoor jitter: do not draw fake road loop
+          drawTrail([], { autoFit: false, autoPanLive: isLive, rawPoints: rawAfterPunchIn });
+        }
+
         fetchBackendDistanceStats();
       } else {
         if (isLive && allPtsRef.current.length > 0) {
@@ -1087,9 +1604,9 @@ export default function LiveTrackingMap({
         }
       }
     } catch (err) {
-      toast.error(err.message, { title: "Error Fetching Trail" });
+      console.warn("[LiveTrackMap] Failed to load trail:", err?.message || err);
     }
-  }, [userId, mapLoaded, isLive, isTodaySelected, preferVisitTrail, routeMode, selectedDate, updateDistanceStats, fetchBackendDistanceStats]);
+  }, [userId, mapLoaded, isLive, isTodaySelected, preferVisitTrail, routeMode, selectedDate, updateDistanceStats, fetchBackendDistanceStats, snapToRoadsOSRM]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -1106,6 +1623,60 @@ export default function LiveTrackingMap({
 
     loadTrailFromDB({ autoFit: true });
   }, [mapLoaded, userId, selectedDate, visits, preferVisitTrail, routeMode, loadTrailFromDB, punchInLocation]);
+
+  useEffect(() => {
+    if (!mapLoaded || !userId) return;
+    const fetchTripData = async () => {
+      try {
+        const res = await fetch(`${API}/api/v1/attendance/trip-status/today?userId=${userId}`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const payload = data?.data || data?.result || data || {};
+        const lastTrip = payload?.lastTrip;
+        const vehicleTrips = payload?.vehicleTrips;
+        if (Array.isArray(vehicleTrips) && vehicleTrips.length > 0) {
+          const formatted = vehicleTrips.map((t, idx) => ({
+            tripNumber: t.tripNumber || idx + 1,
+            title: t.destination?.name || t.title || `Trip ${t.tripNumber || idx + 1}`,
+            subtitle: t.destination?.address || t.subtitle || "",
+            destination: {
+              latitude: Number(t.destination?.latitude ?? t.destination?.lat),
+              longitude: Number(t.destination?.longitude ?? t.destination?.lng),
+              name: t.destination?.name || t.title || "Destination",
+              address: t.destination?.address || t.subtitle || "",
+            },
+            start: t.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
+            selectedRoute: t.selectedRoute || null,
+            availableRoutes: t.availableRoutes || (t.selectedRoute ? [t.selectedRoute] : []),
+            status: t.status || "in_progress",
+          }));
+          setInternalTrips(formatted);
+        } else if (lastTrip && (lastTrip.destination || lastTrip.selectedRoute)) {
+          const formatted = [{
+            tripNumber: lastTrip.tripNumber || 1,
+            title: lastTrip.destination?.name || "Trip 1",
+            subtitle: lastTrip.destination?.address || "",
+            destination: {
+              latitude: Number(lastTrip.destination?.latitude ?? lastTrip.destination?.lat),
+              longitude: Number(lastTrip.destination?.longitude ?? lastTrip.destination?.lng),
+              name: lastTrip.destination?.name || "Destination",
+              address: lastTrip.destination?.address || "",
+            },
+            start: lastTrip.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
+            selectedRoute: lastTrip.selectedRoute || null,
+            availableRoutes: lastTrip.availableRoutes || (lastTrip.selectedRoute ? [lastTrip.selectedRoute] : []),
+            status: lastTrip.tripStatus || "in_progress",
+          }];
+          setInternalTrips(formatted);
+        }
+      } catch (err) {
+        console.warn("[LiveTrackMap] Failed to fetch trip status:", err?.message);
+      }
+    };
+    fetchTripData();
+  }, [mapLoaded, userId, punchInLocation]);
 
   useEffect(() => {
     if (routeMode === ROUTE_MODE_ROAD) {
@@ -1223,22 +1794,13 @@ export default function LiveTrackingMap({
               : getEffectiveMoveThreshold(acc, lastTrailPt.accuracy);
             if (moved >= minMoveRequired && moved <= MAX_LIVE_SEGMENT_METRES) {
               const merged = [...allPtsRef.current, livePoint];
-              const finalTrail = cleanPoints(merged, { preserveDetail: routeMode === ROUTE_MODE_RAW });
-              allPtsRef.current = finalTrail;
-              drawTrail(finalTrail, { autoFit: false, autoPanLive: false, rawPoints: rawPtsRef.current });
-            } else {
-              if (isLive && !userAdjustedViewportRef.current) {
-                withProgrammaticViewport(() => lMap.panTo([lat, lng]));
-              }
-            }
-          } else {
-            if (!userAdjustedViewportRef.current) {
-              withProgrammaticViewport(() => lMap.panTo([lat, lng]));
+              allPtsRef.current = merged;
+              drawTrail(merged, { autoFit: false, autoPanLive: true, rawPoints: rawMerged });
             }
           }
         },
         () => {},
-        { enableHighAccuracy: true, timeout: 20_000, maximumAge: 5_000 }
+        { enableHighAccuracy: true, timeout: 5000 }
       );
     };
 
@@ -1271,16 +1833,19 @@ export default function LiveTrackingMap({
       appendSequentialPoint(rawMerged, livePoint, 1);
       rawPtsRef.current = rawMerged;
 
+      // Animate user's live position marker
+      if (liveMkRef.current) {
+        animateMarkerSmooth(liveMkRef.current, data.lat, data.lng, 600);
+      }
+
+      // Dynamically update route progress (turns faded gray into dark black as user moves)
+      updateTripProgress(data.lat, data.lng);
+
       const last = allPtsRef.current[allPtsRef.current.length - 1];
       if (last) {
         const dist = distMetres(last.lat, last.lng, data.lat, data.lng);
-        const minMoveRequired = routeMode === ROUTE_MODE_RAW
-          ? 3
-          : getEffectiveMoveThreshold(data.accuracy, last.accuracy);
-        if (dist < minMoveRequired || dist > MAX_LIVE_SEGMENT_METRES) {
-          if (liveMkRef.current && dist <= MAX_LIVE_SEGMENT_METRES) {
-            animateMarkerSmooth(liveMkRef.current, data.lat, data.lng, 600);
-          }
+        // Only append to GPS trail line if user has moved at least 25 meters outside stationary noise
+        if (dist < 25 || dist > MAX_LIVE_SEGMENT_METRES) {
           return;
         }
       }
@@ -1291,18 +1856,44 @@ export default function LiveTrackingMap({
       drawTrail(finalTrail, { autoFit: false, autoPanLive: false, rawPoints: rawPtsRef.current });
     };
 
+    const onTripUpdate = (data) => {
+      if (data.userId && userId && String(data.userId) !== String(userId)) return;
+      if (data.trip) {
+        const t = data.trip;
+        const formattedTrip = {
+          tripNumber: t.tripNumber || data.tripNumber || 1,
+          title: t.destination?.name || `Trip ${t.tripNumber || 1}`,
+          subtitle: t.destination?.address || "",
+          destination: {
+            latitude: Number(t.destination?.latitude ?? t.destination?.lat),
+            longitude: Number(t.destination?.longitude ?? t.destination?.lng),
+            name: t.destination?.name || "Destination",
+            address: t.destination?.address || "",
+          },
+          start: t.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
+          selectedRoute: t.selectedRoute || null,
+          availableRoutes: t.availableRoutes || (t.selectedRoute ? [t.selectedRoute] : []),
+          status: t.tripStatus || data.tripStatus || "active",
+        };
+        setInternalTrips([formattedTrip]);
+        toast.info(`Trip ${formattedTrip.tripNumber} started towards ${formattedTrip.title}`, { title: "Trip Update" });
+      }
+    };
+
     socket.on("location:ack",         onAck);
     socket.on("location:error",       onError);
     socket.on("location:live_update", onLiveUpdate);
+    socket.on("location:trip_update", onTripUpdate);
     socket.on("geofence:alert",       onGeofenceAlert);
 
     return () => {
       socket.off("location:ack",         onAck);
       socket.off("location:error",       onError);
       socket.off("location:live_update", onLiveUpdate);
+      socket.off("location:trip_update", onTripUpdate);
       socket.off("geofence:alert",       onGeofenceAlert);
     };
-  }, [socket, userId, routeMode]);
+  }, [socket, userId, routeMode, updateTripProgress, punchInLocation]);
 
   useEffect(() => {
     if (!socket || !userId || isOwner) return;
@@ -1617,6 +2208,112 @@ export default function LiveTrackingMap({
         </button>
       </div>
 
+      {/* Trip & Route Selection Tabs (Requirements 1, 2, 3, 4, 8, 9) */}
+      {Array.isArray(trips) && trips.length > 0 && (
+        <div style={{
+          position: "absolute", top: 10, left: 10, zIndex: 1000,
+          background: "rgba(255,255,255,0.97)", borderRadius: 8,
+          padding: "4px 8px", boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
+          border: "1px solid #e2e8f0", display: "flex", alignItems: "center",
+          gap: 6, flexWrap: "wrap", maxWidth: "calc(100% - 320px)",
+        }}>
+          {/* Trip Selection Pills */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {trips.map((t, idx) => {
+              const isSelected = activeTripIdx === idx;
+              const tNum = t.tripNumber || idx + 1;
+              return (
+                <button
+                  key={`trip_pill_${idx}`}
+                  type="button"
+                  onClick={() => {
+                    setActiveTripIdx(idx);
+                    setActiveRouteIdx(0);
+                    const dest = t.destination;
+                    const lat = Number(dest?.latitude ?? dest?.lat);
+                    const lng = Number(dest?.longitude ?? dest?.lng);
+                    if (leafletMapRef.current && Number.isFinite(lat) && Number.isFinite(lng)) {
+                      leafletMapRef.current.panTo([lat, lng]);
+                    }
+                  }}
+                  style={{
+                    border: isSelected ? "1.5px solid #f59e0b" : "1px solid #cbd5e1",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    color: isSelected ? "#0a1d37" : "#475569",
+                    background: isSelected ? "#fef3c7" : "#f8fafc",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <span style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: isSelected ? "#f59e0b" : "#94a3b8",
+                  }} />
+                  Trip {tNum}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Alternate Route Selector for Current Trip */}
+          {(() => {
+            const curTrip = trips[activeTripIdx] || trips[0];
+            const routes = curTrip?.availableRoutes || (curTrip?.selectedRoute ? [curTrip.selectedRoute] : []);
+            if (routes.length <= 1) return null;
+
+            return (
+              <>
+                <span style={{ color: "#cbd5e1" }}>|</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  {routes.map((r, rIdx) => {
+                    const isSelected = activeRouteIdx === rIdx;
+                    const rLabel = rIdx === 0 ? "Route A (Shortest)" : `Route ${String.fromCharCode(65 + rIdx)} (Alternate)`;
+                    return (
+                      <button
+                        key={`route_pill_${rIdx}`}
+                        type="button"
+                        onClick={() => {
+                          setActiveRouteIdx(rIdx);
+                          toast.success(`Selected Route ${String.fromCharCode(65 + rIdx)} • Highlighted in Deep Yellow`);
+                        }}
+                        style={{
+                          border: isSelected ? "1.5px solid #f59e0b" : "1px solid #cbd5e1",
+                          borderRadius: 6,
+                          padding: "4px 8px",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          color: isSelected ? "#92400e" : "#64748b",
+                          background: isSelected ? "#fef08a" : "#f1f5f9",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <span style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: isSelected ? "#f59e0b" : "#94a3b8",
+                        }} />
+                        {rLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {sockAck && (
         <div style={{
           position: "absolute", bottom: 10, right: 10, zIndex: 1000,
@@ -1657,12 +2354,22 @@ export default function LiveTrackingMap({
           <>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{
-                width: 18,
+                width: 16,
                 height: 0,
-                borderTop: "4px solid #2563eb",
+                borderTop: "4px solid #09090b",
                 borderRadius: 999,
               }} />
-              Route
+              Covered Progress (Dark Black)
+            </span>
+            <span style={{ color: "#e2e8f0" }}>|</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{
+                width: 16,
+                height: 0,
+                borderTop: "4px solid #94a3b8",
+                borderRadius: 999,
+              }} />
+              Planned Route (Faded Gray)
             </span>
             <span style={{ color: "#e2e8f0" }}>|</span>
             <span style={{ color: "#475569", fontSize: 11 }}>
