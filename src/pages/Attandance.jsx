@@ -222,6 +222,9 @@ export default function Attendance() {
 
   const showSnack = useCallback((msg, sev = "success") => setSnackbar({ open: true, message: msg, severity: sev }), []);
 
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedAttendance, setSelectedAttendance] = useState(null);
+
   const [targetUserProfile, setTargetUserProfile] = useState(null);
 
   useEffect(() => {
@@ -295,6 +298,7 @@ export default function Attendance() {
         hours,
         status,
         hasPunchIn,
+        raw: item,
       };
     });
 
@@ -312,11 +316,12 @@ export default function Attendance() {
         hours: "—",
         status: "Present",
         hasPunchIn: true,
+        raw: todayAtt || null,
       });
     }
 
     return rows;
-  }, [attendances, isTodayPunched, activePunchInTime, activePunchOutTime]);
+  }, [attendances, isTodayPunched, activePunchInTime, activePunchOutTime, todayAtt]);
 
   // Filtered rows
   const filteredRows = useMemo(() => {
@@ -415,6 +420,62 @@ export default function Attendance() {
   const displayPhone = targetUserProfile?.phoneNumber || targetUserProfile?.phone || memberInfo.memberPhone || (!isAdminView ? (user?.phoneNumber || user?.phone || "") : "");
   const displayEmail = targetUserProfile?.email || memberInfo.memberEmail || (!isAdminView ? user?.email || "" : "");
   const displayAvatar = (displayName || "U").charAt(0).toUpperCase();
+
+  const handleRowClick = useCallback((row) => {
+    if (!row) return;
+
+    const targetUserObj = targetUserProfile || {
+      name: displayName,
+      role: displayRole,
+      phone: displayPhone,
+      phoneNumber: displayPhone,
+      email: displayEmail,
+      _id: paramUserId || user?._id,
+    };
+
+    let att = null;
+    if (row.raw) {
+      att = {
+        ...row.raw,
+        user: (row.raw.user && typeof row.raw.user === "object") ? { ...targetUserObj, ...row.raw.user } : targetUserObj,
+      };
+    } else {
+      att = {
+        _id: "record_" + row.dateKey,
+        date: row.dateKey,
+        status: String(row.status || "absent").toLowerCase(),
+        workHours: row.hours !== "—" ? row.hours : 0,
+        workHoursFormatted: row.hours !== "—" ? row.hours : "00:00",
+        punchIn: row.punchInTime && row.punchInTime !== "—" ? { time: `${row.dateKey}T09:00:00` } : null,
+        punchOut: row.punchOutTime && row.punchOutTime !== "—" && row.punchOutTime !== "Ongoing" ? { time: `${row.dateKey}T18:00:00` } : null,
+        user: targetUserObj,
+        createdAt: row.dateKey,
+        updatedAt: row.dateKey,
+      };
+    }
+
+    setSelectedAttendance(att);
+    setDetailsOpen(true);
+  }, [displayName, displayRole, displayPhone, displayEmail, paramUserId, user, targetUserProfile]);
+
+  const handleDeleteAttendance = useCallback(async (att) => {
+    if (att?._id && !att._id.startsWith("record_")) {
+      try {
+        const token = localStorage.getItem("token");
+        await axios.delete(`${API}/api/v1/attendance/${att._id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        showSnack("Attendance record deleted successfully");
+        await loadData();
+      } catch (err) {
+        showSnack(err?.response?.data?.message || "Failed to delete record", "error");
+      }
+    }
+  }, [loadData, showSnack]);
+
+  const handleEditAttendance = useCallback(async () => {
+    await loadData();
+  }, [loadData]);
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: COLOR.bg, color: COLOR.text, p: { xs: 1.5, md: 3 } }}>
@@ -528,7 +589,14 @@ export default function Attendance() {
                   sx: { bgcolor: COLOR.card, color: COLOR.text, border: `1px solid ${COLOR.border}`, borderRadius: "12px" },
                 }}
               >
-                <MenuItem onClick={() => { generateCSV(attendances); setExportAnchorEl(null); }} sx={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                <MenuItem
+                  onClick={() => {
+                    const csv = generateCSV(attendances);
+                    downloadFile(csv, `attendances_${format(new Date(), "yyyyMMdd_HHmmss")}.csv`, "text/csv");
+                    setExportAnchorEl(null);
+                  }}
+                  sx={{ fontSize: "0.85rem", fontWeight: 600 }}
+                >
                   Export as CSV (.csv)
                 </MenuItem>
               </Menu>
@@ -1065,8 +1133,11 @@ export default function Attendance() {
                       return (
                         <TableRow
                           key={row.dateKey + idx}
+                          onClick={() => handleRowClick(row)}
                           sx={{
                             borderBottom: `1px solid ${COLOR.border}`,
+                            cursor: "pointer",
+                            transition: "background-color 0.15s ease",
                             "&:hover": { bgcolor: COLOR.cardHover },
                           }}
                         >
@@ -1229,6 +1300,17 @@ export default function Attendance() {
           </Paper>
 
         </Box>
+
+        {/* ── Attendance Details Popup Modal ── */}
+        <AttendanceDetails
+          open={detailsOpen}
+          onClose={() => setDetailsOpen(false)}
+          attendance={selectedAttendance}
+          canEdit={true}
+          canDelete={true}
+          onEdit={handleEditAttendance}
+          onDelete={handleDeleteAttendance}
+        />
 
       </Box>
     </Box>

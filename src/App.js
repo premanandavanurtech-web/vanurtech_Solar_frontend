@@ -166,7 +166,10 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/s" element={<SharedThreeDDesignView />} />
               <Route path="/solar-design/view" element={<SharedThreeDDesignView />} />
+              <Route path="/quotation/preview" element={<Quotation />} />
+              <Route path="/quotation-preview" element={<Quotation />} />
               <Route path="/q/:shareToken" element={<Quotation />} />
+              <Route path="/q" element={<Quotation />} />
               <Route path="/documents/upload/:token" element={<PublicDocumentUpload />} />
               <Route path="/" element={<Navigate to="/login" replace />} />
               <Route

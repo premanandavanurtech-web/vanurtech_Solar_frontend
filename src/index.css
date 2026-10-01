@@ -107,7 +107,9 @@ input[type="number"],
   .quotation-pages > section,
   .quotation-pages > footer {
     min-height: auto;
-    padding: 24px;
+    padding: 16px 12px;
+    border-radius: 16px;
+    margin-bottom: 16px;
   }
 }
 

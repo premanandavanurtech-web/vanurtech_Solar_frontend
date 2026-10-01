@@ -16,6 +16,7 @@ import {
   Stack,
   TextField,
   Typography,
+  useTheme,
 } from "@mui/material";
 import {
   ArrowBack,
@@ -51,15 +52,34 @@ import { toBackendAssetUrl } from "../utils/backendAssetUrl";
 
 const PRIMARY = "#e8703a";
 const PRIMARY_DARK = "#d05e2a";
-const PRIMARY_LIGHT = "#fff4ef";
-const SURFACE = "#ffffff";
-const SURFACE_ALT = "#f6f7f9";
-const BORDER = "#e8eaed";
-const TEXT = "#18181b";
-const TEXT_SUB = "#52525b";
-const TEXT_MUTED = "#a1a1aa";
 const ERROR_COLOR = "#dc2626";
 const SUCCESS = "#16a34a";
+
+const getIsDark = () => {
+  try {
+    const saved = localStorage.getItem("appThemeMode");
+    if (saved) return saved === "dark";
+  } catch {}
+  return true;
+};
+
+const THEME = {
+  get isDark() { return getIsDark(); },
+  get PRIMARY_LIGHT() { return this.isDark ? "rgba(232, 112, 58, 0.18)" : "#fff4ef"; },
+  get SURFACE() { return this.isDark ? "#0e1626" : "#ffffff"; },
+  get SURFACE_ALT() { return this.isDark ? "#050811" : "#f6f7f9"; },
+  get CARD_HEADER() { return this.isDark ? "#121d31" : "#fafafa"; },
+  get BORDER() { return this.isDark ? "rgba(255, 255, 255, 0.08)" : "#e8eaed"; },
+  get TEXT() { return this.isDark ? "#f8fafc" : "#18181b"; },
+  get TEXT_SUB() { return this.isDark ? "#cbd5e1" : "#52525b"; },
+  get TEXT_MUTED() { return this.isDark ? "#94a3b8" : "#a1a1aa"; },
+  get PILL_BG() { return this.isDark ? "#172338" : "#ffffff"; },
+  get PILL_SEL_BG() { return this.isDark ? "rgba(232, 112, 58, 0.25)" : "#fff4ef"; },
+  get BADGE_BG() { return this.isDark ? "rgba(255, 255, 255, 0.08)" : "#f0f0f0"; },
+  get STEP_INACTIVE_BG() { return this.isDark ? "rgba(255, 255, 255, 0.08)" : "#f0f0f0"; },
+  get DROPZONE_BG() { return this.isDark ? "rgba(255, 255, 255, 0.02)" : "#fafafa"; },
+  get DROPZONE_BORDER() { return this.isDark ? "rgba(255, 255, 255, 0.15)" : "#d4d4d4"; },
+};
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const DEFAULT_CENTER = { lat: 20.5937, lng: 78.9629 };
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || "AIzaSyDQYrvUxQPWUrpqWIy-tLg4f3DGrr4GTlg";
@@ -267,7 +287,8 @@ function SectionCard({ icon, title, badge, children }) {
       elevation={0}
       sx={{
         borderRadius: 3,
-        border: `1px solid ${BORDER}`,
+        border: `1px solid ${THEME.BORDER}`,
+        bgcolor: THEME.SURFACE,
         overflow: "hidden",
         mb: 2,
       }}
@@ -279,8 +300,8 @@ function SectionCard({ icon, title, badge, children }) {
         sx={{
           px: 2.5,
           py: 1.5,
-          borderBottom: `1px solid ${BORDER}`,
-          bgcolor: "#fafafa",
+          borderBottom: `1px solid ${THEME.BORDER}`,
+          bgcolor: THEME.CARD_HEADER,
         }}
       >
         <Stack direction="row" spacing={1.25} alignItems="center">
@@ -289,7 +310,7 @@ function SectionCard({ icon, title, badge, children }) {
               width: 30,
               height: 30,
               borderRadius: 1.5,
-              bgcolor: PRIMARY_LIGHT,
+              bgcolor: THEME.PRIMARY_LIGHT,
               color: PRIMARY,
               display: "grid",
               placeItems: "center",
@@ -297,7 +318,7 @@ function SectionCard({ icon, title, badge, children }) {
           >
             {icon}
           </Box>
-          <Typography sx={{ fontSize: "0.92rem", fontWeight: 700, color: TEXT }}>
+          <Typography sx={{ fontSize: "0.92rem", fontWeight: 700, color: THEME.TEXT }}>
             {title}
           </Typography>
         </Stack>
@@ -307,8 +328,8 @@ function SectionCard({ icon, title, badge, children }) {
             size="small"
             sx={{
               height: 22,
-              bgcolor: "#f0f0f0",
-              color: TEXT_MUTED,
+              bgcolor: THEME.BADGE_BG,
+              color: THEME.TEXT_MUTED,
               fontSize: "0.7rem",
               fontWeight: 600,
               borderRadius: 999,
@@ -316,7 +337,7 @@ function SectionCard({ icon, title, badge, children }) {
           />
         )}
       </Stack>
-      <Box sx={{ p: 2.5 }}>{children}</Box>
+      <Box sx={{ p: 2.5, bgcolor: THEME.SURFACE }}>{children}</Box>
     </Paper>
   );
 }
@@ -328,7 +349,7 @@ function FieldLabel({ children, required }) {
       sx={{
         fontSize: "0.78rem",
         fontWeight: 600,
-        color: TEXT_SUB,
+        color: THEME.TEXT_SUB,
         mb: 0.75,
         letterSpacing: "0.01em",
       }}
@@ -357,15 +378,15 @@ function PillGroup({ options, value, onChange }) {
               px: 1.5,
               py: 0.6,
               borderRadius: 2,
-              border: `1.5px solid ${sel ? PRIMARY : BORDER}`,
-              bgcolor: sel ? PRIMARY_LIGHT : SURFACE,
-              color: sel ? PRIMARY : TEXT_SUB,
+              border: `1.5px solid ${sel ? PRIMARY : THEME.BORDER}`,
+              bgcolor: sel ? THEME.PILL_SEL_BG : THEME.PILL_BG,
+              color: sel ? PRIMARY : THEME.TEXT_SUB,
               fontWeight: sel ? 700 : 500,
               fontSize: "0.8rem",
               cursor: "pointer",
               userSelect: "none",
               transition: "all 0.15s",
-              "&:hover": { borderColor: PRIMARY, bgcolor: PRIMARY_LIGHT },
+              "&:hover": { borderColor: PRIMARY, bgcolor: sel ? THEME.PILL_SEL_BG : THEME.PRIMARY_LIGHT },
             }}
           >
             {opt}
@@ -390,15 +411,15 @@ function CheckPillGroup({ options, value = [], onChange }) {
               px: 1.5,
               py: 0.6,
               borderRadius: 2,
-              border: `1.5px solid ${sel ? PRIMARY : BORDER}`,
-              bgcolor: sel ? PRIMARY_LIGHT : SURFACE,
-              color: sel ? PRIMARY : TEXT_SUB,
+              border: `1.5px solid ${sel ? PRIMARY : THEME.BORDER}`,
+              bgcolor: sel ? THEME.PILL_SEL_BG : THEME.PILL_BG,
+              color: sel ? PRIMARY : THEME.TEXT_SUB,
               fontWeight: sel ? 700 : 500,
               fontSize: "0.8rem",
               cursor: "pointer",
               userSelect: "none",
               transition: "all 0.15s",
-              "&:hover": { borderColor: PRIMARY, bgcolor: PRIMARY_LIGHT },
+              "&:hover": { borderColor: PRIMARY, bgcolor: sel ? THEME.PILL_SEL_BG : THEME.PRIMARY_LIGHT },
             }}
           >
             {opt}
@@ -426,7 +447,7 @@ function UploadPreview({ photo, onRemove }) {
         height: 96,
         borderRadius: 2,
         overflow: "hidden",
-        border: `1.5px solid ${BORDER}`,
+        border: `1.5px solid ${THEME.BORDER}`,
         flexShrink: 0,
       }}
     >
@@ -459,7 +480,7 @@ function UploadPreview({ photo, onRemove }) {
 /* ─── Success dialog ─── */
 function SuccessDialog({ open, onClose, leadName }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3, bgcolor: THEME.SURFACE } }}>
       <DialogTitle sx={{ textAlign: "center", pt: 4 }}>
         <Box
           sx={{
@@ -475,10 +496,10 @@ function SuccessDialog({ open, onClose, leadName }) {
         >
           <CheckCircle sx={{ fontSize: 40, color: SUCCESS }} />
         </Box>
-        <Typography variant="h6" sx={{ color: TEXT, fontWeight: 800 }}>
+        <Typography variant="h6" sx={{ color: THEME.TEXT, fontWeight: 800 }}>
           Site Survey Saved
         </Typography>
-        <Typography variant="body2" sx={{ color: TEXT_MUTED, mt: 0.75 }}>
+        <Typography variant="body2" sx={{ color: THEME.TEXT_MUTED, mt: 0.75 }}>
           {leadName
             ? `Survey for ${leadName} was saved successfully.`
             : "Survey details were saved successfully."}
@@ -596,6 +617,14 @@ const LeafletMapPicker = ({ center, markerPosition, onMapPick }) => {
    MAIN COMPONENT
 ════════════════════════════════════════════════ */
 export default function VisitDetails({ onClose, onSave }) {
+  const theme = useTheme();
+  const [, setThemeTick] = useState(0);
+  useEffect(() => {
+    const handleTheme = () => setThemeTick((t) => t + 1);
+    window.addEventListener("themeModeChange", handleTheme);
+    return () => window.removeEventListener("themeModeChange", handleTheme);
+  }, []);
+  const isDark = theme?.palette?.mode === "dark" || THEME.isDark;
   const navigate = useNavigate();
   const locationState = useLocation();
   const { fetchAPI, getUserRole } = useAuth();
@@ -1125,18 +1154,18 @@ export default function VisitDetails({ onClose, onSave }) {
 
   /* ── Contact chips ── */
   const contactItems = [
-    { icon: <Phone sx={{ fontSize: 13 }} />, text: lead?.phone || "No phone", bg: "#e8f5e9", color: "#43a047" },
-    { icon: <Email sx={{ fontSize: 13 }} />, text: lead?.email || "No email", bg: "#e3f2fd", color: "#1e88e5" },
-    { icon: <LocationOn sx={{ fontSize: 13 }} />, text: lead?.address || lead?.city || "No address", bg: "#fce4ec", color: "#e53935" },
-    { icon: <Tag sx={{ fontSize: 13 }} />, text: lead?.pincode || "No pincode", bg: "#f3e5f5", color: "#8e24aa" },
-    { icon: <WhatsApp sx={{ fontSize: 13 }} />, text: "WhatsApp", bg: "#e8f5e9", color: "#25d366" },
+    { icon: <Phone sx={{ fontSize: 13 }} />, text: lead?.phone || "No phone", bg: isDark ? "rgba(67, 160, 71, 0.18)" : "#e8f5e9", color: "#43a047" },
+    { icon: <Email sx={{ fontSize: 13 }} />, text: lead?.email || "No email", bg: isDark ? "rgba(30, 136, 229, 0.18)" : "#e3f2fd", color: "#1e88e5" },
+    { icon: <LocationOn sx={{ fontSize: 13 }} />, text: lead?.address || lead?.city || "No address", bg: isDark ? "rgba(229, 57, 53, 0.18)" : "#fce4ec", color: "#e53935" },
+    { icon: <Tag sx={{ fontSize: 13 }} />, text: lead?.pincode || "No pincode", bg: isDark ? "rgba(142, 36, 170, 0.18)" : "#f3e5f5", color: "#8e24aa" },
+    { icon: <WhatsApp sx={{ fontSize: 13 }} />, text: "WhatsApp", bg: isDark ? "rgba(37, 211, 102, 0.18)" : "#e8f5e9", color: "#25d366" },
   ];
 
   /* ─────────────────────────────────────────────
      RENDER
   ───────────────────────────────────────────── */
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: SURFACE_ALT, color: TEXT, pb: 11 }}>
+    <Box sx={{ minHeight: "100vh", bgcolor: THEME.SURFACE_ALT, color: THEME.TEXT, pb: 11 }}>
       <input
         ref={fileInputRef}
         type="file"
@@ -1151,13 +1180,13 @@ export default function VisitDetails({ onClose, onSave }) {
         elevation={0}
         sx={{
           borderRadius: 0,
-          borderBottom: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${THEME.BORDER}`,
           px: { xs: 2, md: 3 },
           py: 1.25,
           position: "sticky",
           top: 0,
           zIndex: 30,
-          bgcolor: SURFACE,
+          bgcolor: THEME.SURFACE,
         }}
       >
         <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -1182,7 +1211,7 @@ export default function VisitDetails({ onClose, onSave }) {
             </Box>
             <Box>
               <Stack direction="row" spacing={1} alignItems="center">
-                <Typography sx={{ fontSize: "0.94rem", fontWeight: 700, color: TEXT }}>
+                <Typography sx={{ fontSize: "0.94rem", fontWeight: 700, color: THEME.TEXT }}>
                   Site Survey
                 </Typography>
                 <Box
@@ -1190,8 +1219,8 @@ export default function VisitDetails({ onClose, onSave }) {
                     px: 1,
                     py: 0.2,
                     borderRadius: 999,
-                    bgcolor: "#fff4ef",
-                    border: `1px solid #fdd8b4`,
+                    bgcolor: isDark ? "rgba(232, 112, 58, 0.18)" : "#fff4ef",
+                    border: `1px solid ${isDark ? "rgba(232, 112, 58, 0.35)" : "#fdd8b4"}`,
                     color: PRIMARY,
                     fontSize: "0.65rem",
                     fontWeight: 700,
@@ -1201,7 +1230,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   EDITING
                 </Box>
               </Stack>
-              <Typography sx={{ fontSize: "0.76rem", color: TEXT_MUTED, mt: 0.1 }}>
+              <Typography sx={{ fontSize: "0.76rem", color: THEME.TEXT_MUTED, mt: 0.1 }}>
                 {leadName}
               </Typography>
             </Box>
@@ -1216,12 +1245,12 @@ export default function VisitDetails({ onClose, onSave }) {
               borderRadius: 2,
               px: 1.75,
               py: 0.6,
-              borderColor: BORDER,
-              color: TEXT_SUB,
+              borderColor: THEME.BORDER,
+              color: THEME.TEXT_SUB,
               fontWeight: 600,
               textTransform: "none",
               fontSize: "0.8rem",
-              "&:hover": { bgcolor: SURFACE_ALT, borderColor: "#d0d0d0" },
+              "&:hover": { bgcolor: THEME.SURFACE_ALT, borderColor: isDark ? "rgba(255,255,255,0.2)" : "#d0d0d0" },
             }}
           >
             Back
@@ -1232,10 +1261,10 @@ export default function VisitDetails({ onClose, onSave }) {
       {/* ── CONTACT STRIP ── */}
       <Box
         sx={{
-          borderBottom: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${THEME.BORDER}`,
           px: { xs: 2, md: 3 },
           py: 1,
-          bgcolor: SURFACE,
+          bgcolor: THEME.SURFACE,
           overflowX: "auto",
         }}
       >
@@ -1256,7 +1285,7 @@ export default function VisitDetails({ onClose, onSave }) {
               >
                 {item.icon}
               </Box>
-              <Typography sx={{ fontSize: "0.77rem", color: TEXT_SUB, whiteSpace: "nowrap" }}>
+              <Typography sx={{ fontSize: "0.77rem", color: THEME.TEXT_SUB, whiteSpace: "nowrap" }}>
                 {item.text}
               </Typography>
             </Stack>
@@ -1267,8 +1296,8 @@ export default function VisitDetails({ onClose, onSave }) {
       {/* ── STEP INDICATOR ── */}
       <Box
         sx={{
-          borderBottom: `1px solid ${BORDER}`,
-          bgcolor: SURFACE,
+          borderBottom: `1px solid ${THEME.BORDER}`,
+          bgcolor: THEME.SURFACE,
           px: { xs: 2, md: 3 },
           py: 0,
         }}
@@ -1301,9 +1330,9 @@ export default function VisitDetails({ onClose, onSave }) {
                       width: 22,
                       height: 22,
                       borderRadius: "50%",
-                      bgcolor: done ? PRIMARY : active ? PRIMARY_LIGHT : "#f0f0f0",
-                      border: `2px solid ${done || active ? PRIMARY : BORDER}`,
-                      color: done ? "#fff" : active ? PRIMARY : TEXT_MUTED,
+                      bgcolor: done ? PRIMARY : active ? THEME.PRIMARY_LIGHT : THEME.STEP_INACTIVE_BG,
+                      border: `2px solid ${done || active ? PRIMARY : THEME.BORDER}`,
+                      color: done ? "#fff" : active ? PRIMARY : THEME.TEXT_MUTED,
                       display: "grid",
                       placeItems: "center",
                       fontSize: "0.68rem",
@@ -1317,7 +1346,7 @@ export default function VisitDetails({ onClose, onSave }) {
                     sx={{
                       fontSize: "0.78rem",
                       fontWeight: active ? 700 : 500,
-                      color: active ? PRIMARY : done ? TEXT_SUB : TEXT_MUTED,
+                      color: active ? PRIMARY : done ? THEME.TEXT_SUB : THEME.TEXT_MUTED,
                       display: { xs: "none", sm: "block" },
                     }}
                   >
@@ -1327,7 +1356,7 @@ export default function VisitDetails({ onClose, onSave }) {
                     sx={{
                       fontSize: "0.78rem",
                       fontWeight: active ? 700 : 500,
-                      color: active ? PRIMARY : done ? TEXT_SUB : TEXT_MUTED,
+                      color: active ? PRIMARY : done ? THEME.TEXT_SUB : THEME.TEXT_MUTED,
                       display: { xs: "block", sm: "none" },
                     }}
                   >
@@ -1704,7 +1733,7 @@ export default function VisitDetails({ onClose, onSave }) {
                 height: 280,
                 borderRadius: 2.5,
                 overflow: "hidden",
-                border: `1.5px solid ${BORDER}`,
+                border: `1.5px solid ${THEME.BORDER}`,
                 mb: 1.25,
               }}
             >
@@ -1715,7 +1744,7 @@ export default function VisitDetails({ onClose, onSave }) {
               />
             </Box>
 
-            <Typography sx={{ fontSize: "0.74rem", color: TEXT_MUTED, mb: 2 }}>
+            <Typography sx={{ fontSize: "0.74rem", color: THEME.TEXT_MUTED, mb: 2 }}>
               Tap the map or drag the red pin to point the exact house location.
             </Typography>
 
@@ -1740,7 +1769,7 @@ export default function VisitDetails({ onClose, onSave }) {
                 textTransform: "none",
                 fontSize: "0.82rem",
                 mb: 2.5,
-                "&:hover": { borderColor: PRIMARY, bgcolor: PRIMARY_LIGHT },
+                "&:hover": { borderColor: PRIMARY, bgcolor: THEME.PRIMARY_LIGHT },
               }}
             >
               {locationLoading
@@ -1806,30 +1835,30 @@ export default function VisitDetails({ onClose, onSave }) {
                 addFiles(e.dataTransfer.files);
               }}
               sx={{
-                border: `2px dashed ${validationErrors.photos ? ERROR_COLOR : "#d4d4d4"}`,
+                border: `2px dashed ${validationErrors.photos ? ERROR_COLOR : THEME.DROPZONE_BORDER}`,
                 borderRadius: 2.5,
                 px: 2,
                 py: 5,
                 textAlign: "center",
                 cursor: "pointer",
-                bgcolor: "#fafafa",
+                bgcolor: THEME.DROPZONE_BG,
                 transition: "all 0.18s",
                 "&:hover": {
                   borderColor: PRIMARY,
-                  bgcolor: PRIMARY_LIGHT,
+                  bgcolor: THEME.PRIMARY_LIGHT,
                 },
               }}
             >
               <CloudUploadOutlined
                 sx={{ fontSize: 36, color: alpha(PRIMARY, 0.65), mb: 1 }}
               />
-              <Typography sx={{ fontSize: "0.88rem", color: TEXT_SUB, fontWeight: 500 }}>
+              <Typography sx={{ fontSize: "0.88rem", color: THEME.TEXT_SUB, fontWeight: 500 }}>
                 Drag & drop photos, or{" "}
                 <Box component="span" sx={{ color: PRIMARY, fontWeight: 700 }}>
                   browse
                 </Box>
               </Typography>
-              <Typography sx={{ fontSize: "0.7rem", color: TEXT_MUTED, mt: 0.5 }}>
+              <Typography sx={{ fontSize: "0.7rem", color: THEME.TEXT_MUTED, mt: 0.5 }}>
                 JPG, PNG, WEBP · Max 10 MB each
               </Typography>
             </Box>
@@ -1844,7 +1873,7 @@ export default function VisitDetails({ onClose, onSave }) {
             {photos.length > 0 && (
               <Box sx={{ mt: 2 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                  <Typography sx={{ fontSize: "0.78rem", fontWeight: 600, color: TEXT_SUB }}>
+                  <Typography sx={{ fontSize: "0.78rem", fontWeight: 600, color: THEME.TEXT_SUB }}>
                     {photos.length} photo{photos.length !== 1 ? "s" : ""} selected
                   </Typography>
                 </Stack>
@@ -1881,11 +1910,11 @@ export default function VisitDetails({ onClose, onSave }) {
           left: 0,
           right: 0,
           bottom: 0,
-          borderTop: `1px solid ${BORDER}`,
+          borderTop: `1px solid ${THEME.BORDER}`,
           px: { xs: 2, md: 3 },
           py: 1.5,
           zIndex: 30,
-          bgcolor: SURFACE,
+          bgcolor: THEME.SURFACE,
         }}
       >
         <Stack
@@ -1903,12 +1932,12 @@ export default function VisitDetails({ onClose, onSave }) {
                 borderRadius: 2,
                 px: 2,
                 py: 0.85,
-                borderColor: BORDER,
-                color: TEXT_SUB,
+                borderColor: THEME.BORDER,
+                color: THEME.TEXT_SUB,
                 fontWeight: 600,
                 textTransform: "none",
                 fontSize: "0.83rem",
-                "&:hover": { bgcolor: SURFACE_ALT },
+                "&:hover": { bgcolor: THEME.SURFACE_ALT },
               }}
             >
               Cancel
@@ -1922,12 +1951,12 @@ export default function VisitDetails({ onClose, onSave }) {
                 borderRadius: 2,
                 px: 2,
                 py: 0.85,
-                borderColor: BORDER,
-                color: TEXT_SUB,
+                borderColor: THEME.BORDER,
+                color: THEME.TEXT_SUB,
                 fontWeight: 600,
                 textTransform: "none",
                 fontSize: "0.83rem",
-                "&:hover": { bgcolor: SURFACE_ALT },
+                "&:hover": { bgcolor: THEME.SURFACE_ALT },
               }}
             >
               Previous
@@ -1943,7 +1972,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   width: s.key === currentStep ? 20 : 6,
                   height: 6,
                   borderRadius: 999,
-                  bgcolor: s.key === currentStep ? PRIMARY : s.key < currentStep ? alpha(PRIMARY, 0.4) : BORDER,
+                  bgcolor: s.key === currentStep ? PRIMARY : s.key < currentStep ? alpha(PRIMARY, 0.4) : THEME.BORDER,
                   transition: "all 0.25s",
                 }}
               />

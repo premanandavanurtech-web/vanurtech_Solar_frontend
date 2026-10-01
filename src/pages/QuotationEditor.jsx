@@ -1258,7 +1258,7 @@ export default function QuotationEditor({ initialMode = null }) {
       termsGroups,
     });
 
-    upsertQuotation(nextQuotation);
+    await upsertQuotation(nextQuotation);
 
     if (latestLead?._id) {
       try {

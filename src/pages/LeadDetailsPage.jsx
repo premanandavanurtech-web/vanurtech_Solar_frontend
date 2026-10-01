@@ -68,6 +68,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
 import {
   deleteQuotation,
+  fetchQuotationsFromServer,
   getQuotationsForLead,
   setCurrentQuotation,
   updateQuotationStatus,
@@ -1671,9 +1672,23 @@ export default function LeadDetailsPage() {
     } finally { setLoading(false); }
   }, [fetchAPI, leadId]);
 
-  const refreshQuotationEntries = useCallback(() => {
+  const refreshQuotationEntries = useCallback(async () => {
     const activeLeadId = leadDetails?._id || leadId;
-    setQuotationEntries(activeLeadId ? getQuotationsForLead(activeLeadId) : []);
+    if (!activeLeadId) {
+      setQuotationEntries([]);
+      return;
+    }
+    // Set immediate local cache
+    setQuotationEntries(getQuotationsForLead(activeLeadId));
+    // Fetch live from server so APK quotations appear immediately
+    try {
+      const serverQuotes = await fetchQuotationsFromServer(activeLeadId);
+      if (Array.isArray(serverQuotes)) {
+        setQuotationEntries(serverQuotes.filter((q) => q.leadId === activeLeadId || q.lead?._id === activeLeadId));
+      }
+    } catch {
+      // Keep cached
+    }
   }, [leadDetails?._id, leadId]);
 
   useEffect(() => { fetchLeadDetails(); }, [fetchLeadDetails]);
@@ -2005,18 +2020,56 @@ export default function LeadDetailsPage() {
     return customReminderEntries.sort((a, b) => new Date(a.sortAt || 0) - new Date(b.sortAt || 0));
   }, [customActivities, leadDetails?._id, leadDetails?.followUpDate, leadDetails?.followUpNotes]);
 
+  const combinedComments = useMemo(() => {
+    const timelineCommentEntries = (timelineEntries || [])
+      .filter((entry) => ["comment", "call"].includes(String(entry.activityType || "").toLowerCase()))
+      .map((entry) => ({
+        id: entry._id || entry.updatedAt,
+        type: entry.activityType === "call" ? "Log call" : "Comment",
+        message: entry.notes,
+        actorName: `${entry.updatedBy?.firstName || "System"} ${entry.updatedBy?.lastName || ""}`.trim(),
+        createdAt: entry.updatedAt,
+        source: "timeline",
+      }));
+
+    const customCommentEntries = (customActivities || [])
+      .filter((entry) => entry.type === "Comment" || isCallActivity(entry))
+      .map((entry) => ({ ...entry, source: "custom" }));
+
+    const rawList = [...customCommentEntries, ...timelineCommentEntries];
+
+    const accepted = [];
+    for (const entry of rawList) {
+      const msg = String(entry.message || entry.notes || "").trim().toLowerCase();
+      const time = entry.createdAt ? new Date(entry.createdAt).getTime() : 0;
+
+      // Deduplicate entries with identical message created within 2 minutes of each other
+      const isDuplicate = accepted.some((existing) => {
+        const existingMsg = String(existing.message || existing.notes || "").trim().toLowerCase();
+        const existingTime = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
+        return existingMsg === msg && Math.abs(time - existingTime) < 120000;
+      });
+
+      if (!isDuplicate) {
+        accepted.push(entry);
+      }
+    }
+
+    return accepted.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [customActivities, timelineEntries]);
+
   const hasThreeDDesign = Boolean(leadDetails?.threeDDesign && Array.isArray(leadDetails.threeDDesign.points) && leadDetails.threeDDesign.points.length >= 3);
 
   const tabCounts = useMemo(() => ({
     activity: timelineEntries.length + customActivities.length,
-    comments: customActivities.filter((item) => item.type === "Comment" || isCallActivity(item)).length,
+    comments: combinedComments.length,
     documents: uploadedDocumentCount,
     siteVisits: siteVisitEntries.length,
     siteSurvey: hasSiteSurvey ? 1 : 0,
     quotations: quotationEntries.length,
     threeDDesign: hasThreeDDesign ? 1 : 0,
     reminders: reminderEntries.length,
-  }), [customActivities, hasSiteSurvey, hasThreeDDesign, quotationEntries.length, reminderEntries.length, siteVisitEntries.length, timelineEntries.length, uploadedDocumentCount]);
+  }), [combinedComments.length, customActivities, hasSiteSurvey, hasThreeDDesign, quotationEntries.length, reminderEntries.length, siteVisitEntries.length, timelineEntries.length, uploadedDocumentCount]);
 
   const showInfo = useCallback((msg) => {
     setSnackbar({ open: true, message: msg, severity: "info" });

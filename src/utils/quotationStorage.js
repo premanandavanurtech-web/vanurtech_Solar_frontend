@@ -1,3 +1,5 @@
+import axiosInstance from "./axiosConfig";
+
 export const CURRENT_QUOTATION_STORAGE_KEY = "solar360-current-quotation";
 export const QUOTATION_LIBRARY_STORAGE_KEY = "solar360-quotations";
 
@@ -84,8 +86,43 @@ export const loadQuotationLibrary = () => {
   return Array.isArray(stored) ? stored : [];
 };
 
-export const findQuotationById = (quotationId) =>
-  loadQuotationLibrary().find((quotation) => quotation.id === quotationId) || null;
+export const findQuotationById = (quotationId) => {
+  if (!quotationId) return null;
+  return (
+    loadQuotationLibrary().find(
+      (quotation) =>
+        quotation.id === quotationId ||
+        quotation._id === quotationId ||
+        quotation.quotationNumber === quotationId
+    ) || null
+  );
+};
+
+export const fetchQuotationByIdFromServer = async (quotationId) => {
+  try {
+    if (!quotationId) return null;
+    const res = await axiosInstance.get(`/quotation/${encodeURIComponent(quotationId)}`);
+    const data = res?.data?.result || res?.data?.data || null;
+    if (data) {
+      const current = loadQuotationLibrary();
+      const updated = [
+        data,
+        ...current.filter(
+          (q) =>
+            q.id !== data.id &&
+            (!data._id || q._id !== data._id) &&
+            q.quotationNumber !== data.quotationNumber
+        ),
+      ];
+      writeStorage(QUOTATION_LIBRARY_STORAGE_KEY, updated);
+      return data;
+    }
+    return null;
+  } catch (err) {
+    console.warn("Failed to fetch quotation from server by id:", err);
+    return null;
+  }
+};
 
 export const findQuotationByShareToken = (shareToken) =>
   loadQuotationLibrary().find((quotation) => quotation.shareToken === shareToken) || null;
@@ -135,7 +172,37 @@ export const buildQuotationRecord = ({
   };
 };
 
-export const upsertQuotation = (quotation) => {
+export const fetchQuotationsFromServer = async (leadId = null) => {
+  try {
+    const params = leadId ? { leadId } : {};
+    const response = await axiosInstance.get("/quotation", { params });
+    const serverList = response?.data?.result || response?.data?.data || [];
+    if (Array.isArray(serverList)) {
+      const localList = loadQuotationLibrary();
+      let merged = [];
+      if (leadId) {
+        const otherLeads = localList.filter(
+          (item) => item.leadId !== leadId && item.lead?._id !== leadId && item.lead?.id !== leadId
+        );
+        merged = [...serverList, ...otherLeads].sort(
+          (a, b) => new Date(b.savedAt || b.createdAt || 0) - new Date(a.savedAt || a.createdAt || 0)
+        );
+      } else {
+        merged = serverList.sort(
+          (a, b) => new Date(b.savedAt || b.createdAt || 0) - new Date(a.savedAt || a.createdAt || 0)
+        );
+      }
+      writeStorage(QUOTATION_LIBRARY_STORAGE_KEY, merged);
+      return merged;
+    }
+    return loadQuotationLibrary();
+  } catch (error) {
+    console.warn("Failed to fetch quotations from backend:", error);
+    return loadQuotationLibrary();
+  }
+};
+
+export const upsertQuotation = async (quotation) => {
   const currentQuotations = loadQuotationLibrary();
   const nextQuotations = [quotation, ...currentQuotations.filter((entry) => entry.id !== quotation.id)].sort(
     (leftEntry, rightEntry) => new Date(rightEntry.savedAt || 0) - new Date(leftEntry.savedAt || 0),
@@ -143,13 +210,32 @@ export const upsertQuotation = (quotation) => {
 
   writeStorage(QUOTATION_LIBRARY_STORAGE_KEY, nextQuotations);
   setCurrentQuotation(quotation);
+
+  // Sync to backend and await confirmation
+  try {
+    const res = await axiosInstance.post("/quotation", quotation);
+    if (res?.data?.result) {
+      const serverQuotation = res.data.result;
+      const updatedList = [
+        serverQuotation,
+        ...nextQuotations.filter((q) => q.id !== quotation.id && q.id !== serverQuotation.id),
+      ];
+      writeStorage(QUOTATION_LIBRARY_STORAGE_KEY, updatedList);
+      return updatedList;
+    }
+  } catch (err) {
+    console.warn("Failed to sync quotation to server:", err);
+  }
+
   return nextQuotations;
 };
 
 export const updateQuotationStatus = (quotationId, status) => {
   const currentQuotations = loadQuotationLibrary();
   const nextQuotations = currentQuotations.map((quotation) => {
-    if (quotation.id !== quotationId) return quotation;
+    if (quotation.id !== quotationId && quotation._id !== quotationId && quotation.quotationNumber !== quotationId) {
+      return quotation;
+    }
 
     const now = new Date().toISOString();
     return {
@@ -164,20 +250,48 @@ export const updateQuotationStatus = (quotationId, status) => {
   writeStorage(QUOTATION_LIBRARY_STORAGE_KEY, nextQuotations);
 
   const activeQuotation = loadCurrentQuotation();
-  if (activeQuotation?.id === quotationId) {
-    setCurrentQuotation(nextQuotations.find((quotation) => quotation.id === quotationId) || null);
+  if (activeQuotation?.id === quotationId || activeQuotation?._id === quotationId || activeQuotation?.quotationNumber === quotationId) {
+    setCurrentQuotation(nextQuotations.find((quotation) => quotation.id === quotationId || quotation._id === quotationId || quotation.quotationNumber === quotationId) || null);
   }
+
+  // Sync status to backend
+  axiosInstance.patch(`/quotation/${encodeURIComponent(quotationId)}/status`, { status }).catch((err) => {
+    console.warn("Failed to sync quotation status to server:", err);
+  });
 
   return nextQuotations;
 };
 
-export const deleteQuotation = (quotationId) => {
-  const nextQuotations = loadQuotationLibrary().filter((quotation) => quotation.id !== quotationId);
+export const deleteQuotation = async (quotationId) => {
+  const currentList = loadQuotationLibrary();
+  const target = currentList.find(
+    (q) => q.id === quotationId || q._id === quotationId || q.quotationNumber === quotationId
+  );
+  const nextQuotations = currentList.filter(
+    (quotation) =>
+      quotation.id !== quotationId &&
+      quotation._id !== quotationId &&
+      quotation.quotationNumber !== quotationId &&
+      (!target || (quotation.id !== target.id && (!target._id || quotation._id !== target._id)))
+  );
   writeStorage(QUOTATION_LIBRARY_STORAGE_KEY, nextQuotations);
 
   const activeQuotation = loadCurrentQuotation();
-  if (activeQuotation?.id === quotationId) {
+  if (
+    activeQuotation?.id === quotationId ||
+    activeQuotation?._id === quotationId ||
+    activeQuotation?.quotationNumber === quotationId ||
+    (target && (activeQuotation?.id === target.id || activeQuotation?._id === target._id))
+  ) {
     setCurrentQuotation(null);
+  }
+
+  // Delete from backend using target._id, target.id, or quotationId
+  try {
+    const idToDelete = target?._id || target?.id || quotationId;
+    await axiosInstance.delete(`/quotation/${encodeURIComponent(idToDelete)}`);
+  } catch (err) {
+    console.warn("Failed to sync quotation deletion to server:", err);
   }
 
   return nextQuotations;

@@ -39,11 +39,13 @@ import {
   ArrowLeft,
 } from "lucide-react"
 import "./Quotation.css"
+import { API_ORIGIN } from "../utils/apiConfig"
 import { toBackendAssetUrl } from "../utils/backendAssetUrl"
 import {
   ensureQuotationShareToken,
   findQuotationById,
   findQuotationByShareToken,
+  fetchQuotationByIdFromServer,
   loadCurrentQuotation,
   setCurrentQuotation,
 } from "../utils/quotationStorage"
@@ -307,6 +309,11 @@ const safeNumber = (value, fallback = 0) => {
 }
 
 const loadSavedQuotation = (locationState, search = "", shareToken = "") => {
+  // 1. Direct injection from Mobile App WebView
+  if (typeof window !== "undefined" && window.__INITIAL_QUOTATION__) {
+    return window.__INITIAL_QUOTATION__;
+  }
+
   const searchParams = new URLSearchParams(search || "")
   const quotationIdFromQuery = searchParams.get("quotationId") || searchParams.get("quoteId")
 
@@ -608,7 +615,38 @@ async function downloadQuotationPdf(targetId) {
     }
   }
 
-  pdf.save("SAHOO-Construction-Solar-Quotation.pdf")
+  const cleanNumber = (quote?.number || "Solar-Quotation").replace(/[^a-zA-Z0-9_-]/g, "_")
+  const fileName = `${cleanNumber}-Official-Proposal.pdf`
+
+  // Send the PDF buffer to the backend so Android DownloadManager (or browser) can download it directly via an HTTP URL
+  try {
+    const pdfBase64 = pdf.output("datauristring")
+    const apiRes = await fetch(`${API_ORIGIN}/api/v1/quotation/save-pdf-temp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quoteNumber: cleanNumber,
+        pdfBase64: pdfBase64,
+      }),
+    })
+    const resData = await apiRes.json()
+    if (resData?.downloadUrl) {
+      // Trigger the HTTP download directly in the WebView / browser
+      // Android DownloadListener intercepts HTTP URLs and saves to phone storage directly!
+      const dlLink = document.createElement("a")
+      dlLink.href = resData.downloadUrl
+      dlLink.setAttribute("download", fileName)
+      document.body.appendChild(dlLink)
+      dlLink.click()
+      document.body.removeChild(dlLink)
+      return
+    }
+  } catch (err) {
+    console.warn("[PDF] Temp upload failed, falling back to pdf.save():", err)
+  }
+
+  // Fallback for regular desktop browsers
+  pdf.save(fileName)
 }
 
 function DownloadButton({ targetId }) {
@@ -755,7 +793,7 @@ function QuotationDocument() {
   return (
     <div id="quotation-document" className="quotation-document mx-auto w-full max-w-[820px] text-card-foreground">
       {/* COVER */}
-      <section className="quotation-page-sheet quotation-cover-page relative overflow-hidden bg-primary px-10 py-12 text-primary-foreground">
+      <section className="quotation-page-sheet quotation-cover-page relative overflow-hidden bg-primary px-4 py-8 sm:px-10 sm:py-12 text-primary-foreground">
         <div className="relative z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1215,45 +1253,45 @@ function QuotationDocument() {
           </div>
 
           {/* Subsidy breakdown */}
-          <div className="mt-4 overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-left text-sm">
+          <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-left text-xs sm:text-sm">
               <tbody>
                 <tr className="border-b border-border">
-                  <td className="px-5 py-3 text-foreground">Total Project Cost</td>
-                  <td className="px-5 py-3 text-right font-medium text-foreground">{inr(financials.totalProjectCost)}</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-foreground font-medium">Total Project Cost</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-right font-medium text-foreground whitespace-nowrap">{inr(financials.totalProjectCost)}</td>
                 </tr>
                 <tr className="border-b border-border bg-secondary/40">
-                  <td className="px-5 py-3 text-muted-foreground">Less: Government Subsidy</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">− {inr(financials.subsidy)}</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-muted-foreground">Less: Government Subsidy</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-right text-emerald-600 font-semibold whitespace-nowrap">− {inr(financials.subsidy)}</td>
                 </tr>
                 <tr className="bg-primary text-primary-foreground">
-                  <td className="px-5 py-3 font-bold">Effective Cost to Customer</td>
-                  <td className="px-5 py-3 text-right text-lg font-extrabold">{inr(financials.effectiveCost)}</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 font-bold">Effective Cost to Customer</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-right text-base sm:text-lg font-extrabold whitespace-nowrap">{inr(financials.effectiveCost)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           {/* Year-wise projection */}
-          <div className="mt-4 overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-left text-sm">
+          <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[460px] sm:min-w-full text-left text-xs sm:text-sm">
               <thead>
                 <tr className="bg-primary text-primary-foreground">
-                  <th className="px-4 py-3 font-semibold">Year</th>
-                  <th className="px-4 py-3 font-semibold">Generation</th>
-                  <th className="px-4 py-3 text-right font-semibold">Tariff (₹)</th>
-                  <th className="px-4 py-3 text-right font-semibold">Annual Savings</th>
-                  <th className="hidden px-4 py-3 text-right font-semibold sm:table-cell">Cumulative</th>
+                  <th className="px-3 sm:px-4 py-2.5 sm:py-3 font-semibold">Year</th>
+                  <th className="px-3 sm:px-4 py-2.5 sm:py-3 font-semibold">Generation</th>
+                  <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right font-semibold">Tariff (₹)</th>
+                  <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right font-semibold">Annual Savings</th>
+                  <th className="hidden px-3 sm:px-4 py-2.5 sm:py-3 text-right font-semibold sm:table-cell">Cumulative</th>
                 </tr>
               </thead>
               <tbody>
                 {yearProjection.map((r, i) => (
                   <tr key={r.year} className={i % 2 === 0 ? "bg-card" : "bg-secondary/40"}>
-                    <td className="px-4 py-3 font-medium text-foreground">{r.year}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{r.generation}</td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">{r.tariff}</td>
-                    <td className="px-4 py-3 text-right font-medium text-foreground">{inr(r.annualSavings)}</td>
-                    <td className="hidden px-4 py-3 text-right text-muted-foreground sm:table-cell">
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 font-medium text-foreground whitespace-nowrap">{r.year}</td>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 text-muted-foreground whitespace-nowrap">{r.generation}</td>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 text-right text-muted-foreground whitespace-nowrap">{r.tariff}</td>
+                    <td className="px-3 sm:px-4 py-2 sm:py-3 text-right font-medium text-foreground whitespace-nowrap">{inr(r.annualSavings)}</td>
+                    <td className="hidden px-3 sm:px-4 py-2 sm:py-3 text-right text-muted-foreground sm:table-cell whitespace-nowrap">
                       {inr(r.cumulativeSavings)}
                     </td>
                   </tr>
@@ -1263,28 +1301,28 @@ function QuotationDocument() {
           </div>
 
           {/* Cost breakdown */}
-          <div className="mt-4 overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-left text-sm">
+          <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-left text-xs sm:text-sm">
               <thead>
                 <tr className="bg-secondary/60">
-                  <th className="px-5 py-3 font-semibold text-foreground">Description of Work / Service</th>
-                  <th className="px-5 py-3 text-right font-semibold text-foreground">Amount (₹)</th>
+                  <th className="px-3 sm:px-5 py-2.5 sm:py-3 font-semibold text-foreground">Description of Work / Service</th>
+                  <th className="px-3 sm:px-5 py-2.5 sm:py-3 text-right font-semibold text-foreground whitespace-nowrap">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-t border-border">
-                  <td className="px-5 py-3 text-muted-foreground">
-                    Procurement, Installation & Commissioning of {system.sizeKw} kW On-grid Solar Plant at Itanagar.
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-muted-foreground">
+                    Procurement, Installation & Commissioning of {system.sizeKw} kW On-grid Solar Plant at {client.city || "Site"}.
                   </td>
-                  <td className="px-5 py-3 text-right font-medium text-foreground">{inr(financials.preGst)}</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-right font-medium text-foreground whitespace-nowrap">{inr(financials.preGst)}</td>
                 </tr>
                 <tr className="border-t border-border bg-secondary/40">
-                  <td className="px-5 py-3 text-muted-foreground">GST @ {financials.gstRate}%</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{inr(financials.gstAmount)}</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-muted-foreground">GST @ {financials.gstRate}%</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-right text-muted-foreground whitespace-nowrap">{inr(financials.gstAmount)}</td>
                 </tr>
                 <tr className="border-t border-border bg-primary text-primary-foreground">
-                  <td className="px-5 py-3 font-bold">Grand Total</td>
-                  <td className="px-5 py-3 text-right text-lg font-extrabold">{inr(financials.totalProjectCost)}</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 font-bold">Grand Total</td>
+                  <td className="px-3 sm:px-5 py-2.5 sm:py-3 text-right text-base sm:text-lg font-extrabold whitespace-nowrap">{inr(financials.totalProjectCost)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1337,23 +1375,32 @@ function QuotationDocument() {
         {/* WARRANTY */}
         <section>
           <SectionTitle index="08" title="Warranty & After-Sales Support" subtitle="Industry-leading warranty coverage across all components" />
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-left text-xs sm:text-sm">
               <thead>
                 <tr className="bg-primary text-primary-foreground">
-                  <th className="px-4 py-3 font-semibold">Component</th>
-                  <th className="px-4 py-3 font-semibold">Brand</th>
-                  <th className="px-4 py-3 font-semibold">Product Warranty</th>
-                  <th className="hidden px-4 py-3 font-semibold sm:table-cell">Performance Guarantee</th>
+                  <th className="px-2.5 sm:px-4 py-2.5 sm:py-3 font-semibold">Component</th>
+                  <th className="px-2 sm:px-4 py-2.5 sm:py-3 font-semibold">Brand</th>
+                  <th className="px-2 sm:px-4 py-2.5 sm:py-3 font-semibold whitespace-nowrap text-right sm:text-left">
+                    <span className="hidden sm:inline">Product </span>Warranty
+                  </th>
+                  <th className="hidden px-2.5 sm:px-4 py-2.5 sm:py-3 font-semibold sm:table-cell">Performance Guarantee</th>
                 </tr>
               </thead>
               <tbody>
                 {warranties.map((w, i) => (
                   <tr key={w.component} className={i % 2 === 0 ? "bg-card" : "bg-secondary/40"}>
-                    <td className="px-4 py-3 font-medium text-foreground">{w.component}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{w.brand}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{w.product}</td>
-                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{w.performance}</td>
+                    <td className="px-2.5 sm:px-4 py-2.5 sm:py-3 font-medium text-foreground">
+                      <div>{w.component}</div>
+                      {w.performance && (
+                        <div className="mt-0.5 text-[11px] font-medium text-amber-600 sm:hidden">
+                          {w.performance}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2 sm:px-4 py-2.5 sm:py-3 text-muted-foreground">{w.brand}</td>
+                    <td className="px-2 sm:px-4 py-2.5 sm:py-3 text-muted-foreground whitespace-nowrap font-semibold text-right sm:text-left">{w.product}</td>
+                    <td className="hidden px-2.5 sm:px-4 py-2.5 sm:py-3 text-muted-foreground sm:table-cell">{w.performance}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1364,23 +1411,23 @@ function QuotationDocument() {
         {/* PAYMENT TERMS */}
         <section>
           <SectionTitle index="09" title="Payment Terms" subtitle="Milestone-based payment schedule" />
-          <div className="overflow-hidden rounded-lg border border-border">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-left text-xs sm:text-sm">
               <thead>
                 <tr className="bg-primary text-primary-foreground">
-                  <th className="px-4 py-3 font-semibold">#</th>
-                  <th className="px-4 py-3 font-semibold">Share</th>
-                  <th className="px-4 py-3 font-semibold">Milestone</th>
-                  <th className="px-4 py-3 text-right font-semibold">Amount (₹)</th>
+                  <th className="w-8 px-2 sm:px-4 py-2.5 sm:py-3 text-center font-semibold">#</th>
+                  <th className="w-14 px-2 sm:px-4 py-2.5 sm:py-3 text-center font-semibold">Share</th>
+                  <th className="px-2 sm:px-4 py-2.5 sm:py-3 font-semibold">Milestone</th>
+                  <th className="px-2.5 sm:px-4 py-2.5 sm:py-3 text-right font-semibold whitespace-nowrap">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody>
                 {paymentSchedule.map((p, i) => (
                   <tr key={p.milestone} className={i % 2 === 0 ? "bg-card" : "bg-secondary/40"}>
-                    <td className="px-4 py-3 text-muted-foreground">{i + 1}</td>
-                    <td className="px-4 py-3 font-bold text-accent">{p.share}</td>
-                    <td className="px-4 py-3 text-foreground">{p.milestone}</td>
-                    <td className="px-4 py-3 text-right font-medium text-foreground">{inr(p.amount)}</td>
+                    <td className="w-8 px-2 sm:px-4 py-2.5 sm:py-3 text-center text-muted-foreground font-medium">{i + 1}</td>
+                    <td className="w-14 px-2 sm:px-4 py-2.5 sm:py-3 text-center font-bold text-accent whitespace-nowrap">{p.share}</td>
+                    <td className="px-2 sm:px-4 py-2.5 sm:py-3 text-foreground leading-snug">{p.milestone}</td>
+                    <td className="px-2.5 sm:px-4 py-2.5 sm:py-3 text-right font-bold text-foreground whitespace-nowrap">{inr(p.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1393,7 +1440,7 @@ function QuotationDocument() {
         </section>
 
         {/* TERMS, SIGN-OFF & FOOTER */}
-        <section className="quotation-page-sheet space-y-5 rounded-[28px] border border-border bg-white p-6">
+        <section className="quotation-page-sheet space-y-5 rounded-[20px] sm:rounded-[28px] border border-border bg-white p-4 sm:p-6">
           <div>
             <SectionTitle index="10" title="Terms & Conditions" subtitle="Please read these terms carefully before confirming your order" />
             <div className="grid gap-4 sm:grid-cols-2">
@@ -1468,48 +1515,140 @@ export default function Page() {
   const isSharedView = Boolean(shareToken)
   const location = useLocation()
   const navigate = useNavigate()
+  const searchParams = useMemo(() => new URLSearchParams(location.search || ""), [location.search])
+  const isProposalPreview =
+    isSharedView ||
+    location.pathname.includes("/quotation/preview") ||
+    location.pathname.includes("/quotation-preview") ||
+    location.pathname.startsWith("/q") ||
+    searchParams.get("view") === "preview" ||
+    searchParams.get("view") === "mobile" ||
+    searchParams.get("embed") === "true"
+
   const [savedQuotation, setSavedQuotation] = useState(() => loadSavedQuotation(location.state, location.search, shareToken))
+  const [loading, setLoading] = useState(() => {
+    const target = searchParams.get("quotationId") || searchParams.get("quoteId") || shareToken
+    const initial = loadSavedQuotation(location.state, location.search, shareToken)
+    return Boolean(target && !initial)
+  })
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [shareLink, setShareLink] = useState("")
   const quotationData = useMemo(() => buildQuotationData(savedQuotation), [savedQuotation])
   applyQuotationData(quotationData)
+
+  // Listen for direct quotation payloads from mobile app WebView
+  useEffect(() => {
+    const handleMessage = (event) => {
+      try {
+        const payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (payload && (payload.type === "SET_QUOTATION" || payload.quotationNumber || payload.form)) {
+          const incoming = payload.quotation || payload;
+          setSavedQuotation(incoming);
+          setCurrentQuotation(incoming);
+          setLoading(false);
+        }
+      } catch (err) {}
+    };
+
+    window.addEventListener("message", handleMessage);
+    document.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      document.removeEventListener("message", handleMessage);
+    };
+  }, []);
 
   useEffect(() => {
     const nextQuotation = loadSavedQuotation(location.state, location.search, shareToken)
     if (nextQuotation) {
       setSavedQuotation(nextQuotation)
       setCurrentQuotation(nextQuotation)
+      setLoading(false)
     }
-  }, [location.search, location.state, shareToken])
+
+    const targetId = searchParams.get("quotationId") || searchParams.get("quoteId") || location.state?.quotationId;
+    if (targetId) {
+      setLoading(true)
+      fetchQuotationByIdFromServer(targetId)
+        .then((serverQuote) => {
+          if (serverQuote) {
+            setSavedQuotation(serverQuote)
+            setCurrentQuotation(serverQuote)
+          }
+        })
+        .finally(() => {
+          setLoading(false)
+        })
+    }
+  }, [location.search, location.state, shareToken, searchParams])
 
   useEffect(() => {
     if (!savedQuotation) return
     setCurrentQuotation(savedQuotation)
   }, [savedQuotation])
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+
+  const handleProposalDownload = async () => {
+    setDownloadingPdf(true)
+    try {
+      await downloadQuotationPdf("quotation")
+    } catch (err) {
+      console.error("[Proposal] Download error:", err)
+      alert("Failed to generate PDF. Please ensure the document is fully loaded and try again.")
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
+  const handleProposalPrint = () => {
+    // If running inside React Native WebView in the APK
+    if (typeof window !== "undefined" && window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(
+        JSON.stringify({
+          type: "PRINT_PROPOSAL",
+          quoteNumber: quote?.number,
+        })
+      )
+      return
+    }
+
+    if (typeof window.print === "function") {
+      window.print()
+    } else {
+      alert("Print is not supported in this view. Please open in an external browser.")
+    }
+  }
+
+  const autoDownloadQuery = searchParams.get("autoDownload") === "true"
+  const autoPrintQuery = searchParams.get("autoPrint") === "true"
+
   useEffect(() => {
-    if (!location.state?.autoPrint && !location.state?.autoDownload) return
+    window.triggerDownloadPdf = () => downloadQuotationPdf("quotation")
+    window.triggerPrintPdf = () => {
+      if (typeof window.print === "function") window.print()
+    }
+
+    if (loading || !savedQuotation) return
+    if (!location.state?.autoPrint && !location.state?.autoDownload && !autoDownloadQuery && !autoPrintQuery) return
 
     const actionTimer = window.setTimeout(async () => {
       try {
-        if (location.state?.autoPrint) {
-          window.print()
+        if (location.state?.autoPrint || autoPrintQuery) {
+          if (typeof window.print === "function") {
+            window.print()
+          }
         }
-        if (location.state?.autoDownload) {
+        if (location.state?.autoDownload || autoDownloadQuery) {
           await downloadQuotationPdf("quotation")
         }
       } catch (error) {
         console.log("[v0] quotation action failed:", error)
-      } finally {
-        navigate(savedQuotation?.id ? `/quotation?quoteId=${savedQuotation.id}` : "/quotation", {
-          replace: true,
-          state: savedQuotation?.id ? { quotationId: savedQuotation.id } : {},
-        })
       }
-    }, 250)
+    }, 1000)
 
     return () => window.clearTimeout(actionTimer)
-  }, [location.state, navigate, savedQuotation?.id])
+  }, [loading, savedQuotation, location.state, autoDownloadQuery, autoPrintQuery])
 
   const detailPageHref = savedQuotation?.id ? `/quotation?quoteId=${savedQuotation.id}` : "/quotation"
 
@@ -1541,13 +1680,25 @@ export default function Page() {
     ? `https://wa.me/?text=${encodeURIComponent(`Please view this quotation: ${shareLink}`)}`
     : ""
 
-  if (isSharedView && !savedQuotation) {
+  if (loading) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-900 text-white p-6">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-10 w-10 animate-spin text-amber-400 mb-3" />
+          <p className="text-base font-semibold text-slate-100">Loading Solar Proposal & PDF...</p>
+          <p className="text-xs text-slate-400 mt-1">Preparing official quotation document</p>
+        </div>
+      </main>
+    )
+  }
+
+  if (isProposalPreview && !savedQuotation) {
     return (
       <main className="grid min-h-screen place-items-center bg-background p-6">
         <div className="w-full max-w-md rounded-3xl border border-border bg-white p-8 text-center shadow-sm">
           <h1 className="text-2xl font-bold text-foreground">Quotation Not Found</h1>
           <p className="mt-3 text-sm leading-7 text-muted-foreground">
-            This shared quotation link is invalid or is no longer available in this browser.
+            This quotation link is invalid or is no longer available.
           </p>
         </div>
       </main>
@@ -1555,8 +1706,8 @@ export default function Page() {
   }
 
   return (
-    <main className="min-h-screen bg-background py-8">
-      {!isSharedView && (
+    <main className={`min-h-screen bg-background ${isProposalPreview ? "py-2 sm:py-6" : "py-8"}`}>
+      {!isProposalPreview && (
         <div className="mx-auto w-full max-w-[1320px] px-4">
           <div className="overflow-hidden rounded-[28px] border border-border bg-card/95 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
             <div className="border-b border-border bg-gradient-to-r from-slate-50 via-white to-slate-50/70 px-5 py-5 sm:px-7">
@@ -1657,7 +1808,41 @@ export default function Page() {
           </div>
         </div>
       )}
-      <div id="quotation" className="mx-auto w-full max-w-[1320px] px-4">
+      {isProposalPreview && (
+        <div className="mx-auto mb-3 flex w-full max-w-[1320px] items-center justify-between px-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-600 border border-emerald-500/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Official Proposal
+            </span>
+            <span className="text-xs font-semibold text-slate-500 hidden sm:inline">{quote.number}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleProposalDownload}
+              disabled={downloadingPdf}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 disabled:opacity-60 transition-all"
+            >
+              {downloadingPdf ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              {downloadingPdf ? "Generating PDF..." : "Download PDF"}
+            </button>
+            <button
+              type="button"
+              onClick={handleProposalPrint}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 active:scale-95 transition-all"
+              title="Print Proposal"
+            >
+              <Printer className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+      <div id="quotation" className="mx-auto w-full max-w-[1320px] px-1 sm:px-4">
         <QuotationDocument />
       </div>
 

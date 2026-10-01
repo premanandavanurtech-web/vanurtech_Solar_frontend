@@ -1,5 +1,5 @@
 // pages/AttendanceDetails.jsx
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -27,7 +27,6 @@ import {
   Fade,
   CircularProgress,
   alpha,
-  Tooltip,
   Menu,
   ListItemIcon,
   ListItemText,
@@ -43,7 +42,7 @@ import {
   Person,
   CalendarToday,
   CheckCircle,
-  Warning,
+  Warning as WarningIcon,
   Error as ErrorIcon,
   Login,
   Logout,
@@ -51,154 +50,188 @@ import {
   Print,
   ContentCopy,
   ExpandMore,
+  Phone,
+  Email,
+  AccessTime,
+  TouchApp,
+  FiberManualRecord,
 } from "@mui/icons-material";
 import { useAttendance } from "../hooks/useAttendance";
 import { format } from "date-fns";
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const PRIMARY = "#0f1f3d";
-const SECONDARY = "#1a237e";
-const SUCCESS = "#22c55e";
-const DANGER = "#ef4444";
-const WARNING = "#f59e0b";
+// ─── Theme Colors matching dark UI ───────────────────────────────────────────
+const THEME = {
+  dialogBg: "#0b1222",
+  cardBg: "#111b33",
+  cardBorder: "rgba(255, 255, 255, 0.08)",
+  inputBg: "#0c1527",
+  textPrimary: "#f8fafc",
+  textSecondary: "#94a3b8",
+  textMuted: "#64748b",
+  blue: "#2563eb",
+  sky: "#38bdf8",
+  green: "#10b981",
+  greenLight: "#34d399",
+  orange: "#f59e0b",
+  orangeLight: "#fbbf24",
+  red: "#ef4444",
+  purple: "#a855f7",
+};
 
 const STATUS_CONFIG = {
-  present: { bg: alpha(SUCCESS, 0.1), color: SUCCESS, icon: <CheckCircle sx={{ fontSize: 15 }} />, label: "Present" },
-  absent: { bg: alpha(DANGER, 0.1), color: DANGER, icon: <ErrorIcon sx={{ fontSize: 15 }} />, label: "Absent" },
-  late: { bg: alpha(WARNING, 0.1), color: WARNING, icon: <Warning sx={{ fontSize: 15 }} />, label: "Late" },
-  leave: { bg: alpha("#a855f7", 0.1), color: "#a855f7", icon: <Person sx={{ fontSize: 15 }} />, label: "Leave" },
-  holiday: { bg: alpha("#3b82f6", 0.1), color: "#3b82f6", icon: <CalendarToday sx={{ fontSize: 15 }} />, label: "Holiday" },
+  present: {
+    bg: "rgba(16, 185, 129, 0.12)",
+    color: "#34d399",
+    border: "rgba(16, 185, 129, 0.3)",
+    icon: <CheckCircle sx={{ fontSize: 16, color: "#34d399" }} />,
+    label: "Present",
+  },
+  punch_in_mobile: {
+    bg: "rgba(6, 182, 212, 0.12)",
+    color: "#22d3ee",
+    border: "rgba(6, 182, 212, 0.3)",
+    icon: <TouchApp sx={{ fontSize: 16, color: "#22d3ee" }} />,
+    label: "Punch In (Mobile)",
+  },
+  absent: {
+    bg: "rgba(239, 68, 68, 0.12)",
+    color: "#f87171",
+    border: "rgba(239, 68, 68, 0.3)",
+    icon: <ErrorIcon sx={{ fontSize: 16, color: "#f87171" }} />,
+    label: "Absent",
+  },
+  late: {
+    bg: "rgba(245, 158, 11, 0.12)",
+    color: "#fbbf24",
+    border: "rgba(245, 158, 11, 0.3)",
+    icon: <WarningIcon sx={{ fontSize: 16, color: "#fbbf24" }} />,
+    label: "Late",
+  },
+  leave: {
+    bg: "rgba(168, 85, 247, 0.12)",
+    color: "#c084fc",
+    border: "rgba(168, 85, 247, 0.3)",
+    icon: <Person sx={{ fontSize: 16, color: "#c084fc" }} />,
+    label: "Leave",
+  },
+  holiday: {
+    bg: "rgba(59, 130, 246, 0.12)",
+    color: "#60a5fa",
+    border: "rgba(59, 130, 246, 0.3)",
+    icon: <CalendarToday sx={{ fontSize: 16, color: "#60a5fa" }} />,
+    label: "Holiday",
+  },
+  "half-day": {
+    bg: "rgba(245, 158, 11, 0.12)",
+    color: "#fbbf24",
+    border: "rgba(245, 158, 11, 0.3)",
+    icon: <WarningIcon sx={{ fontSize: 16, color: "#fbbf24" }} />,
+    label: "Half Day",
+  },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const fmtDate = (ts) =>
-  !ts ? "—" : new Date(ts).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-
-const fmtTime = (ts) =>
-  !ts ? "—" : new Date(ts).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
-
-const fmtShortDate = (ts) => !ts ? "N/A" : new Date(ts).toLocaleDateString();
-const fmtShortTime = (ts) => !ts ? "N/A" : new Date(ts).toLocaleTimeString();
-const fmtDateTime = (ts) => !ts ? "N/A" : new Date(ts).toLocaleString();
-
-const resolveAddress = (addr) => {
-  if (!addr) return "N/A";
-  if (typeof addr === "string") return addr;
-  return addr.full || addr.short || "N/A";
+const fmtDateFull = (ts) => {
+  if (!ts) return "—";
+  try {
+    return new Date(ts).toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return "—";
+  }
 };
 
-// ─── StatusChip ───────────────────────────────────────────────────────────────
+const fmtTimeSec = (ts) => {
+  if (!ts) return "—";
+  try {
+    return new Date(ts).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return "—";
+  }
+};
+
+const fmtDateTime = (ts) => {
+  if (!ts) return "—";
+  try {
+    return format(new Date(ts), "dd MMM yyyy, hh:mm a");
+  } catch {
+    return "—";
+  }
+};
+
+const resolveAddress = (addr) => {
+  if (!addr) return "No location recorded";
+  if (typeof addr === "string") return addr;
+  return addr.full || addr.short || "No location recorded";
+};
+
+// ─── StatusChip Component ─────────────────────────────────────────────────────
 const StatusChip = ({ status }) => {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.present;
+  const norm = String(status || "present").toLowerCase().replace(/\s+/g, "_");
+  const cfg = STATUS_CONFIG[norm] || STATUS_CONFIG.present;
   return (
     <Chip
       size="small"
       label={cfg.label}
       icon={cfg.icon}
       sx={{
-        background: "#fff",
+        bgcolor: cfg.bg,
         color: cfg.color,
-        fontWeight: 700,
-        borderRadius: 1,
-        border: `1px solid ${alpha(cfg.color, 0.3)}`,
-        "& .MuiChip-icon": { color: cfg.color },
+        fontWeight: 800,
+        fontSize: "0.75rem",
+        borderRadius: "999px",
+        border: `1px solid ${cfg.border}`,
+        px: 0.5,
+        height: 28,
+        "& .MuiChip-icon": { color: cfg.color, ml: 0.5 },
       }}
     />
   );
 };
 
-// ─── InfoRow ──────────────────────────────────────────────────────────────────
-const InfoRow = ({ label, value, color }) => (
-  <Box
-    sx={{
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      py: 1,
-      borderBottom: `1px solid ${alpha(PRIMARY, 0.06)}`,
-      "&:last-child": { border: "none", pb: 0 },
-    }}
-  >
-    <Typography variant="caption" color="text.secondary" fontWeight={600}
-      sx={{ textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.68rem" }}
-    >
-      {label}
-    </Typography>
-    <Typography variant="body2" fontWeight={600} color={color || "text.primary"}>
-      {value}
-    </Typography>
-  </Box>
-);
-
-// ─── PunchBlock ───────────────────────────────────────────────────────────────
-const PunchBlock = ({ type, data }) => {
-  const isPunchIn = type === "in";
-  const color = isPunchIn ? SUCCESS : WARNING;
-  const absent = !data;
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: 2,
-        borderRadius: 3,
-        border: `1px solid ${alpha(color, absent ? 0.1 : 0.2)}`,
-        bgcolor: alpha(color, absent ? 0.02 : 0.05),
-        height: "100%",
-      }}
-    >
-      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
-        <Box
-          sx={{
-            width: 34, height: 34, borderRadius: "50%",
-            bgcolor: alpha(color, 0.12),
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          {isPunchIn ? <Login sx={{ fontSize: 18, color }} /> : <Logout sx={{ fontSize: 18, color }} />}
-        </Box>
-        <Box>
-          <Typography variant="caption" color="text.secondary" fontWeight={700}
-            sx={{ textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.68rem" }}
-          >
-            Punch {isPunchIn ? "In" : "Out"}
-          </Typography>
-          <Typography variant="h6" fontWeight={800} color={absent ? "text.disabled" : color} lineHeight={1.1}>
-            {absent ? (isPunchIn ? "Not recorded" : "Not punched out") : fmtTime(data?.time)}
-          </Typography>
-        </Box>
-      </Stack>
-
-      {data?.address && (
-        <Stack direction="row" spacing={0.75} alignItems="flex-start" sx={{ mb: 1 }}>
-          <LocationOn sx={{ fontSize: 14, color: "text.secondary", mt: 0.2, flexShrink: 0 }} />
-          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.4 }}>
-            {resolveAddress(data.address)}
-          </Typography>
-        </Stack>
-      )}
-
-      {data?.location && (
-        <Typography variant="caption" color="text.disabled" sx={{ fontSize: "0.65rem" }}>
-          {data.location.lat?.toFixed(5)}, {data.location.lng?.toFixed(5)}
-        </Typography>
-      )}
-
-      {data?.remarks && (
-        <Box sx={{ mt: 1, pt: 1, borderTop: `1px dashed ${alpha(color, 0.2)}` }}>
-          <Typography variant="caption" color="text.secondary">
-            <strong>Note:</strong> {data.remarks}
-          </Typography>
-        </Box>
-      )}
-    </Paper>
-  );
+// ─── Export & Format Utilities ───────────────────────────────────────────────
+const fmtShortDate = (ts) => {
+  if (!ts) return "N/A";
+  try {
+    return new Date(ts).toLocaleDateString();
+  } catch {
+    return String(ts);
+  }
 };
 
-// ─── Export Utils ─────────────────────────────────────────────────────────────
+const fmtShortTime = (ts) => {
+  if (!ts) return "N/A";
+  try {
+    return new Date(ts).toLocaleTimeString();
+  } catch {
+    return String(ts);
+  }
+};
+
+export const downloadFile = (content, fileName, mimeType) => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
 export const generateCSV = (records) => {
-  const list = Array.isArray(records) ? records : [records];
+  const list = Array.isArray(records) ? records : (records ? [records] : []);
 
   const headers = [
     "Record ID", "Employee Name", "Employee ID", "Employee Email", "Employee Phone",
@@ -211,15 +244,15 @@ export const generateCSV = (records) => {
   const escape = (val) => {
     const s = val == null ? "" : String(val);
     return s.includes(",") || s.includes('"') || s.includes("\n")
-      ? `"${s.replace(/"/g, '""')}"` : s;
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
 
   const rows = list.map((a) => [
     a._id || a.id || "",
-    a.user?.name || "",
-    a.user?.employeeId || "",
-    a.user?.email || "",
-    a.user?.phone || "",
+    a.user?.name || a.userName || "",
+    a.user?.employeeId || a.employeeId || "",
+    a.user?.email || a.userEmail || "",
+    a.user?.phone || a.user?.phoneNumber || a.userPhone || "",
     fmtShortDate(a.date),
     a.status || "",
     a.workHoursFormatted || "",
@@ -241,9 +274,9 @@ export const generateCSV = (records) => {
 };
 
 export const generateJSON = (records) => {
-  const list = Array.isArray(records) ? records : [records];
+  const list = Array.isArray(records) ? records : (records ? [records] : []);
   const enriched = list.map((a) => {
-    const clone = JSON.parse(JSON.stringify(a));
+    const clone = JSON.parse(JSON.stringify(a || {}));
     if (clone.date) clone.date_formatted = fmtShortDate(a.date);
     if (clone.punchIn?.time) clone.punchIn.time_formatted = fmtDateTime(a.punchIn.time);
     if (clone.punchOut?.time) clone.punchOut.time_formatted = fmtDateTime(a.punchOut.time);
@@ -254,21 +287,13 @@ export const generateJSON = (records) => {
   return JSON.stringify(list.length === 1 ? enriched[0] : enriched, null, 2);
 };
 
-export const downloadFile = (content, fileName, mimeType) => {
-  const blob = new Blob([content], { type: mimeType });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.setAttribute("download", fileName);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
-};
-
 export const printRecord = (a) => {
+  if (!a) return;
   const win = window.open("", "_blank");
-  if (!win) { alert("Please allow pop-ups to print"); return; }
+  if (!win) {
+    alert("Please allow pop-ups to print");
+    return;
+  }
 
   win.document.write(`
     <html>
@@ -299,21 +324,21 @@ export const printRecord = (a) => {
           <div class="row"><span class="label">Employee</span><span class="value">${a.user?.name || "N/A"}</span></div>
           <div class="row"><span class="label">Employee ID</span><span class="value">${a.user?.employeeId || "N/A"}</span></div>
           <div class="row"><span class="label">Email</span><span class="value">${a.user?.email || "N/A"}</span></div>
-          <div class="row"><span class="label">Date</span><span class="value">${fmtDate(a.date)}</span></div>
+          <div class="row"><span class="label">Date</span><span class="value">${fmtDateFull(a.date)}</span></div>
           <div class="row"><span class="label">Status</span><span class="value">${a.status || "N/A"}</span></div>
-          <div class="row"><span class="label">Work Hours</span><span class="value">${a.workHoursFormatted || "N/A"}</span></div>
+          <div class="row"><span class="label">Work Hours</span><span class="value">${a.workHoursFormatted || a.workHours || "N/A"}</span></div>
         </div>
 
         <div class="card punch-in">
           <div class="card-title">Punch In</div>
-          <div class="row"><span class="label">Time</span><span class="value">${fmtTime(a.punchIn?.time)}</span></div>
+          <div class="row"><span class="label">Time</span><span class="value">${fmtTimeSec(a.punchIn?.time)}</span></div>
           <div class="row"><span class="label">Address</span><span class="value">${resolveAddress(a.punchIn?.address)}</span></div>
           ${a.punchIn?.location ? `<div class="row"><span class="label">Coordinates</span><span class="value">${a.punchIn.location.lat}, ${a.punchIn.location.lng}</span></div>` : ""}
         </div>
 
         <div class="card punch-out">
           <div class="card-title">Punch Out</div>
-          <div class="row"><span class="label">Time</span><span class="value">${fmtTime(a.punchOut?.time)}</span></div>
+          <div class="row"><span class="label">Time</span><span class="value">${fmtTimeSec(a.punchOut?.time)}</span></div>
           <div class="row"><span class="label">Address</span><span class="value">${resolveAddress(a.punchOut?.address)}</span></div>
           ${a.punchOut?.location ? `<div class="row"><span class="label">Coordinates</span><span class="value">${a.punchOut.location.lat}, ${a.punchOut.location.lng}</span></div>` : ""}
         </div>
@@ -332,7 +357,7 @@ export const printRecord = (a) => {
   win.print();
 };
 
-// ─── ActionExportMenu — used in DialogActions ─────────────────────────────────
+// ─── Export Menu Component ────────────────────────────────────────────────────
 const ActionExportMenu = ({ attendance, onSnack }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
@@ -341,51 +366,64 @@ const ActionExportMenu = ({ attendance, onSnack }) => {
   const id = attendance?._id || attendance?.id || "record";
 
   const handle = (fn) => () => {
-    fn();
     setAnchorEl(null);
+    fn();
   };
 
   const exportCSV = handle(() => {
     try {
       downloadFile(generateCSV(attendance), `attendance_${id}_${ts}.csv`, "text/csv");
       onSnack("Exported as CSV");
-    } catch { onSnack("Export failed", "error"); }
+    } catch {
+      onSnack("Export failed", "error");
+    }
   });
 
   const exportJSON = handle(() => {
     try {
       downloadFile(generateJSON(attendance), `attendance_${id}_${ts}.json`, "application/json");
       onSnack("Exported as JSON");
-    } catch { onSnack("Export failed", "error"); }
+    } catch {
+      onSnack("Export failed", "error");
+    }
   });
 
   const copyClip = handle(() => {
     try {
       navigator.clipboard.writeText(generateJSON(attendance));
       onSnack("Copied to clipboard");
-    } catch { onSnack("Copy failed", "error"); }
+    } catch {
+      onSnack("Copy failed", "error");
+    }
   });
 
   const print = handle(() => {
     try {
       printRecord(attendance);
       onSnack("Print preview opened");
-    } catch { onSnack("Print failed", "error"); }
+    } catch {
+      onSnack("Print failed", "error");
+    }
   });
 
   return (
     <>
       <Button
         variant="outlined"
-        startIcon={<FileDownload />}
+        startIcon={<FileDownload sx={{ fontSize: 16 }} />}
         endIcon={<ExpandMore sx={{ fontSize: 16 }} />}
         onClick={(e) => setAnchorEl(e.currentTarget)}
         sx={{
-          borderRadius: 2,
-          borderColor: alpha(PRIMARY, 0.35),
-          color: PRIMARY,
-          fontWeight: 600,
-          "&:hover": { bgcolor: alpha(PRIMARY, 0.05) },
+          borderRadius: "10px",
+          borderColor: THEME.cardBorder,
+          bgcolor: "rgba(255, 255, 255, 0.04)",
+          color: THEME.textPrimary,
+          fontWeight: 700,
+          fontSize: "0.82rem",
+          textTransform: "none",
+          px: 1.8,
+          py: 0.8,
+          "&:hover": { bgcolor: "rgba(255, 255, 255, 0.08)", borderColor: "rgba(255, 255, 255, 0.2)" },
         }}
       >
         Export
@@ -396,47 +434,62 @@ const ActionExportMenu = ({ attendance, onSnack }) => {
         open={open}
         onClose={() => setAnchorEl(null)}
         PaperProps={{
-          sx: { mt: 1, borderRadius: 2.5, minWidth: 190, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" },
+          sx: {
+            mt: 1,
+            borderRadius: "12px",
+            minWidth: 180,
+            bgcolor: THEME.cardBg,
+            border: `1px solid ${THEME.cardBorder}`,
+            color: THEME.textPrimary,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+          },
         }}
         transformOrigin={{ horizontal: "left", vertical: "bottom" }}
         anchorOrigin={{ horizontal: "left", vertical: "top" }}
       >
         <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
-          <Typography variant="caption" color="text.secondary" fontWeight={700}
-            sx={{ textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.65rem" }}
+          <Typography
+            variant="caption"
+            sx={{
+              color: THEME.textMuted,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+              fontSize: "0.65rem",
+            }}
           >
             Export This Record
           </Typography>
         </Box>
-        <MenuItem onClick={exportCSV} sx={{ py: 1.25 }}>
-          <ListItemIcon><FileDownload fontSize="small" sx={{ color: SUCCESS }} /></ListItemIcon>
-          <ListItemText primary="Export as CSV" primaryTypographyProps={{ variant: "body2", fontWeight: 600 }} />
+        <MenuItem onClick={exportCSV} sx={{ py: 1, "&:hover": { bgcolor: "rgba(255, 255, 255, 0.06)" } }}>
+          <ListItemIcon><FileDownload fontSize="small" sx={{ color: THEME.greenLight }} /></ListItemIcon>
+          <ListItemText primary="Export as CSV" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }} />
         </MenuItem>
-        <MenuItem onClick={exportJSON} sx={{ py: 1.25 }}>
-          <ListItemIcon><FileDownload fontSize="small" sx={{ color: PRIMARY }} /></ListItemIcon>
-          <ListItemText primary="Export as JSON" primaryTypographyProps={{ variant: "body2", fontWeight: 600 }} />
+        <MenuItem onClick={exportJSON} sx={{ py: 1, "&:hover": { bgcolor: "rgba(255, 255, 255, 0.06)" } }}>
+          <ListItemIcon><FileDownload fontSize="small" sx={{ color: THEME.sky }} /></ListItemIcon>
+          <ListItemText primary="Export as JSON" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }} />
         </MenuItem>
-        <Divider sx={{ my: 0.5 }} />
-        <MenuItem onClick={copyClip} sx={{ py: 1.25 }}>
-          <ListItemIcon><ContentCopy fontSize="small" /></ListItemIcon>
-          <ListItemText primary="Copy to Clipboard" primaryTypographyProps={{ variant: "body2", fontWeight: 600 }} />
+        <Divider sx={{ my: 0.5, borderColor: THEME.cardBorder }} />
+        <MenuItem onClick={copyClip} sx={{ py: 1, "&:hover": { bgcolor: "rgba(255, 255, 255, 0.06)" } }}>
+          <ListItemIcon><ContentCopy fontSize="small" sx={{ color: THEME.textSecondary }} /></ListItemIcon>
+          <ListItemText primary="Copy to Clipboard" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }} />
         </MenuItem>
-        <MenuItem onClick={print} sx={{ py: 1.25 }}>
-          <ListItemIcon><Print fontSize="small" /></ListItemIcon>
-          <ListItemText primary="Print" primaryTypographyProps={{ variant: "body2", fontWeight: 600 }} />
+        <MenuItem onClick={print} sx={{ py: 1, "&:hover": { bgcolor: "rgba(255, 255, 255, 0.06)" } }}>
+          <ListItemIcon><Print fontSize="small" sx={{ color: THEME.textSecondary }} /></ListItemIcon>
+          <ListItemText primary="Print" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }} />
         </MenuItem>
       </Menu>
     </>
   );
 };
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main AttendanceDetails Modal Component ──────────────────────────────────
 export default function AttendanceDetails({
   open,
   onClose,
   attendance,
-  canEdit = false,
-  canDelete = false,
+  canEdit = true,
+  canDelete = true,
   onEdit,
   onDelete,
 }) {
@@ -445,48 +498,157 @@ export default function AttendanceDetails({
   const { updateAttendance } = useAttendance();
 
   const [editMode, setEditMode] = useState(false);
-  const [editData, setEditData] = useState({ status: "", remarks: "" });
   const [editLoad, setEditLoad] = useState(false);
-  const [photoOpen, setPhotoOpen] = useState(false);
-  const [selPhoto, setSelPhoto] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
   const showSnack = useCallback((message, severity = "success") =>
     setSnackbar({ open: true, message, severity }), []);
 
+  // Form State
+  const [formData, setFormData] = useState({
+    status: "present",
+    punchInTime: "09:00",
+    punchOutTime: "18:00",
+    workHours: "0",
+    remarks: "",
+  });
+
+  // Populate edit fields when attendance changes or editMode is triggered
+  useEffect(() => {
+    if (!attendance) return;
+
+    let inTime = "";
+    if (attendance.punchIn?.time) {
+      try {
+        const d = new Date(attendance.punchIn.time);
+        inTime = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      } catch {}
+    }
+
+    let outTime = "";
+    if (attendance.punchOut?.time) {
+      try {
+        const d = new Date(attendance.punchOut.time);
+        outTime = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      } catch {}
+    }
+
+    const normStatus = String(attendance.status || "present").toLowerCase().replace(/\s+/g, "_");
+
+    setFormData({
+      status: normStatus in STATUS_CONFIG ? normStatus : "present",
+      punchInTime: inTime || "09:00",
+      punchOutTime: outTime || "18:30",
+      workHours: String(attendance.workHours || 0),
+      remarks: attendance.remarks || "",
+    });
+  }, [attendance]);
+
+  // Auto-calculate work hours whenever punchInTime or punchOutTime changes
+  const calculateWorkHours = (inTime, outTime) => {
+    if (!inTime || !outTime) return;
+    const [hIn, mIn] = inTime.split(":").map(Number);
+    const [hOut, mOut] = outTime.split(":").map(Number);
+    if (Number.isFinite(hIn) && Number.isFinite(hOut)) {
+      let diff = (hOut * 60 + mOut) - (hIn * 60 + mIn);
+      if (diff < 0) diff += 24 * 60; // next day wrap
+      const calculatedHours = (diff / 60).toFixed(1);
+      setFormData((prev) => ({
+        ...prev,
+        workHours: calculatedHours.endsWith(".0") ? String(Math.round(diff / 60)) : calculatedHours,
+      }));
+    }
+  };
+
+  const handlePunchInTimeChange = (e) => {
+    const val = e.target.value;
+    setFormData((p) => ({ ...p, punchInTime: val }));
+    calculateWorkHours(val, formData.punchOutTime);
+  };
+
+  const handlePunchOutTimeChange = (e) => {
+    const val = e.target.value;
+    setFormData((p) => ({ ...p, punchOutTime: val }));
+    calculateWorkHours(formData.punchInTime, val);
+  };
+
   if (!attendance) return null;
 
   const a = attendance;
-  const statusCfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.present;
-  const photos = [...(a.punchIn?.photos || []), ...(a.punchOut?.photos || [])];
+  const targetUser = a.user || {};
+  const userName =
+    targetUser.name ||
+    [targetUser.firstName, targetUser.lastName].filter(Boolean).join(" ") ||
+    targetUser.email ||
+    "Team Member";
+  const userInitial = (userName || "D").charAt(0).toUpperCase();
+  const userPhone = targetUser.phoneNumber || targetUser.phone || "—";
+  const userEmail = targetUser.email || "—";
 
-  const handleEditStart = () => {
-    setEditData({ status: a.status || "present", remarks: a.remarks || "" });
-    setEditMode(true);
-  };
+  // Work Hours format
+  const hoursNum = Number(a.workHours || 0);
+  const h = Math.floor(hoursNum);
+  const m = Math.round((hoursNum - h) * 60);
+  const workHoursDisplay = a.workHoursFormatted || `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+
+  const punchInTimeDisplay = a.punchIn?.time ? fmtTimeSec(a.punchIn.time) : "Not recorded";
+  const punchOutTimeDisplay = a.punchOut?.time
+    ? fmtTimeSec(a.punchOut.time)
+    : a.punchIn?.time
+    ? "Ongoing"
+    : "No punch out recorded";
 
   const handleEditSave = async () => {
     setEditLoad(true);
     try {
-      const id = a._id || a.id;
-      if (!id) { showSnack("Invalid record ID", "error"); return; }
-      const res = await updateAttendance(id, editData);
+      const id = a._id || a.id || "new";
+
+      // Build Date objects for Punch In & Punch Out based on the record's date
+      const baseDate = a.date || a.createdAt || new Date().toISOString();
+      const baseDateStr = format(new Date(baseDate), "yyyy-MM-dd");
+
+      const payload = {
+        userId: a.user?._id || a.user?.id || (typeof a.user === "string" ? a.user : undefined),
+        date: baseDate,
+        status: formData.status,
+        remarks: formData.remarks,
+        workHours: Number(formData.workHours) || 0,
+      };
+
+      if (formData.punchInTime) {
+        payload.punchIn = {
+          ...(a.punchIn || {}),
+          time: new Date(`${baseDateStr}T${formData.punchInTime}:00`).toISOString(),
+        };
+      }
+
+      if (formData.punchOutTime) {
+        payload.punchOut = {
+          ...(a.punchOut || {}),
+          time: new Date(`${baseDateStr}T${formData.punchOutTime}:00`).toISOString(),
+        };
+      }
+
+      const res = await updateAttendance(id, payload);
       if (res?.success) {
-        showSnack("Attendance updated successfully");
+        showSnack("Attendance record updated successfully!");
         setEditMode(false);
-        if (onEdit) onEdit(res.data);
+        if (onEdit) onEdit(res.data || { ...a, ...payload });
       } else {
         showSnack(res?.error || "Update failed", "error");
       }
-    } catch {
-      showSnack("An error occurred", "error");
+    } catch (err) {
+      showSnack(err?.message || "Failed to update attendance", "error");
     } finally {
       setEditLoad(false);
     }
   };
 
   const handleDelete = () => {
-    if (onDelete) { onDelete(a); onClose(); }
+    if (window.confirm("Are you sure you want to delete this attendance record?")) {
+      if (onDelete) onDelete(a);
+      onClose();
+    }
   };
 
   const handleClose = () => {
@@ -503,298 +665,627 @@ export default function AttendanceDetails({
         fullWidth
         fullScreen={isMobile}
         PaperProps={{
-          sx: { borderRadius: isMobile ? 0 : 4, overflow: "hidden", maxHeight: isMobile ? "100%" : "92vh" },
+          sx: {
+            borderRadius: isMobile ? 0 : "22px",
+            bgcolor: THEME.dialogBg,
+            color: THEME.textPrimary,
+            border: `1px solid ${THEME.cardBorder}`,
+            boxShadow: "0 24px 64px rgba(0, 0, 0, 0.65)",
+            overflow: "hidden",
+            maxHeight: isMobile ? "100%" : "92vh",
+          },
         }}
         TransitionComponent={isMobile ? Slide : Fade}
         TransitionProps={isMobile ? { direction: "up" } : {}}
-        transitionDuration={280}
       >
-        {/* Top accent bar */}
-        <Box sx={{ height: 5, background: `linear-gradient(90deg, ${statusCfg.color}, ${PRIMARY})` }} />
-
-        {/* Header */}
-        <DialogTitle sx={{ bgcolor: PRIMARY, color: "#fff", px: { xs: 2, sm: 3 }, py: { xs: 1.5, sm: 2 } }}>
+        {/* Header (Image 2) */}
+        <DialogTitle
+          sx={{
+            px: { xs: 2, sm: 3 },
+            py: 2.2,
+            borderBottom: `1px solid ${THEME.cardBorder}`,
+            bgcolor: "rgba(255,255,255,0.02)",
+          }}
+        >
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            {/* Left: Avatar + Title + Date */}
+            <Stack direction="row" spacing={1.8} alignItems="center">
               <Avatar
                 sx={{
-                  bgcolor: "rgba(255,255,255,.15)", color: "#fff",
-                  width: { xs: 38, sm: 44 }, height: { xs: 38, sm: 44 }, fontWeight: 700,
+                  bgcolor: THEME.blue,
+                  color: "#fff",
+                  width: 44,
+                  height: 44,
+                  fontWeight: 800,
+                  fontSize: "1.15rem",
+                  boxShadow: "0 4px 14px rgba(37, 99, 235, 0.35)",
                 }}
               >
-                {a.user?.name?.charAt(0) || "A"}
+                {userInitial}
               </Avatar>
               <Box>
-                <Typography variant="h6" fontWeight={800} sx={{ fontSize: { xs: "1rem", sm: "1.15rem" } }}>
-                  {a.user?.name || "Attendance Details"}
+                <Typography variant="h6" fontWeight={800} sx={{ color: "#fff", fontSize: "1.1rem", lineHeight: 1.2 }}>
+                  Attendance Details
                 </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.85 }}>{fmtDate(a.date)}</Typography>
+                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: "0.8rem", mt: 0.2, display: "block" }}>
+                  {fmtDateFull(a.date || a.createdAt)}
+                </Typography>
               </Box>
             </Stack>
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              <StatusChip status={a.status || "present"} />
-              {/* ← Export removed from header; moved to Actions */}
-              <IconButton onClick={handleClose} size="small" sx={{ color: "#fff", ml: 0.5 }}>
-                <Close />
+
+            {/* Right: Status badge + Close Button */}
+            <Stack direction="row" spacing={1.2} alignItems="center">
+              <StatusChip status={a.status} />
+              <IconButton
+                onClick={handleClose}
+                size="small"
+                sx={{
+                  color: THEME.textSecondary,
+                  bgcolor: "rgba(255,255,255,0.05)",
+                  border: `1px solid ${THEME.cardBorder}`,
+                  width: 32,
+                  height: 32,
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.12)", color: "#fff" },
+                }}
+              >
+                <Close sx={{ fontSize: 18 }} />
               </IconButton>
             </Stack>
           </Stack>
         </DialogTitle>
 
-        {/* Content */}
-        <DialogContent sx={{ px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 2.5 } }}>
-          <Stack spacing={2.5}>
-            {/* Summary chips */}
+        {/* Content (Image 2 & 3) */}
+        <DialogContent sx={{ px: { xs: 2, sm: 3 }, py: 2.5 }}>
+          <Stack spacing={2.2}>
+            {/* ── Row 1: Summary Cards (Work Hours, Phone, Email) ── */}
             <Grid container spacing={1.5}>
-              {[
-                { label: "Work Hours", value: a.workHoursFormatted || "—", color: PRIMARY },
-                { label: "Phone", value: a.user?.phone || "—" },
-                { label: "Email", value: a.user?.email || "—" },
-              ].map((item) => (
-                <Grid item xs={12} sm={4} key={item.label}>
-                  <Paper
-                    elevation={0}
-                    sx={{ p: 1.5, borderRadius: 2.5, bgcolor: alpha(PRIMARY, 0.04), border: `1px solid ${alpha(PRIMARY, 0.1)}` }}
-                  >
-                    <Typography variant="caption" color="text.secondary" fontWeight={600}
-                      sx={{ textTransform: "uppercase", fontSize: "0.65rem", letterSpacing: 0.5 }}
-                    >
-                      {item.label}
+              {/* Work Hours */}
+              <Grid item xs={12} sm={4}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: "14px",
+                    bgcolor: THEME.cardBg,
+                    border: `1px solid ${THEME.cardBorder}`,
+                    height: "100%",
+                  }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <AccessTime sx={{ fontSize: 16, color: THEME.sky }} />
+                    <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textSecondary, letterSpacing: "0.05em" }}>
+                      WORK HOURS
                     </Typography>
-                    <Typography variant="body2" fontWeight={700} color={item.color || "text.primary"} noWrap sx={{ mt: 0.25 }}>
-                      {item.value}
+                  </Stack>
+                  <Typography variant="h5" fontWeight={800} sx={{ color: THEME.sky, letterSpacing: "-0.02em" }}>
+                    {workHoursDisplay}
+                  </Typography>
+                </Paper>
+              </Grid>
+
+              {/* Phone */}
+              <Grid item xs={12} sm={4}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: "14px",
+                    bgcolor: THEME.cardBg,
+                    border: `1px solid ${THEME.cardBorder}`,
+                    height: "100%",
+                  }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <Phone sx={{ fontSize: 16, color: THEME.textSecondary }} />
+                    <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textSecondary, letterSpacing: "0.05em" }}>
+                      PHONE
                     </Typography>
-                  </Paper>
-                </Grid>
-              ))}
+                  </Stack>
+                  <Typography variant="body1" fontWeight={700} sx={{ color: "#fff" }}>
+                    {userPhone}
+                  </Typography>
+                </Paper>
+              </Grid>
+
+              {/* Email */}
+              <Grid item xs={12} sm={4}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: "14px",
+                    bgcolor: THEME.cardBg,
+                    border: `1px solid ${THEME.cardBorder}`,
+                    height: "100%",
+                    overflow: "hidden",
+                  }}
+                >
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <Email sx={{ fontSize: 16, color: THEME.textSecondary }} />
+                    <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textSecondary, letterSpacing: "0.05em" }}>
+                      EMAIL
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body1" fontWeight={700} sx={{ color: "#fff" }} noWrap title={userEmail}>
+                    {userEmail}
+                  </Typography>
+                </Paper>
+              </Grid>
             </Grid>
 
-            {/* Edit form */}
+            {/* ── Row 2: Punch In & Punch Out Cards ── */}
+            <Grid container spacing={1.8}>
+              {/* Punch In Card (Green) */}
+              <Grid item xs={12} sm={6}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2.2,
+                    borderRadius: "16px",
+                    bgcolor: "rgba(16, 185, 129, 0.05)",
+                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                    height: "100%",
+                  }}
+                >
+                  <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+                    <Box
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "10px",
+                        bgcolor: "rgba(16, 185, 129, 0.15)",
+                        color: THEME.greenLight,
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      <Login sx={{ fontSize: 18 }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" fontWeight={800} sx={{ color: THEME.green, letterSpacing: "0.05em" }}>
+                        PUNCH IN
+                      </Typography>
+                      <Typography variant="h6" fontWeight={800} sx={{ color: THEME.greenLight, lineHeight: 1.1 }}>
+                        {punchInTimeDisplay}
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  {/* Location Address */}
+                  <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1.5 }}>
+                    <LocationOn sx={{ fontSize: 15, color: THEME.textMuted, mt: 0.2, flexShrink: 0 }} />
+                    <Box>
+                      <Typography variant="caption" sx={{ color: THEME.textSecondary, lineHeight: 1.4, display: "block" }}>
+                        {resolveAddress(a.punchIn?.address)}
+                      </Typography>
+                      {a.punchIn?.location && (
+                        <Typography variant="caption" sx={{ color: THEME.textMuted, fontSize: "0.72rem", display: "block", mt: 0.3 }}>
+                          {a.punchIn.location.lat?.toFixed(5)}, {a.punchIn.location.lng?.toFixed(5)}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Stack>
+                </Paper>
+              </Grid>
+
+              {/* Punch Out Card (Orange) */}
+              <Grid item xs={12} sm={6}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2.2,
+                    borderRadius: "16px",
+                    bgcolor: "rgba(245, 158, 11, 0.05)",
+                    border: "1px solid rgba(245, 158, 11, 0.25)",
+                    height: "100%",
+                  }}
+                >
+                  <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+                    <Box
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "10px",
+                        bgcolor: "rgba(245, 158, 11, 0.15)",
+                        color: THEME.orangeLight,
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      <Logout sx={{ fontSize: 18 }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" fontWeight={800} sx={{ color: THEME.orange, letterSpacing: "0.05em" }}>
+                        PUNCH OUT
+                      </Typography>
+                      <Typography variant="h6" fontWeight={800} sx={{ color: THEME.orangeLight, lineHeight: 1.1 }}>
+                        {punchOutTimeDisplay}
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  {/* Location Address */}
+                  <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1.5 }}>
+                    <LocationOn sx={{ fontSize: 15, color: THEME.textMuted, mt: 0.2, flexShrink: 0 }} />
+                    <Box>
+                      <Typography variant="caption" sx={{ color: THEME.textSecondary, lineHeight: 1.4, display: "block" }}>
+                        {a.punchOut?.address ? resolveAddress(a.punchOut.address) : (punchOutTimeDisplay === "Ongoing" ? "No punch out location recorded" : "No punch out location recorded")}
+                      </Typography>
+                      {a.punchOut?.location && (
+                        <Typography variant="caption" sx={{ color: THEME.textMuted, fontSize: "0.72rem", display: "block", mt: 0.3 }}>
+                          {a.punchOut.location.lat?.toFixed(5)}, {a.punchOut.location.lng?.toFixed(5)}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Stack>
+                </Paper>
+              </Grid>
+            </Grid>
+
+            {/* ── Row 3: Record Metadata (RECORD ID, CREATED, LAST UPDATED) ── */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                borderRadius: "14px",
+                bgcolor: THEME.cardBg,
+                border: `1px solid ${THEME.cardBorder}`,
+              }}
+            >
+              <Stack spacing={1.2}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textMuted, letterSpacing: "0.06em" }}>
+                    RECORD ID
+                  </Typography>
+                  <Typography variant="body2" fontWeight={800} sx={{ color: "#fff", fontFamily: "monospace" }}>
+                    {(a._id || a.id || "—").slice(-10)}
+                  </Typography>
+                </Stack>
+                <Divider sx={{ borderColor: "rgba(255,255,255,0.05)" }} />
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textMuted, letterSpacing: "0.06em" }}>
+                    CREATED
+                  </Typography>
+                  <Typography variant="body2" fontWeight={700} sx={{ color: "#fff" }}>
+                    {fmtDateTime(a.createdAt || a.date)}
+                  </Typography>
+                </Stack>
+                <Divider sx={{ borderColor: "rgba(255,255,255,0.05)" }} />
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textMuted, letterSpacing: "0.06em" }}>
+                    LAST UPDATED
+                  </Typography>
+                  <Typography variant="body2" fontWeight={700} sx={{ color: "#fff" }}>
+                    {fmtDateTime(a.updatedAt || a.createdAt || a.date)}
+                  </Typography>
+                </Stack>
+              </Stack>
+            </Paper>
+
+            {/* ── Row 4: Edit Attendance Record Box (Images 3 & 4) ── */}
             {editMode && (
               <Paper
                 elevation={0}
-                sx={{ p: 2, borderRadius: 3, border: `1px solid ${alpha(WARNING, 0.25)}`, bgcolor: alpha(WARNING, 0.04) }}
+                sx={{
+                  p: 2.5,
+                  borderRadius: "16px",
+                  bgcolor: "rgba(16, 185, 129, 0.03)",
+                  border: "1px solid rgba(16, 185, 129, 0.35)",
+                  boxShadow: "0 8px 24px rgba(16, 185, 129, 0.08)",
+                }}
               >
-                <Typography variant="subtitle2" fontWeight={700} color={WARNING} sx={{ mb: 2 }}>
-                  Edit Attendance
-                </Typography>
-                <Stack spacing={2}>
+                {/* Header with green dot */}
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <FiberManualRecord sx={{ fontSize: 10, color: THEME.green }} />
+                  <Typography variant="subtitle1" fontWeight={800} sx={{ color: THEME.green, fontSize: "0.95rem" }}>
+                    Edit Attendance Record
+                  </Typography>
+                </Stack>
+
+                <Stack spacing={2.2}>
+                  {/* Status Dropdown (Image 4) */}
                   <FormControl fullWidth size="small">
-                    <InputLabel>Status</InputLabel>
+                    <InputLabel sx={{ color: THEME.green, "&.Mui-focused": { color: THEME.greenLight } }}>
+                      Status
+                    </InputLabel>
                     <Select
-                      value={editData.status}
-                      onChange={(e) => setEditData((p) => ({ ...p, status: e.target.value }))}
+                      value={formData.status}
+                      onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
                       label="Status"
-                      sx={{ borderRadius: 2 }}
+                      sx={{
+                        borderRadius: "10px",
+                        bgcolor: THEME.inputBg,
+                        color: "#fff",
+                        fontSize: "0.88rem",
+                        fontWeight: 700,
+                        "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(16, 185, 129, 0.4)" },
+                        "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: THEME.greenLight },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: THEME.green },
+                        "& .MuiSvgIcon-root": { color: "#fff" },
+                      }}
+                      MenuProps={{
+                        PaperProps: {
+                          sx: {
+                            bgcolor: "#0d1629",
+                            border: `1px solid ${THEME.cardBorder}`,
+                            color: "#fff",
+                            borderRadius: "12px",
+                            boxShadow: "0 12px 36px rgba(0,0,0,0.6)",
+                          },
+                        },
+                      }}
                     >
-                      {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-                        <MenuItem key={k} value={k}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Box sx={{ color: v.color }}>{v.icon}</Box>
-                            <span>{v.label}</span>
+                      {Object.entries(STATUS_CONFIG).map(([key, item]) => (
+                        <MenuItem
+                          key={key}
+                          value={key}
+                          sx={{
+                            py: 1.2,
+                            px: 2,
+                            "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
+                            "&.Mui-selected": { bgcolor: "rgba(16, 185, 129, 0.15)" },
+                          }}
+                        >
+                          <Stack direction="row" spacing={1.5} alignItems="center">
+                            {item.icon}
+                            <Typography variant="body2" fontWeight={700} sx={{ color: item.color }}>
+                              {item.label}
+                            </Typography>
                           </Stack>
                         </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
-                  <TextField
-                    size="small"
-                    label="Remarks"
-                    multiline
-                    rows={2}
-                    fullWidth
-                    value={editData.remarks}
-                    onChange={(e) => setEditData((p) => ({ ...p, remarks: e.target.value }))}
-                    inputProps={{ maxLength: 250 }}
-                    helperText={`${editData.remarks.length}/250`}
-                    FormHelperTextProps={{ sx: { textAlign: "right" } }}
-                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-                  />
-                </Stack>
-              </Paper>
-            )}
 
-            {/* Punch blocks */}
-            <Grid container spacing={1.5}>
-              <Grid item xs={12} sm={6}><PunchBlock type="in" data={a.punchIn} /></Grid>
-              <Grid item xs={12} sm={6}><PunchBlock type="out" data={a.punchOut} /></Grid>
-            </Grid>
+                  {/* 3 Inputs Grid: Punch In, Punch Out, Work Hours (Image 3) */}
+                  <Grid container spacing={1.5}>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Punch In Time"
+                        type="time"
+                        size="small"
+                        fullWidth
+                        value={formData.punchInTime}
+                        onChange={handlePunchInTimeChange}
+                        InputLabelProps={{ shrink: true, sx: { color: THEME.textSecondary } }}
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            bgcolor: THEME.inputBg,
+                            borderRadius: "10px",
+                            color: "#fff",
+                            "& fieldset": { borderColor: THEME.cardBorder },
+                            "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                          },
+                        }}
+                      />
+                    </Grid>
 
-            {/* Remarks */}
-            {a.remarks && !editMode && (
-              <Paper
-                elevation={0}
-                sx={{ p: 2, borderRadius: 2.5, bgcolor: alpha(PRIMARY, 0.04), border: `1px solid ${alpha(PRIMARY, 0.1)}` }}
-              >
-                <Typography variant="caption" color="text.secondary" fontWeight={600}
-                  sx={{ textTransform: "uppercase", fontSize: "0.65rem", letterSpacing: 0.5, display: "block", mb: 0.5 }}
-                >
-                  Remarks
-                </Typography>
-                <Typography variant="body2">{a.remarks}</Typography>
-              </Paper>
-            )}
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Punch Out Time"
+                        type="time"
+                        size="small"
+                        fullWidth
+                        value={formData.punchOutTime}
+                        onChange={handlePunchOutTimeChange}
+                        InputLabelProps={{ shrink: true, sx: { color: THEME.textSecondary } }}
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            bgcolor: THEME.inputBg,
+                            borderRadius: "10px",
+                            color: "#fff",
+                            "& fieldset": { borderColor: THEME.cardBorder },
+                            "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                          },
+                        }}
+                      />
+                    </Grid>
 
-            {/* Metadata */}
-            <Paper
-              elevation={0}
-              sx={{ p: 2, borderRadius: 2.5, bgcolor: alpha(PRIMARY, 0.025), border: `1px solid ${alpha(PRIMARY, 0.08)}` }}
-            >
-              <InfoRow label="Record ID" value={(a._id || a.id || "—").slice(-10)} />
-              <InfoRow label="Created" value={a.createdAt ? format(new Date(a.createdAt), "dd MMM yyyy, hh:mm a") : "—"} />
-              <InfoRow label="Last Updated" value={a.updatedAt ? format(new Date(a.updatedAt), "dd MMM yyyy, hh:mm a") : "—"} />
-            </Paper>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Work Hours"
+                        type="number"
+                        size="small"
+                        fullWidth
+                        value={formData.workHours}
+                        onChange={(e) => setFormData((p) => ({ ...p, workHours: e.target.value }))}
+                        InputLabelProps={{ shrink: true, sx: { color: THEME.textSecondary } }}
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            bgcolor: THEME.inputBg,
+                            borderRadius: "10px",
+                            color: "#fff",
+                            "& fieldset": { borderColor: THEME.cardBorder },
+                            "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                          },
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
 
-            {/* Photos */}
-            {photos.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
-                  Photos ({photos.length})
-                </Typography>
-                <Stack direction="row" spacing={1.5} sx={{ overflowX: "auto", pb: 0.5 }}>
-                  {photos.map((p, i) => (
-                    <Box
-                      key={i}
-                      onClick={() => { setSelPhoto(p); setPhotoOpen(true); }}
+                  {/* Remarks Textarea (Image 3) */}
+                  <Box>
+                    <TextField
+                      placeholder="Remarks"
+                      label="Remarks"
+                      multiline
+                      rows={3}
+                      fullWidth
+                      value={formData.remarks}
+                      onChange={(e) => setFormData((p) => ({ ...p, remarks: e.target.value }))}
+                      inputProps={{ maxLength: 250 }}
+                      InputLabelProps={{ shrink: true, sx: { color: THEME.textSecondary } }}
                       sx={{
-                        width: 80, height: 80, borderRadius: 2, overflow: "hidden",
-                        border: `2px solid ${alpha(PRIMARY, 0.2)}`, flexShrink: 0, cursor: "pointer",
-                        transition: "transform .2s",
-                        "&:hover": { transform: "scale(1.06)", borderColor: PRIMARY },
+                        "& .MuiOutlinedInput-root": {
+                          bgcolor: THEME.inputBg,
+                          borderRadius: "10px",
+                          color: "#fff",
+                          "& fieldset": { borderColor: THEME.cardBorder },
+                          "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                        },
                       }}
-                    >
-                      <img src={toBackendAssetUrl(p?.url || p?.path || p?.filename)} alt={`photo-${i}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    </Box>
-                  ))}
+                    />
+                    <Typography variant="caption" sx={{ color: THEME.textMuted, display: "block", textAlign: "right", mt: 0.5 }}>
+                      {formData.remarks.length}/250
+                    </Typography>
+                  </Box>
                 </Stack>
-              </Box>
+              </Paper>
             )}
           </Stack>
         </DialogContent>
 
-        {/* ─── Actions (Export always shown; Edit/Delete conditional) ─────── */}
+        {/* Footer Actions (Image 2 & Image 4) */}
         <DialogActions
           sx={{
             px: { xs: 2, sm: 3 },
-            py: { xs: 2, sm: 2 },
-            borderTop: `1px solid ${alpha(PRIMARY, 0.08)}`,
-            flexWrap: "wrap",
-            gap: 1,
+            py: 2,
+            borderTop: `1px solid ${THEME.cardBorder}`,
+            bgcolor: "rgba(255,255,255,0.02)",
+            display: "flex",
             justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1.5,
           }}
         >
+          {/* Left: Export & Close (Always visible or in view mode) */}
+          <Stack direction="row" spacing={1.2}>
+            <ActionExportMenu attendance={a} onSnack={showSnack} />
+            <Button
+              variant="outlined"
+              onClick={handleClose}
+              sx={{
+                borderRadius: "10px",
+                borderColor: THEME.cardBorder,
+                bgcolor: "rgba(255,255,255,0.04)",
+                color: THEME.textPrimary,
+                fontWeight: 700,
+                fontSize: "0.82rem",
+                textTransform: "none",
+                px: 2,
+                "&:hover": { bgcolor: "rgba(255,255,255,0.08)" },
+              }}
+            >
+              Close
+            </Button>
+          </Stack>
+
+          {/* Right: Actions based on editMode */}
           {editMode ? (
-            /* ── Edit mode actions ── */
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: "100%" }}>
+            <Stack direction="row" spacing={1.2}>
+              {/* Cancel Button (Image 4) */}
               <Button
-                fullWidth={isMobile}
                 variant="outlined"
-                startIcon={<Cancel />}
+                startIcon={<Close sx={{ fontSize: 16 }} />}
                 onClick={() => setEditMode(false)}
                 disabled={editLoad}
-                sx={{ borderRadius: 2, borderColor: alpha(PRIMARY, 0.3), color: PRIMARY }}
+                sx={{
+                  borderRadius: "10px",
+                  borderColor: THEME.cardBorder,
+                  bgcolor: "rgba(255,255,255,0.04)",
+                  color: THEME.textPrimary,
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  textTransform: "none",
+                  px: 2,
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.08)" },
+                }}
               >
                 Cancel
               </Button>
+
+              {/* Save Changes Button (Image 4) */}
               <Button
-                fullWidth={isMobile}
                 variant="contained"
-                startIcon={editLoad ? <CircularProgress size={16} color="inherit" /> : <Save />}
+                startIcon={editLoad ? <CircularProgress size={16} color="inherit" /> : <Save sx={{ fontSize: 16 }} />}
                 onClick={handleEditSave}
                 disabled={editLoad}
-                sx={{ borderRadius: 2, bgcolor: PRIMARY, "&:hover": { bgcolor: SECONDARY } }}
+                sx={{
+                  borderRadius: "10px",
+                  bgcolor: THEME.blue,
+                  color: "#fff",
+                  fontWeight: 800,
+                  fontSize: "0.82rem",
+                  textTransform: "none",
+                  px: 2.5,
+                  boxShadow: "0 4px 14px rgba(37, 99, 235, 0.4)",
+                  "&:hover": { bgcolor: "#1d4ed8" },
+                }}
               >
-                {editLoad ? "Saving…" : "Save Changes"}
+                {editLoad ? "Saving..." : "Save Changes"}
               </Button>
             </Stack>
           ) : (
-            <>
-              {/* Left group: Export + Close */}
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                {/* Export button with dropdown — always visible */}
-                <ActionExportMenu attendance={a} onSnack={showSnack} />
+            <Stack direction="row" spacing={1.2}>
+              {/* Edit Button (Image 2: amber outline, yellow icon/text) */}
+              {canEdit && (
                 <Button
                   variant="outlined"
-                  onClick={handleClose}
-                  sx={{ borderRadius: 2, borderColor: alpha(PRIMARY, 0.3), color: PRIMARY }}
+                  startIcon={<Edit sx={{ fontSize: 16, color: "#fbbf24" }} />}
+                  onClick={() => setEditMode(true)}
+                  sx={{
+                    borderRadius: "10px",
+                    borderColor: "rgba(245, 158, 11, 0.5)",
+                    bgcolor: "rgba(245, 158, 11, 0.08)",
+                    color: "#fbbf24",
+                    fontWeight: 800,
+                    fontSize: "0.82rem",
+                    textTransform: "none",
+                    px: 2.2,
+                    boxShadow: "0 2px 8px rgba(245, 158, 11, 0.15)",
+                    "&:hover": {
+                      bgcolor: "rgba(245, 158, 11, 0.18)",
+                      borderColor: "#fbbf24",
+                    },
+                  }}
                 >
-                  Close
+                  Edit
                 </Button>
-              </Stack>
+              )}
 
-              {/* Right group: Edit + Delete */}
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                {canEdit && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<Edit />}
-                    onClick={handleEditStart}
-                    sx={{
-                      borderRadius: 2, borderColor: WARNING, color: WARNING,
-                      "&:hover": { bgcolor: alpha(WARNING, 0.06) },
-                    }}
-                  >
-                    Edit
-                  </Button>
-                )}
-                {canDelete && (
-                  <Button
-                    variant="contained"
-                    color="error"
-                    startIcon={<Delete />}
-                    onClick={handleDelete}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    Delete
-                  </Button>
-                )}
-              </Stack>
-            </>
+              {/* Delete Button (Image 2: red background) */}
+              {canDelete && (
+                <Button
+                  variant="contained"
+                  startIcon={<Delete sx={{ fontSize: 16 }} />}
+                  onClick={handleDelete}
+                  sx={{
+                    borderRadius: "10px",
+                    bgcolor: THEME.red,
+                    color: "#fff",
+                    fontWeight: 800,
+                    fontSize: "0.82rem",
+                    textTransform: "none",
+                    px: 2,
+                    boxShadow: "0 4px 14px rgba(239, 68, 68, 0.25)",
+                    "&:hover": { bgcolor: "#dc2626" },
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
+            </Stack>
           )}
         </DialogActions>
       </Dialog>
 
-      {/* Photo lightbox */}
-      <Dialog
-        open={photoOpen}
-        onClose={() => setPhotoOpen(false)}
-        maxWidth="lg"
-        fullScreen={isMobile}
-        PaperProps={{ sx: { borderRadius: isMobile ? 0 : 3, bgcolor: "#000" } }}
-      >
-        <IconButton
-          onClick={() => setPhotoOpen(false)}
-          sx={{ position: "absolute", top: 8, right: 8, bgcolor: "rgba(0,0,0,.5)", color: "#fff", zIndex: 10 }}
-        >
-          <Close />
-        </IconButton>
-        {selPhoto?.url && (
-          <img src={selPhoto.url} alt="attendance" style={{ width: "100%", maxHeight: "92vh", objectFit: "contain" }} />
-        )}
-      </Dialog>
-
-      {/* Snackbar */}
+      {/* Snackbar alerts */}
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={3000}
+        autoHideDuration={3500}
         onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: isMobile ? "top" : "bottom", horizontal: isMobile ? "center" : "right" }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
-        <Alert severity={snackbar.severity} variant="filled" sx={{ borderRadius: 2, color: "#fff", fontWeight: 600 }}>
+        <Alert
+          severity={snackbar.severity}
+          variant="filled"
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          sx={{ borderRadius: "10px", fontWeight: 700 }}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>
-      {/* ✅ Missed punch-out alert */}
-{attendance?.missedPunchOut && (
-  <Alert
-    severity="warning"
-    sx={{ borderRadius: 2, mb: 2, fontWeight: 600 }}
-  >
-    {attendance.punchOutMessage || "User did not punch out this day"}
-    {attendance.punchOut?.isAutoPunchOut &&
-      " — System auto punched out after 12 hours."}
-  </Alert>
-)}
     </>
   );
 }

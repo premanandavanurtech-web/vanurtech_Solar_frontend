@@ -105,6 +105,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { toast } from "../components/useToast.jsx";
 import axiosInstance from "../utils/axiosConfig";
 import SalarySlipModal from "../components/SalarySlipDocument";
+import AttendanceDetails from "./AttendanceDetails";
 
 // ─── Global Animation Keyframes Styles ────────────────────────────────
 const GlobalAnimationStyles = () => (
@@ -1030,6 +1031,16 @@ const UserDetailsPage = () => {
     ? new Date(user.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
     : "—";
 
+  const copyToClipboard = (text, label = "Item") => {
+    if (!text || text === "—") return;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard!`);
+    } else {
+      toast.info(text);
+    }
+  };
+
   const managerName = useMemo(() => {
     if (user?.supervisor) {
       if (typeof user.supervisor === "object") {
@@ -1224,6 +1235,36 @@ const UserDetailsPage = () => {
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceFilterStatus, setAttendanceFilterStatus] = useState("ALL");
   const [holidaysList, setHolidaysList] = useState([]);
+  const [attendanceRefreshTrigger, setAttendanceRefreshTrigger] = useState(0);
+  const [attendanceDetailsOpen, setAttendanceDetailsOpen] = useState(false);
+  const [selectedAttendanceRecord, setSelectedAttendanceRecord] = useState(null);
+
+  const handleAttendanceRowClick = useCallback((row) => {
+    if (!row) return;
+    const targetUserObj = user || {};
+    let att = null;
+    if (row.raw) {
+      att = {
+        ...row.raw,
+        user: (row.raw.user && typeof row.raw.user === "object") ? { ...targetUserObj, ...row.raw.user } : targetUserObj,
+      };
+    } else {
+      att = {
+        _id: "record_" + (row.dateKey || row.date),
+        date: row.dateKey || row.rawDate || row.date,
+        status: String(row.status || "absent").toLowerCase(),
+        workHours: row.hours || 0,
+        workHoursFormatted: row.hours || "00:00",
+        punchIn: row.checkIn && row.checkIn !== "—" ? { time: `${row.dateKey}T09:00:00` } : null,
+        punchOut: row.checkOut && row.checkOut !== "—" && row.checkOut !== "Ongoing" ? { time: `${row.dateKey}T18:00:00` } : null,
+        user: targetUserObj,
+        createdAt: row.dateKey || row.rawDate,
+        updatedAt: row.dateKey || row.rawDate,
+      };
+    }
+    setSelectedAttendanceRecord(att);
+    setAttendanceDetailsOpen(true);
+  }, [user]);
 
   // Fetch real attendance records for the selected month and user
   useEffect(() => {
@@ -1249,12 +1290,21 @@ const UserDetailsPage = () => {
             },
           }),
           axiosInstance.get("/attendance/holidays", {
-            params: { year },
+            params: {
+              startDate: `${year}-01-01`,
+              endDate: `${year}-12-31`,
+              limit: 500,
+            },
           }),
         ]);
 
         if (attRes.status === "fulfilled" && attRes.value?.data?.success) {
-          const list = attRes.value.data.result?.attendances || attRes.value.data.data || [];
+          const resObj = attRes.value.data.result || attRes.value.data.data;
+          const list = Array.isArray(resObj)
+            ? resObj
+            : Array.isArray(resObj?.attendances)
+            ? resObj.attendances
+            : [];
           setAttendanceRecords(list);
         } else if (attRes.status === "fulfilled" && Array.isArray(attRes.value?.data)) {
           setAttendanceRecords(attRes.value.data);
@@ -1263,19 +1313,29 @@ const UserDetailsPage = () => {
         }
 
         if (holRes.status === "fulfilled" && holRes.value?.data?.success) {
-          const hList = holRes.value.data.result || holRes.value.data.data || [];
+          const resObj = holRes.value.data.result || holRes.value.data.data;
+          const hList = Array.isArray(resObj)
+            ? resObj
+            : Array.isArray(resObj?.holidays)
+            ? resObj.holidays
+            : [];
           setHolidaysList(hList);
+        } else if (holRes.status === "fulfilled" && Array.isArray(holRes.value?.data)) {
+          setHolidaysList(holRes.value.data);
+        } else {
+          setHolidaysList([]);
         }
       } catch (err) {
         console.warn("Attendance fetch error:", err);
         setAttendanceRecords([]);
+        setHolidaysList([]);
       } finally {
         setAttendanceLoading(false);
       }
     };
 
     fetchUserAttendance();
-  }, [userId, selectedAttendanceMonth]);
+  }, [userId, selectedAttendanceMonth, attendanceRefreshTrigger]);
 
   // Calculate dynamic Attendance Calendar & Statistics for the selected month
   const attendanceStats = useMemo(() => {
@@ -1291,9 +1351,10 @@ const UserDetailsPage = () => {
     let totalWorkHoursSum = 0;
     let lateArrivalsCount = 0;
 
-    attendanceRecords.forEach((rec) => {
-      const recDate = rec.date ? new Date(rec.date) : (rec.punchIn?.time ? new Date(rec.punchIn.time) : null);
-      if (recDate) {
+    const safeAttendance = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+    safeAttendance.forEach((rec) => {
+      const recDate = rec?.date ? new Date(rec.date) : (rec?.punchIn?.time ? new Date(rec.punchIn.time) : null);
+      if (recDate && !isNaN(recDate.getTime())) {
         const key = `${recDate.getFullYear()}-${String(recDate.getMonth() + 1).padStart(2, "0")}-${String(recDate.getDate()).padStart(2, "0")}`;
         recordMap[key] = rec;
 
@@ -1307,11 +1368,14 @@ const UserDetailsPage = () => {
     });
 
     const holidayMap = {};
-    holidaysList.forEach((h) => {
-      if (h.date) {
+    const safeHolidays = Array.isArray(holidaysList) ? holidaysList : [];
+    safeHolidays.forEach((h) => {
+      if (h?.date) {
         const d = new Date(h.date);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        holidayMap[key] = h.name || h.title || "Holiday";
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          holidayMap[key] = h.reason || h.name || h.title || "Holiday";
+        }
       }
     });
 
@@ -1401,6 +1465,8 @@ const UserDetailsPage = () => {
           checkIn: checkInStr,
           checkOut: checkOutStr,
           hours: hoursStr,
+          raw: rec,
+          dateKey: `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`,
         });
       }
     }
@@ -2980,7 +3046,16 @@ const UserDetailsPage = () => {
                           attendanceStats.logEntries.slice(0, 10).map((row, idx) => {
                             const style = getStatusBadge(row.status);
                             return (
-                              <TableRow key={idx} sx={{ "& td": { borderColor: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc", py: 0.85, px: 1, fontSize: "0.72rem", whiteSpace: "nowrap" } }}>
+                              <TableRow
+                                key={idx}
+                                onClick={() => handleAttendanceRowClick(row)}
+                                sx={{
+                                  "& td": { borderColor: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc", py: 0.85, px: 1, fontSize: "0.72rem", whiteSpace: "nowrap" },
+                                  cursor: "pointer",
+                                  transition: "background-color 0.15s ease",
+                                  "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)" },
+                                }}
+                              >
                                 <TableCell>
                                   <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: isDark ? "#f8fafc" : "#0f172a", lineHeight: 1.1 }}>
                                     {row.date}
@@ -3022,6 +3097,17 @@ const UserDetailsPage = () => {
                   </TableContainer>
                 </Box>
               </Paper>
+
+              {/* Attendance Details Modal */}
+              <AttendanceDetails
+                open={attendanceDetailsOpen}
+                onClose={() => setAttendanceDetailsOpen(false)}
+                attendance={selectedAttendanceRecord}
+                canEdit={true}
+                canDelete={true}
+                onEdit={() => setAttendanceRefreshTrigger((prev) => prev + 1)}
+                onDelete={() => setAttendanceRefreshTrigger((prev) => prev + 1)}
+              />
             </Grid>
 
             {/* 3. Right: Attendance Summary + Hours Subcards */}
@@ -4811,7 +4897,7 @@ const UserDetailsPage = () => {
           ...previewSlip,
           name: userName,
           empId: userEmpId,
-          designation: userRole,
+          designation: displayRole || user?.role || "Employee",
           joiningDate: joinDate,
           department: "Solar Operations",
         } : null}

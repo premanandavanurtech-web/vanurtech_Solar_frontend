@@ -39,10 +39,12 @@ import {
 } from "@mui/icons-material";
 import {
   deleteQuotation,
+  fetchQuotationsFromServer,
   loadQuotationLibrary,
   setCurrentQuotation,
   updateQuotationStatus,
 } from "../utils/quotationStorage";
+import { useAuth } from "../contexts/AuthContext";
 
 const BLUE = "#2563eb";
 const BLUE_LIGHT = "#60a5fa";
@@ -335,7 +337,10 @@ export default function AllQuotes() {
   const TEXT_SUB = isDark ? "#94a3b8" : "#5c6b85";
   const TEXT_MUTED = isDark ? "#64748b" : "#91a0b8";
 
-  const [quotations, setQuotations] = useState([]);
+  const [quotations, setQuotations] = useState(() => {
+    const cached = loadQuotationLibrary();
+    return Array.isArray(cached) && cached.length > 0 ? cached : [];
+  });
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [menuAnchor, setMenuAnchor] = useState(null);
@@ -343,17 +348,51 @@ export default function AllQuotes() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  useEffect(() => {
-    const loaded = loadQuotationLibrary();
-    if (Array.isArray(loaded) && loaded.length > 0) {
-      setQuotations(loaded);
-    } else {
-      setQuotations(DEFAULT_SAMPLE_QUOTES);
+  const { user, getUserRole } = useAuth();
+  const userRole = getUserRole ? getUserRole() : user?.role;
+  const isAdmin = ["admin", "admin_panel", "head_office", "super_admin"].includes(
+    String(userRole || "").toLowerCase()
+  );
+
+  const loadQuotes = useCallback(() => {
+    // 1. Immediately read local library
+    const cached = loadQuotationLibrary();
+    if (Array.isArray(cached) && cached.length > 0) {
+      setQuotations(cached);
     }
+
+    // 2. Fetch server quotations to ensure full sync
+    fetchQuotationsFromServer()
+      .then((serverQuotes) => {
+        if (Array.isArray(serverQuotes)) {
+          setQuotations(serverQuotes);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch server quotations:", err);
+      });
   }, []);
 
+  useEffect(() => {
+    loadQuotes();
+    window.addEventListener("focus", loadQuotes);
+    return () => window.removeEventListener("focus", loadQuotes);
+  }, [loadQuotes]);
+
+  const currentUserId = user?._id || user?.id;
+
+  const visibleQuotations = useMemo(() => {
+    if (isAdmin) return quotations;
+    if (!currentUserId) return quotations;
+    return quotations.filter((q) => {
+      const creatorId = q.createdBy?._id || q.createdBy?.id || q.createdBy;
+      if (!creatorId) return true;
+      return String(creatorId) === String(currentUserId);
+    });
+  }, [quotations, isAdmin, currentUserId]);
+
   const formattedQuotations = useMemo(() => {
-    return quotations.map((quotation) => {
+    return visibleQuotations.map((quotation) => {
       const resolvedStatus = getResolvedStatus(quotation);
       const validityEnd = getValidityEndDate(quotation);
       const totalValue = getQuoteValue(quotation);
@@ -368,7 +407,7 @@ export default function AllQuotes() {
         customerLocation: getCustomerLocation(quotation),
       };
     });
-  }, [quotations]);
+  }, [visibleQuotations]);
 
   const pipelineCounts = useMemo(() => {
     const counts = {
@@ -470,9 +509,11 @@ export default function AllQuotes() {
   const handlePreview = useCallback((quotation) => {
     if (!quotation) return;
     setCurrentQuotation(quotation);
-    navigate(`/quotation?quoteId=${quotation.id}`, {
+    const targetId = quotation.id || quotation._id || quotation.quotationNumber;
+    navigate(`/quotation?quoteId=${encodeURIComponent(targetId)}`, {
       state: {
-        quotationId: quotation.id,
+        quotationId: targetId,
+        quotationData: quotation,
         quotationUpdatedAt: quotation.savedAt,
       },
     });
@@ -496,11 +537,22 @@ export default function AllQuotes() {
     setActiveQuote(null);
   }, []);
 
-  const handleDelete = useCallback((quotationId) => {
+  const handleDelete = useCallback(async (quotationId) => {
     if (!window.confirm("Delete this quotation?")) return;
-    setQuotations(deleteQuotation(quotationId));
-    setMenuAnchor(null);
-    setActiveQuote(null);
+    try {
+      const updated = await deleteQuotation(quotationId);
+      setQuotations(updated);
+      setMenuAnchor(null);
+      setActiveQuote(null);
+      try {
+        const fresh = await fetchQuotationsFromServer();
+        if (Array.isArray(fresh)) {
+          setQuotations(fresh);
+        }
+      } catch {}
+    } catch (err) {
+      console.warn("Failed to delete quotation:", err);
+    }
   }, []);
 
   const handleExport = useCallback(() => {
@@ -872,6 +924,11 @@ export default function AllQuotes() {
                             <Typography sx={{ fontSize: "0.85rem", fontWeight: 800, color: TEXT }}>
                               {quotation.quotationNumber || "Quote"}
                             </Typography>
+                            {isAdmin && quotation.createdBy && (
+                              <Typography sx={{ fontSize: "0.68rem", color: TEXT_MUTED, mt: 0.2 }}>
+                                Created by: {quotation.createdBy?.firstName ? `${quotation.createdBy.firstName} ${quotation.createdBy.lastName || ""}` : (quotation.createdBy?.role || "Staff")}
+                              </Typography>
+                            )}
                             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.35 }}>
                               <Typography
                                 sx={{
@@ -1118,10 +1175,12 @@ export default function AllQuotes() {
           <OpenInNew sx={{ fontSize: 16, mr: 1, color: isDark ? "#60a5fa" : BLUE }} />
           Open quote
         </MenuItem>
-        <MenuItem onClick={() => handleEdit(activeQuote)}>
-          <EditOutlined sx={{ fontSize: 16, mr: 1, color: isDark ? "#60a5fa" : BLUE }} />
-          Edit quote
-        </MenuItem>
+        {(isAdmin || String(activeQuote?.createdBy?._id || activeQuote?.createdBy) === String(user?._id)) && (
+          <MenuItem onClick={() => handleEdit(activeQuote)}>
+            <EditOutlined sx={{ fontSize: 16, mr: 1, color: isDark ? "#60a5fa" : BLUE }} />
+            Edit quote
+          </MenuItem>
+        )}
         <MenuItem onClick={() => handleStatusChange(activeQuote?.id, "sent")}>
           <SendOutlined sx={{ fontSize: 16, mr: 1, color: CYAN }} />
           Mark sent
@@ -1130,10 +1189,12 @@ export default function AllQuotes() {
           <CheckCircleOutline sx={{ fontSize: 16, mr: 1, color: GREEN }} />
           Mark accepted
         </MenuItem>
-        <MenuItem onClick={() => handleDelete(activeQuote?.id)} sx={{ color: RED }}>
-          <DeleteOutline sx={{ fontSize: 16, mr: 1 }} />
-          Delete
-        </MenuItem>
+        {(isAdmin || String(activeQuote?.createdBy?._id || activeQuote?.createdBy) === String(user?._id)) && (
+          <MenuItem onClick={() => handleDelete(activeQuote?.id)} sx={{ color: RED }}>
+            <DeleteOutline sx={{ fontSize: 16, mr: 1 }} />
+            Delete
+          </MenuItem>
+        )}
       </Menu>
     </Box>
   );
