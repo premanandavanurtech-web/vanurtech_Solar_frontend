@@ -37,6 +37,7 @@ import {
   useTheme,
 } from "@mui/material";
 import {
+  Add,
   AssignmentTurnedIn,
   Bolt,
   Build,
@@ -64,6 +65,16 @@ import {
   ViewKanban,
   Visibility,
   Workspaces,
+  EmailOutlined,
+  ReceiptLongOutlined,
+  PaidOutlined,
+  FactCheckOutlined,
+  SpeedOutlined,
+  AccountBalanceOutlined,
+  PriceCheckOutlined,
+  VerifiedOutlined,
+  RedeemOutlined,
+  MonetizationOnOutlined,
 } from "@mui/icons-material";
 import { format, isThisWeek, parseISO } from "date-fns";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -84,13 +95,25 @@ const BORDER   = "#e4eaf5";
 
 // ── Stage config (now with icons) ───────────────────────────────
 const PROJECT_STAGES = [
-  { key: "lead_converted", label: "Lead Converted", color: EMERALD,   icon: Workspaces },
-  { key: "registration",   label: "Registration",   color: "#8b5cf6", icon: FactCheck },
-  { key: "document",       label: "Document",       color: "#06b6d4", icon: DescriptionOutlined },
-  { key: "payment",        label: "Payment",        color: "#6366f1", icon: Receipt },
-  { key: "loan_pending",   label: "Loan Pending",   color: AMBER,     icon: CalendarMonth },
-  { key: "installation",   label: "Installation",   color: "#0ea5e9", icon: Bolt },
-  { key: "disbursement",   label: "Disbursement",   color: "#f97316", icon: TrendingUp },
+  { key: "lead_converted",        label: "Lead Converted",          color: EMERALD,   icon: Workspaces },
+  { key: "registration",          label: "DISCOM Registration",     color: "#8b5cf6", icon: FactCheck },
+  { key: "document",              label: "Document",                color: "#06b6d4", icon: DescriptionOutlined },
+  { key: "payment",               label: "Payment",                 color: "#6366f1", icon: Receipt },
+  { key: "loan_pending",          label: "Loan Pending",            color: AMBER,     icon: CalendarMonth },
+  { key: "disbursement",          label: "Phase 1 Disbursement",    color: "#f97316", icon: TrendingUp },
+  { key: "installation",          label: "Installation",            color: "#0ea5e9", icon: Bolt },
+  { key: "dcr_generation",        label: "DCR Generation",          color: "#14b8a6", icon: TaskAlt },
+  { key: "notification_email",    label: "Notification Email",      color: "#3b82f6", icon: EmailOutlined },
+  { key: "demand_note",           label: "Demand Note",             color: "#8b5cf6", icon: ReceiptLongOutlined },
+  { key: "demand_note_payment",   label: "Demand Note Payment",     color: "#10b981", icon: PaidOutlined },
+  { key: "inspection",            label: "Inspection",              color: "#ec4899", icon: FactCheckOutlined },
+  { key: "meter_installation",    label: "Meter Installation",      color: "#0284c7", icon: SpeedOutlined },
+  { key: "phase2_disbursement",   label: "Phase 2 Disbursement",    color: "#f59e0b", icon: AccountBalanceOutlined },
+  { key: "final_payment",         label: "Final Payment",           color: "#6366f1", icon: PriceCheckOutlined },
+  { key: "project_commissioning",  label: "Project Commissioning",   color: "#10b981", icon: VerifiedOutlined },
+  { key: "discom_approval",       label: "DISCOM Approval",         color: "#059669", icon: TaskAlt },
+  { key: "subsidy_redeemed",      label: "Subsidy Redeemed",        color: "#f97316", icon: RedeemOutlined },
+  { key: "subsidy_received",      label: "Subsidy Received",        color: "#059669", icon: MonetizationOnOutlined },
 ];
 
 const PROJECT_PIPELINE_STAGES = [
@@ -113,8 +136,21 @@ const NEXT_ACTIONS = {
   document:     "Document review or submission in progress",
   payment:      "Payment process started",
   loan_pending: "Loan approval or pending bank action",
+  disbursement: "Phase 1 disbursement stage active",
   installation: "Installation work is in progress",
-  disbursement: "Disbursement stage is active",
+  dcr_generation: "DCR generation & module verification",
+  notification_email: "Send notification email to DISCOM",
+  demand_note: "Demand note generation & verification",
+  demand_note_payment: "Demand note payment clearance",
+  inspection: "Site inspection by RESCO / DISCOM",
+  meter_installation: "Net meter installation & testing",
+  phase2_disbursement: "Phase 2 loan / grant disbursement",
+  final_payment: "Final customer settlement & payment",
+  project_commissioning: "Plant commissioning & synchronization",
+  discom_approval: "Final DISCOM approval certificate",
+  subsidy_redeemed: "Subsidy redemption process",
+  subsidy_received: "Subsidy credited to consumer",
+  ready_handover: "Project completed — Customer handover done",
 };
 
 const PROJECT_STAGE_ROUTES = {
@@ -123,8 +159,21 @@ const PROJECT_STAGE_ROUTES = {
   document: "/document-submission",
   payment: "/bank-loan-apply",
   loan_pending: "/bank-at-pending",
-  installation: "/installation-completion",
   disbursement: "/disbursement",
+  installation: "/installation-completion",
+  dcr_generation: "/projects",
+  notification_email: "/projects",
+  demand_note: "/projects",
+  demand_note_payment: "/projects",
+  inspection: "/projects",
+  meter_installation: "/projects",
+  phase2_disbursement: "/projects",
+  final_payment: "/projects",
+  project_commissioning: "/projects",
+  discom_approval: "/projects",
+  subsidy_redeemed: "/projects",
+  subsidy_received: "/projects",
+  ready_handover: "/projects",
 };
 
 const AMOUNT_RANGES = [
@@ -154,7 +203,152 @@ const formatDate = (value, pattern = "dd MMM yyyy") => {
   } catch { return "Not set"; }
 };
 
-const getProjectAmount = (p) => Number(p.disbursementAmount || p.loanAmount || 0);
+const getProjectAmount = (p) => {
+  if (!p) return 0;
+  return Number(
+    p.projectSaleValue ||
+    p.finalPaymentCost ||
+    p.totalProjectCost ||
+    p.agreedPrice ||
+    p.totalAmount ||
+    p.projectValue ||
+    p.quotationAmount ||
+    p.loanAmount ||
+    p.disbursementAmount ||
+    p.paymentAmount ||
+    0
+  );
+};
+
+const getProjectDueAmount = (p) => {
+  if (!p) return 0;
+  // If due payment is cleared or project is in handover / subsidy received stages
+  if (
+    p.duePaymentCleared === "Yes" ||
+    p.pipelineStage === "ready_handover" ||
+    p.currentStage === "ready_handover" ||
+    p.currentStage === "subsidy_received" ||
+    p.status === "Handover" ||
+    p.status === "ready_handover" ||
+    p.status === "Subsidy Received"
+  ) {
+    return 0;
+  }
+
+  if (p.finalPaymentDue !== null && p.finalPaymentDue !== undefined && p.finalPaymentDue !== "") {
+    return Math.max(0, Number(p.finalPaymentDue));
+  }
+  if (p.dueAmount !== null && p.dueAmount !== undefined && p.dueAmount !== "") {
+    return Math.max(0, Number(p.dueAmount));
+  }
+
+  const total = getProjectAmount(p);
+  if (total <= 0) return 0;
+
+  // Calculate sum of payments recorded
+  const p1 = Number(p.paymentAmount || 0);
+  const p2 = (p.disbursementStatus === "completed" || p.disbursementDate) ? Number(p.disbursementAmount || 0) : 0;
+  const p3 = (p.demandNotePaymentPaid === "Yes" || p.demandNotePaymentDate) ? Number(p.demandNotePaymentAmount || 0) : 0;
+  const p4 = (p.phase2DisbursementPaid === "Yes" || p.phase2DisbursementDate) ? Number(p.phase2DisbursementAmount || 0) : 0;
+  const calculatedReceived = p1 + p2 + p3 + p4;
+
+  const totalReceived = Number(p.totalPaymentReceived || p.finalPaymentTotalReceived || 0);
+  const received = totalReceived > 0 ? totalReceived : calculatedReceived;
+
+  return Math.max(0, total - received);
+};
+
+const getDynamicNextAction = (project, stageKey) => {
+  if (project?.nextAction && String(project.nextAction).trim()) return project.nextAction;
+  if (project?.nextFollowUpAction && String(project.nextFollowUpAction).trim()) return project.nextFollowUpAction;
+  if (project?.nextFollowUpNote && String(project.nextFollowUpNote).trim()) return project.nextFollowUpNote;
+
+  const resolvedStage = stageKey || normalizeProjectStage(project);
+
+  switch (resolvedStage) {
+    case "lead_converted":
+      return "Complete consumer portal registration";
+    case "registration":
+      if (project?.registrationStatus === "completed" || project?.consumerAccountNo) {
+        return "Upload Aadhaar, PAN & electricity documents";
+      }
+      return "Registration completed or in progress";
+    case "document":
+      if (project?.documentStatus === "submitted" || project?.documentStatus === "approved") {
+        return "Proceed to Bank Loan / Advance Payment";
+      }
+      return "Document review or submission in progress";
+    case "payment":
+      if (project?.paymentType === "Cash" || project?.paymentStatus === "completed") {
+        return "Advance payment received — Schedule installation";
+      }
+      if (project?.loanStatus === "approved") {
+        return "Bank loan approved — Await sanction letter";
+      }
+      return "Payment process started";
+    case "loan_pending":
+      if (project?.bankAtPendingStatus === "approved") {
+        return "Bank sanctioned — Issue material & start installation";
+      }
+      return "Loan approval or pending bank action";
+    case "installation":
+      if (project?.installationStatus === "installation_completed") {
+        return "Net meter installation & DISCOM commissioning";
+      }
+      if (project?.installationStatus === "sent_for_jee_verification" || project?.installationStatus === "jee_verified") {
+        return "Awaiting JEE site verification & inspection";
+      }
+      if (project?.installationStatus === "meter_charge") {
+        return "Pay DISCOM meter charges";
+      }
+      return "Installation work is in progress";
+    case "disbursement":
+      if (project?.disbursementStatus === "completed") {
+        return "Phase 1 disbursement received — Ready for execution";
+      }
+      return "Phase 1 disbursement in progress";
+    case "installation":
+      if (project?.installationStatus === "installation_completed") {
+        return "Installation completed — Proceed to DCR";
+      }
+      if (project?.installationStatus === "sent_for_jee_verification" || project?.installationStatus === "jee_verified") {
+        return "Awaiting JEE site verification & inspection";
+      }
+      if (project?.installationStatus === "meter_charge") {
+        return "Pay DISCOM meter charges";
+      }
+      return "Installation work is in progress";
+    case "dcr_generation":
+      return "Generate DCR certificate & upload serial numbers";
+    case "notification_email":
+      return "Submit notification email with work completion details";
+    case "demand_note":
+      return "Generate & verify DISCOM demand note";
+    case "demand_note_payment":
+      return "Process demand note fee payment";
+    case "inspection":
+      return "Schedule and complete technical site inspection";
+    case "meter_installation":
+      return "Install bidirectional / net solar meter";
+    case "phase2_disbursement":
+      return "Claim and process Phase 2 loan disbursement";
+    case "final_payment":
+      return "Collect remaining customer dues & settle final payment";
+    case "project_commissioning":
+      return "Commission the solar plant and energize system";
+    case "discom_approval":
+      return "Obtain official DISCOM commissioning report";
+    case "subsidy_redeemed":
+      return "Submit subsidy redemption on national portal";
+    case "subsidy_received":
+      return "Subsidy disbursed & credited to customer account";
+    case "ready_handover":
+    case "handover":
+      return "Project completed — Customer handover done";
+    default:
+      return NEXT_ACTIONS[resolvedStage] || "Review and proceed to next project task";
+  }
+};
 
 const getStageMeta = (key) => PROJECT_STAGES.find((s) => s.key === key) || PROJECT_STAGES[0];
 const getPipelineStageMeta = (key) => PROJECT_PIPELINE_STAGES.find((s) => s.key === key) || PROJECT_PIPELINE_STAGES[0];
@@ -162,7 +356,7 @@ const normalizeProjectStage = (projectOrStage) => {
   const rawStage = typeof projectOrStage === "string" ? projectOrStage : getProjectStage(projectOrStage);
   if (rawStage === "visit") return "lead_converted";
   if (rawStage === "bank_loan") return "payment";
-  if (rawStage === "handover") return "disbursement";
+  if (rawStage === "handover") return "ready_handover";
   return rawStage;
 };
 const normalizePipelineStage = (projectOrStage) => {
@@ -184,19 +378,13 @@ const getAssignedPerson = (project) => {
 const getRegistrationDateValue = (project) => project.dateOfRegistration || project.createdAt || project.updatedAt;
 const getRegistrationStatusMeta = (status) => {
   const value = String(status || "").toLowerCase();
-  if (value === "completed") {
-    return { label: "Completed", bg: alpha(EMERALD, 0.12), color: EMERALD, icon: <AssignmentTurnedIn sx={{ fontSize: 14 }} /> };
-  }
-  if (value === "approved") {
-    return { label: "Approved", bg: alpha(BLUE, 0.12), color: BLUE, icon: <FactCheck sx={{ fontSize: 14 }} /> };
+  if (value === "completed" || value === "approved" || value === "approval") {
+    return { label: "Approval", bg: alpha(EMERALD, 0.12), color: EMERALD, icon: <AssignmentTurnedIn sx={{ fontSize: 14 }} /> };
   }
   if (value === "rejected") {
     return { label: "Rejected", bg: alpha(RED, 0.1), color: RED, icon: <DescriptionOutlined sx={{ fontSize: 14 }} /> };
   }
-  if (value === "pending") {
-    return { label: "Pending", bg: alpha(AMBER, 0.12), color: "#9a6700", icon: <CalendarMonth sx={{ fontSize: 14 }} /> };
-  }
-  return { label: "In Progress", bg: alpha(BLUE, 0.12), color: BLUE, icon: <CalendarMonth sx={{ fontSize: 14 }} /> };
+  return { label: "Pending", bg: alpha(AMBER, 0.12), color: "#9a6700", icon: <CalendarMonth sx={{ fontSize: 14 }} /> };
 };
 const getLeadStatusMeta = (status) => {
   const stage = normalizeProjectStage({ status });
@@ -501,51 +689,88 @@ const RegistrationProjectRow = ({ project, highlight, onView, onEdit, onUpload, 
           </Box>
         </Stack>
 
-        <Box sx={{ width: { xs: "100%", lg: 280 }, minWidth: 0 }}>
-          <Chip
-            icon={<FactCheck sx={{ fontSize: 14 }} />}
-            label="Registration"
-            size="small"
-            sx={{
-              bgcolor: alpha("#8b5cf6", 0.10),
-              color: "#8b5cf6",
-              fontWeight: 700,
-              mb: 1.1,
-              "& .MuiChip-icon": { color: "#8b5cf6 !important" },
-            }}
-          />
-          <LinearProgress
-            variant="determinate"
-            value={progress}
-            sx={{
-              height: 5,
-              borderRadius: 999,
-              bgcolor: alpha("#8b5cf6", 0.12),
-              "& .MuiLinearProgress-bar": {
-                bgcolor: "#8b5cf6",
-                borderRadius: 999,
-              },
-            }}
-          />
+        <Box sx={{ width: { xs: "100%", lg: 240 }, minWidth: 0 }}>
+          {(() => {
+            const stage = getStageMeta(stageKey);
+            const StageIcon = stage.icon;
+            return (
+              <>
+                <Chip
+                  icon={<StageIcon sx={{ fontSize: "14px !important", color: `${stage.color} !important` }} />}
+                  label={stage.label}
+                  size="small"
+                  sx={{
+                    bgcolor: alpha(stage.color, 0.10),
+                    color: stage.color,
+                    fontWeight: 700,
+                    mb: 1.1,
+                  }}
+                />
+                <LinearProgress
+                  variant="determinate"
+                  value={progress}
+                  sx={{
+                    height: 5,
+                    borderRadius: 999,
+                    bgcolor: alpha(stage.color, 0.12),
+                    "& .MuiLinearProgress-bar": {
+                      bgcolor: stage.color,
+                      borderRadius: 999,
+                    },
+                  }}
+                />
+              </>
+            );
+          })()}
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h6" fontWeight={700} color={isDark ? "#f8fafc" : NAVY} sx={{ lineHeight: 1.2 }}>
-            {NEXT_ACTIONS.registration}
+            {getDynamicNextAction(project, stageKey)}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
             Updated {formatDate(project.updatedAt || getRegistrationDateValue(project))}
           </Typography>
         </Box>
 
-        <Typography
-          variant="h6"
-          fontWeight={800}
-          color={isDark ? "#f8fafc" : NAVY}
-          sx={{ width: { xs: "auto", lg: 90 }, textAlign: { xs: "left", lg: "center" } }}
-        >
-          {formatCurrency(getProjectAmount(project))}
-        </Typography>
+        <Box sx={{ minWidth: 100, textAlign: { xs: "left", lg: "right" } }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 10.5, fontWeight: 700 }}>
+            AMOUNT
+          </Typography>
+          <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : NAVY}>
+            {formatCurrency(getProjectAmount(project))}
+          </Typography>
+        </Box>
+
+        <Box sx={{ minWidth: 100, textAlign: { xs: "left", lg: "right" } }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 10.5, fontWeight: 700 }}>
+            DUE AMOUNT
+          </Typography>
+          {(() => {
+            const due = getProjectDueAmount(project);
+            const total = getProjectAmount(project);
+            if (total > 0 && due === 0) {
+              return (
+                <Chip
+                  label="Paid"
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    bgcolor: alpha(EMERALD, isDark ? 0.25 : 0.12),
+                    color: isDark ? "#4ade80" : EMERALD,
+                  }}
+                />
+              );
+            }
+            return (
+              <Typography variant="subtitle2" fontWeight={800} color={due > 0 ? (isDark ? "#f87171" : RED) : "text.secondary"}>
+                {formatCurrency(due)}
+              </Typography>
+            );
+          })()}
+        </Box>
 
         <Stack
           direction="row"
@@ -638,8 +863,8 @@ const ProjectCard = ({ project, onOpen, onCall, onEdit }) => {
         <ActionMenu project={project} onOpen={onOpen} onCall={onCall} onEdit={onEdit} color={stage.color} />
       </Stack>
 
-      <Typography variant="caption" color={isDark ? "#94a3b8" : "text.secondary"} sx={{ display: "block", mb: 1.25, lineHeight: 1.4 }}>
-        {NEXT_ACTIONS[stage.key]}
+      <Typography variant="caption" color={isDark ? "#94a3b8" : "text.secondary"} sx={{ display: "block", mb: 1.25, lineHeight: 1.4, minHeight: 32 }}>
+        {getDynamicNextAction(project, stage.key)}
       </Typography>
 
       <LinearProgress
@@ -652,10 +877,47 @@ const ProjectCard = ({ project, onOpen, onCall, onEdit }) => {
         }}
       />
 
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : NAVY}>
-          {formatCurrency(getProjectAmount(project))}
-        </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-end" sx={{ mb: 1 }}>
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 10.5, fontWeight: 700 }}>
+            AMOUNT
+          </Typography>
+          <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : NAVY}>
+            {formatCurrency(getProjectAmount(project))}
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: "right" }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 10.5, fontWeight: 700 }}>
+            DUE AMOUNT
+          </Typography>
+          {(() => {
+            const due = getProjectDueAmount(project);
+            const total = getProjectAmount(project);
+            if (total > 0 && due === 0) {
+              return (
+                <Chip
+                  label="Paid"
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    bgcolor: alpha(EMERALD, isDark ? 0.25 : 0.12),
+                    color: isDark ? "#4ade80" : EMERALD,
+                  }}
+                />
+              );
+            }
+            return (
+              <Typography variant="subtitle2" fontWeight={800} color={due > 0 ? (isDark ? "#f87171" : RED) : "text.secondary"}>
+                {formatCurrency(due)}
+              </Typography>
+            );
+          })()}
+        </Box>
+      </Stack>
+
+      <Stack direction="row" justifyContent="flex-end" alignItems="center">
         <Button
           size="small"
           endIcon={<OpenInNew sx={{ fontSize: "14px !important" }} />}
@@ -850,13 +1112,7 @@ function Projects() {
   }, [enriched, searchTerm, selectedStage, selectedProjectType, selectedSection, amountRange, activityFilter]);
 
   const paged = useMemo(() => filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage), [filtered, page, rowsPerPage]);
-  const showRegistrationRows = useMemo(
-    () =>
-      filtered.length > 0 &&
-      (selectedStage === "registration" ||
-        filtered.every((project) => project.currentStage === "registration")),
-    [filtered, selectedStage],
-  );
+  const showRegistrationRows = false;
 
   const summary = useMemo(() => {
     const counts = PROJECT_STAGES.reduce((acc, s) => {
@@ -879,7 +1135,7 @@ function Projects() {
       stuck:   enriched.filter(isStuck).length,
       thisWeek: enriched.filter((p) => p.installationDate && isThisWeek(new Date(p.installationDate))).length,
       awaitingComm: counts.installation || 0,
-      readyHandover: enriched.filter((p) => p.pipelineStage === "ready_handover").length,
+      readyHandover: enriched.filter((p) => p.pipelineStage === "ready_handover" || p.currentStage === "subsidy_received" || p.currentStage === "subsidy_redeemed" || p.currentStage === "final_payment").length,
       counts,
       typeCounts,
       pipelineCounts,
@@ -1012,37 +1268,6 @@ function Projects() {
             </Stack>
           </Box>
 
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <ToggleButtonGroup
-              value={viewMode} exclusive size="small"
-              onChange={(_, v) => v && setViewMode(v)}
-              sx={{
-                bgcolor: alpha("#fff", 0.08), borderRadius: "10px",
-                "& .MuiToggleButton-root": {
-                  color: alpha("#fff", 0.55), border: "none", px: 2, py: 0.8, borderRadius: "10px !important",
-                  fontSize: 13, fontWeight: 600,
-                  "&.Mui-selected": { bgcolor: alpha("#fff", 0.15), color: "#fff" },
-                },
-              }}
-            >
-              <ToggleButton value="table">
-                <TableChart sx={{ mr: 0.75, fontSize: 16 }} /> Table
-              </ToggleButton>
-              <ToggleButton value="kanban">
-                <ViewKanban sx={{ mr: 0.75, fontSize: 16 }} /> Kanban
-              </ToggleButton>
-            </ToggleButtonGroup>
-
-            <Tooltip title="Refresh data">
-              <IconButton
-                onClick={fetchProjects}
-                sx={{ bgcolor: alpha("#fff", 0.08), color: "#fff", borderRadius: "10px",
-                  "&:hover": { bgcolor: alpha("#fff", 0.15) } }}
-              >
-                <Refresh />
-              </IconButton>
-            </Tooltip>
-          </Stack>
         </Stack>
       </Paper>
 
@@ -1148,8 +1373,8 @@ function Projects() {
           <Typography variant="caption" fontWeight={900} color={isDark ? "#94a3b8" : NAVY} sx={{ mb: 0.75, display: "block", textTransform: "uppercase" }}>
             {getProjectTypeMeta(selectedProjectType).label} Pipeline Stages
           </Typography>
-          <Box sx={{ width: "100%", overflowX: "auto", pb: 0.25 }}>
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 980 }}>
+          <Box sx={{ width: "100%", overflowX: "auto", pb: 0.5, "&::-webkit-scrollbar": { height: 6 }, "&::-webkit-scrollbar-thumb": { bgcolor: alpha(NAVY, 0.2), borderRadius: 3 } }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: "max-content", py: 0.25 }}>
               {PROJECT_PIPELINE_STAGES.map((stage, index) => {
                 const StageIcon = stage.icon;
                 const active = selectedStage === stage.key;
@@ -1158,7 +1383,8 @@ function Projects() {
                     <Box
                       onClick={() => { setSelectedStage(stage.key); setPage(0); }}
                       sx={{
-                        flex: 1,
+                        minWidth: 165,
+                        flexShrink: 0,
                         minHeight: 54,
                         px: 1.25,
                         py: 1,
@@ -1166,6 +1392,12 @@ function Projects() {
                         border: `1px solid ${active ? alpha(stage.color, 0.55) : (isDark ? "rgba(255,255,255,0.08)" : BORDER)}`,
                         bgcolor: active ? alpha(stage.color, isDark ? 0.2 : 0.08) : (isDark ? "#0e1220" : "#fff"),
                         cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        "&:hover": {
+                          borderColor: stage.color,
+                          bgcolor: alpha(stage.color, isDark ? 0.25 : 0.12),
+                          transform: "translateY(-1px)",
+                        },
                       }}
                     >
                       <Stack direction="row" spacing={1} alignItems="center">
@@ -1193,7 +1425,7 @@ function Projects() {
                       </Stack>
                     </Box>
                     {index < PROJECT_PIPELINE_STAGES.length - 1 && (
-                      <Typography variant="caption" color="text.disabled" fontWeight={900}>
+                      <Typography variant="caption" color="text.disabled" fontWeight={900} sx={{ px: 0.25 }}>
                         +
                       </Typography>
                     )}
@@ -1630,15 +1862,6 @@ function Projects() {
                                 <Visibility sx={{ fontSize: 18 }} />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Edit">
-                              <IconButton
-                                size="small"
-                                onClick={() => openRegistrationAction(project, "edit")}
-                                sx={{ color: BLUE, bgcolor: alpha(BLUE, 0.08), "&:hover": { bgcolor: alpha(BLUE, 0.14) } }}
-                              >
-                                <Edit sx={{ fontSize: 18 }} />
-                              </IconButton>
-                            </Tooltip>
                             <Tooltip title="Upload documents">
                               <IconButton
                                 size="small"
@@ -1677,10 +1900,10 @@ function Projects() {
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: isDark ? "#0e1220" : "#fafbfe" }}>
-                    {["Project", "Stage", "Next Action", "Amount", "Actions"].map((col, i) => (
+                    {["Project", "Stage", "Next Action", "Amount", "Due Amount", "Actions"].map((col, i) => (
                       <TableCell
                         key={i}
-                        align={i === 4 ? "right" : "left"}
+                        align={i === 5 ? "right" : "left"}
                         sx={{
                           fontWeight: 800, fontSize: 12,
                           color: isDark ? "#94a3b8" : alpha(NAVY, 0.6),
@@ -1703,6 +1926,8 @@ function Projects() {
                     const progress  = ((stageIndex(project.currentStage) + 1) / PROJECT_STAGES.length) * 100;
                     const highlight = highlightId === project._id;
                     const stuck     = isStuck(project);
+                    const amount    = getProjectAmount(project);
+                    const dueAmount = getProjectDueAmount(project);
 
                     return (
                       <TableRow
@@ -1774,9 +1999,9 @@ function Projects() {
                         </TableCell>
 
                         {/* Next action */}
-                        <TableCell sx={{ maxWidth: 240 }}>
+                        <TableCell sx={{ maxWidth: 260 }}>
                           <Typography variant="body2" fontWeight={600} color={isDark ? "#f8fafc" : NAVY} sx={{ mb: 0.25 }}>
-                            {NEXT_ACTIONS[project.currentStage]}
+                            {getDynamicNextAction(project, project.currentStage)}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             Updated {formatDate(project.updatedAt)}
@@ -1786,8 +2011,41 @@ function Projects() {
                         {/* Amount */}
                         <TableCell>
                           <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : NAVY}>
-                            {formatCurrency(getProjectAmount(project))}
+                            {formatCurrency(amount)}
                           </Typography>
+                        </TableCell>
+
+                        {/* Due Amount */}
+                        <TableCell>
+                          {(() => {
+                            if (amount > 0 && dueAmount === 0) {
+                              return (
+                                <Chip
+                                  label="Paid"
+                                  size="small"
+                                  sx={{
+                                    height: 22,
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    bgcolor: alpha(EMERALD, isDark ? 0.25 : 0.12),
+                                    color: isDark ? "#4ade80" : EMERALD,
+                                  }}
+                                />
+                              );
+                            }
+                            if (dueAmount > 0) {
+                              return (
+                                <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f87171" : RED}>
+                                  {formatCurrency(dueAmount)}
+                                </Typography>
+                              );
+                            }
+                            return (
+                              <Typography variant="body2" color="text.secondary">
+                                ₹0
+                              </Typography>
+                            );
+                          })()}
                         </TableCell>
 
                         {/* Actions */}

@@ -74,8 +74,8 @@ const SHADING_OPTIONS = ["Trees", "Buildings", "Water Tank", "Antenna/Satellite"
 const SITE_ACCESS_OPTIONS = ["Easy", "Moderate", "Difficult", "Very Difficult"];
 const EARTHING_OPTIONS = ["Yes", "No", "Needs Upgrade"];
 const PHASE_OPTIONS = ["Single Phase", "Three Phase"];
-const PANEL_BRANDS = ["Waaree", "Adani", "Tata Power", "Vikram Solar", "Renewsys"];
-const INVERTER_BRANDS = ["Growatt", "SMA", "Fronius", "Sungrow", "Huawei"];
+const PANEL_BRANDS = ["Waaree", "Adani", "Tata Power", "Vikram Solar", "Renewsys", "Other"];
+const INVERTER_BRANDS = ["Growatt", "SMA", "Fronius", "Sungrow", "Huawei", "Other"];
 const INVERTER_TYPES = ["String Inverter", "Microinverter", "Hybrid Inverter"];
 
 const getToken = () =>
@@ -170,11 +170,16 @@ const makeInitialSurveyData = (lead, siteSurvey = null) => {
     shadingIssues: Array.isArray(general.shadingIssues) ? general.shadingIssues : [],
     siteAccess: general.siteAccess || "",
     existingElectricalLoad: general.existingElectricalLoad || "",
+    kilowattEnhancement: general.kilowattEnhancement || "",
     mainDistributionBoardLocation: general.mainDistributionBoardLocation || "",
     earthingAvailable: general.earthingAvailable || "",
     phaseType: general.phaseType || "",
     recommendedPanelBrand: general.recommendedPanelBrand || "",
+    customPanelBrand: general.customPanelBrand || "",
+    panelCapacity: general.panelCapacity || "",
     recommendedInverterBrand: general.recommendedInverterBrand || "",
+    customInverterBrand: general.customInverterBrand || "",
+    inverterCapacity: general.inverterCapacity || "",
     inverterType: general.inverterType || "",
     availableRoofArea: general.availableRoofArea || "",
     usableRoofArea: general.usableRoofArea || "",
@@ -954,7 +959,13 @@ export default function VisitDetails({ onClose, onSave }) {
         if (!surveyData.earthingAvailable) errs.earthingAvailable = "Required";
         if (!surveyData.phaseType) errs.phaseType = "Required";
         if (!surveyData.recommendedPanelBrand) errs.recommendedPanelBrand = "Required";
+        if (surveyData.recommendedPanelBrand === "Other" && !surveyData.customPanelBrand?.trim()) {
+          errs.customPanelBrand = "Panel brand name is required when 'Other' is selected";
+        }
         if (!surveyData.recommendedInverterBrand) errs.recommendedInverterBrand = "Required";
+        if (surveyData.recommendedInverterBrand === "Other" && !surveyData.customInverterBrand?.trim()) {
+          errs.customInverterBrand = "Inverter brand name is required when 'Other' is selected";
+        }
         if (!surveyData.availableRoofArea) errs.availableRoofArea = "Required";
         if (!surveyData.usableRoofArea) errs.usableRoofArea = "Required";
       }
@@ -995,11 +1006,14 @@ export default function VisitDetails({ onClose, onSave }) {
       `Shading Issues: ${surveyData.shadingIssues.length ? surveyData.shadingIssues.join(", ") : "-"}`,
       `Site Access: ${surveyData.siteAccess || "-"}`,
       `Existing Electrical Load (kW): ${surveyData.existingElectricalLoad || "-"}`,
+      `Kilowatt Enhancement (kW): ${surveyData.kilowattEnhancement || "-"}`,
       `Main Distribution Board Location: ${surveyData.mainDistributionBoardLocation || "-"}`,
       `Earthing Available: ${surveyData.earthingAvailable || "-"}`,
       `Phase Type: ${surveyData.phaseType || "-"}`,
-      `Recommended Panel Brand: ${surveyData.recommendedPanelBrand || "-"}`,
-      `Recommended Inverter Brand: ${surveyData.recommendedInverterBrand || "-"}`,
+      `Recommended Panel Brand: ${surveyData.recommendedPanelBrand === "Other" && surveyData.customPanelBrand ? `Other (${surveyData.customPanelBrand})` : (surveyData.recommendedPanelBrand || "-")}`,
+      `Panel Capacity: ${surveyData.panelCapacity || "-"}`,
+      `Recommended Inverter Brand: ${surveyData.recommendedInverterBrand === "Other" && surveyData.customInverterBrand ? `Other (${surveyData.customInverterBrand})` : (surveyData.recommendedInverterBrand || "-")}`,
+      `Inverter Capacity: ${surveyData.inverterCapacity || "-"}`,
       `Inverter Type: ${surveyData.inverterType || "-"}`,
       `Available Roof Area (sq ft): ${surveyData.availableRoofArea || "-"}`,
       `Usable Roof Area (sq ft): ${surveyData.usableRoofArea || "-"}`,
@@ -1479,6 +1493,18 @@ export default function VisitDetails({ onClose, onSave }) {
                     placeholder="e.g. 5"
                   />
                 </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FieldLabel>Kilowatt Enhancement (kW)</FieldLabel>
+                  <TextField
+                    type="number"
+                    value={surveyData.kilowattEnhancement}
+                    onChange={(e) => updateField("kilowattEnhancement", e.target.value)}
+                    fullWidth
+                    size="small"
+                    placeholder="e.g. 3"
+                    helperText="Required enhancement if proposed capacity exceeds existing load"
+                  />
+                </Grid>
 
                 <Grid item xs={12} sm={6}>
                   <FieldLabel required>Main Distribution Board Location</FieldLabel>
@@ -1539,6 +1565,7 @@ export default function VisitDetails({ onClose, onSave }) {
               title="Equipment Recommendations"
             >
               <Grid container spacing={2.5}>
+                {/* Panel Brand */}
                 <Grid item xs={12} sm={6}>
                   <FieldLabel required>Panel Brand</FieldLabel>
                   <TextField
@@ -1552,9 +1579,44 @@ export default function VisitDetails({ onClose, onSave }) {
                     helperText={validationErrors.recommendedPanelBrand}
                   >
                     <option value="">Select panel brand</option>
-                    {PANEL_BRANDS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    {PANEL_BRANDS.map((o) => (
+                      <option key={o} value={o}>
+                        {o === "Other" ? "Other / Add Other Panel Brand" : o}
+                      </option>
+                    ))}
                   </TextField>
                 </Grid>
+
+                {/* Panel Capacity beside Panel Brand */}
+                <Grid item xs={12} sm={6}>
+                  <FieldLabel>Panel Capacity</FieldLabel>
+                  <TextField
+                    value={surveyData.panelCapacity}
+                    onChange={(e) => updateField("panelCapacity", e.target.value)}
+                    fullWidth
+                    size="small"
+                    placeholder="e.g. 540 Wp / 550 W"
+                    helperText="Rated capacity per module"
+                  />
+                </Grid>
+
+                {/* Other Panel Brand manual entry if 'Other' selected */}
+                {surveyData.recommendedPanelBrand === "Other" && (
+                  <Grid item xs={12}>
+                    <FieldLabel required>Other Panel Brand Name</FieldLabel>
+                    <TextField
+                      value={surveyData.customPanelBrand}
+                      onChange={(e) => updateField("customPanelBrand", e.target.value)}
+                      fullWidth
+                      size="small"
+                      error={Boolean(validationErrors.customPanelBrand)}
+                      helperText={validationErrors.customPanelBrand || "Enter custom panel brand name"}
+                      placeholder="e.g. Longi, Canadian Solar, Jinko"
+                    />
+                  </Grid>
+                )}
+
+                {/* Inverter Brand */}
                 <Grid item xs={12} sm={6}>
                   <FieldLabel required>Inverter Brand</FieldLabel>
                   <TextField
@@ -1568,9 +1630,43 @@ export default function VisitDetails({ onClose, onSave }) {
                     helperText={validationErrors.recommendedInverterBrand}
                   >
                     <option value="">Select inverter brand</option>
-                    {INVERTER_BRANDS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    {INVERTER_BRANDS.map((o) => (
+                      <option key={o} value={o}>
+                        {o === "Other" ? "Other / Add Other Inverter Brand" : o}
+                      </option>
+                    ))}
                   </TextField>
                 </Grid>
+
+                {/* Inverter Capacity beside Inverter Brand */}
+                <Grid item xs={12} sm={6}>
+                  <FieldLabel>Inverter Capacity</FieldLabel>
+                  <TextField
+                    value={surveyData.inverterCapacity}
+                    onChange={(e) => updateField("inverterCapacity", e.target.value)}
+                    fullWidth
+                    size="small"
+                    placeholder="e.g. 5 kW / 10 kW"
+                    helperText="Rated capacity of inverter"
+                  />
+                </Grid>
+
+                {/* Other Inverter Brand manual entry if 'Other' selected */}
+                {surveyData.recommendedInverterBrand === "Other" && (
+                  <Grid item xs={12}>
+                    <FieldLabel required>Other Inverter Brand Name</FieldLabel>
+                    <TextField
+                      value={surveyData.customInverterBrand}
+                      onChange={(e) => updateField("customInverterBrand", e.target.value)}
+                      fullWidth
+                      size="small"
+                      error={Boolean(validationErrors.customInverterBrand)}
+                      helperText={validationErrors.customInverterBrand || "Enter custom inverter brand name"}
+                      placeholder="e.g. Solis, Deye, GoodWe, Enphase"
+                    />
+                  </Grid>
+                )}
+
                 <Grid item xs={12}>
                   <FieldLabel>Inverter Type</FieldLabel>
                   <PillGroup

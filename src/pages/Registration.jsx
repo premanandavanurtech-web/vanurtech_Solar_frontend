@@ -162,19 +162,10 @@ const ALLOWED_FILE_TYPES = [
 // Registration Status Configuration
 const REGISTRATION_STATUS_OPTIONS = [
   "pending",
-  "completed",
-  "inProgress"
+  "approval",
 ];
 
 const REGISTRATION_STATUS_CONFIG = {
-  "inProgress": {           // ✅ key matches the option value exactly
-    bg: "linear-gradient(135deg, #dbeafe, #bfdbfe)",
-    color: "#1e40af",
-    icon: <AccessTime sx={{ fontSize: 16 }} />,
-    label: "In Progress",
-    description: "Registration is in progress",
-    order: 3,
-  },
   pending: {
     bg: "linear-gradient(135deg, #fef3c7, #fde68a)",
     color: "#92400e",
@@ -183,13 +174,37 @@ const REGISTRATION_STATUS_CONFIG = {
     description: "Registration is pending review",
     order: 1,
   },
+  approval: {
+    bg: "linear-gradient(135deg, #dcfce7, #bbf7d0)",
+    color: "#14532d",
+    icon: <CheckCircle sx={{ fontSize: 16 }} />,
+    label: "Approval",
+    description: "Registration approved successfully",
+    order: 2,
+  },
+  approved: {
+    bg: "linear-gradient(135deg, #dcfce7, #bbf7d0)",
+    color: "#14532d",
+    icon: <CheckCircle sx={{ fontSize: 16 }} />,
+    label: "Approval",
+    description: "Registration approved successfully",
+    order: 2,
+  },
   completed: {
     bg: "linear-gradient(135deg, #dcfce7, #bbf7d0)",
     color: "#14532d",
     icon: <CheckCircle sx={{ fontSize: 16 }} />,
-    label: "Completed",
+    label: "Approval",
     description: "Registration completed successfully",
     order: 2,
+  },
+  inProgress: {
+    bg: "linear-gradient(135deg, #fef3c7, #fde68a)",
+    color: "#92400e",
+    icon: <PendingActions sx={{ fontSize: 16 }} />,
+    label: "Pending",
+    description: "Registration is pending review",
+    order: 1,
   },
 };
 
@@ -2103,7 +2118,7 @@ const EditRegistrationModal = ({
     pincode: "",
     solarRequirement: "",
     dateOfRegistration: null,
-    registrationStatus: "inProgress",
+    registrationStatus: "pending",
     registrationNotes: "",
     status: "Registration",
   });
@@ -2111,6 +2126,12 @@ const EditRegistrationModal = ({
 
   useEffect(() => {
     if (open && registration) {
+      const rawRegStatus = String(registration.registrationStatus || "").toLowerCase();
+      const normalizedRegStatus =
+        rawRegStatus === "completed" || rawRegStatus === "approved" || rawRegStatus === "approval"
+          ? "approval"
+          : "pending";
+
       setFormData({
         address: registration.address || "",
         city: registration.city || "",
@@ -2121,7 +2142,7 @@ const EditRegistrationModal = ({
           : registration.createdAt
             ? parseISO(registration.createdAt)
             : null,
-        registrationStatus: registration.registrationStatus || "inProgress",
+        registrationStatus: normalizedRegStatus,
         registrationNotes: registration.registrationNotes || "",
         status: registration.status || "Registration",
       });
@@ -2130,12 +2151,16 @@ const EditRegistrationModal = ({
   }, [open, registration]);
 
   const validateForm = useCallback(() => {
+    const finalSolarReq =
+      formData.solarRequirement === "Other"
+        ? (formData.customSolarRequirement || "").trim()
+        : (formData.customSolarRequirement || formData.solarRequirement || "").trim();
+
     const errors = {
       address: validateRequiredField(formData.address, "Address"),
       city: validateRequiredField(formData.city, "City"),
-      pincode: validatePincode(formData.pincode),
       solarRequirement: validateRequiredField(
-        formData.solarRequirement,
+        finalSolarReq,
         "Solar requirement",
       ),
     };
@@ -2152,11 +2177,16 @@ const EditRegistrationModal = ({
 
     setLoading(true);
     try {
+      const finalSolarReq =
+        formData.solarRequirement === "Other"
+          ? (formData.customSolarRequirement || "").trim()
+          : (formData.customSolarRequirement || formData.solarRequirement || "").trim();
+
       const payload = {
         address: formData.address.trim(),
         city: formData.city.trim(),
-        pincode: formData.pincode.trim(),
-        solarRequirement: formData.solarRequirement.trim(),
+        pincode: formData.pincode?.trim?.() || "",
+        solarRequirement: finalSolarReq,
         registrationStatus: formData.registrationStatus,
         registrationNotes: formData.registrationNotes.trim(),
         status: formData.status,
@@ -2302,34 +2332,26 @@ const EditRegistrationModal = ({
             required
           />
 
-          <TextField
-            label="Pincode *"
-            value={formData.pincode}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                pincode: e.target.value,
-              }))
-            }
-            fullWidth
-            size="small"
-            error={!!validationErrors.pincode}
-            helperText={validationErrors.pincode}
-            required
-            inputProps={{ maxLength: 6 }}
-          />
 
           <FormControl fullWidth size="small" error={!!validationErrors.solarRequirement}>
             <InputLabel>Solar Requirement *</InputLabel>
             <Select
-              value={formData.solarRequirement}
+              value={
+                SOLAR_REQUIREMENT_TYPES.includes(formData.solarRequirement)
+                  ? formData.solarRequirement
+                  : formData.solarRequirement
+                  ? "Other"
+                  : ""
+              }
               label="Solar Requirement *"
-              onChange={(e) =>
+              onChange={(e) => {
+                const val = e.target.value;
                 setFormData((prev) => ({
                   ...prev,
-                  solarRequirement: e.target.value,
-                }))
-              }
+                  solarRequirement: val,
+                  ...(val !== "Other" ? { customSolarRequirement: "" } : {}),
+                }));
+              }}
             >
               <MenuItem value="">
                 <em>Select requirement</em>
@@ -2344,6 +2366,32 @@ const EditRegistrationModal = ({
               <FormHelperText>{validationErrors.solarRequirement}</FormHelperText>
             )}
           </FormControl>
+
+          {(formData.solarRequirement === "Other" ||
+            (!SOLAR_REQUIREMENT_TYPES.filter((t) => t !== "Other").includes(formData.solarRequirement) &&
+              Boolean(formData.solarRequirement))) && (
+            <TextField
+              fullWidth
+              size="small"
+              label="Specify Solar Requirement *"
+              placeholder="Enter custom solar requirement"
+              value={
+                formData.customSolarRequirement !== undefined
+                  ? formData.customSolarRequirement
+                  : formData.solarRequirement === "Other"
+                  ? ""
+                  : formData.solarRequirement
+              }
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  customSolarRequirement: e.target.value,
+                }))
+              }
+              error={!!validationErrors.solarRequirement}
+              helperText={validationErrors.solarRequirement}
+            />
+          )}
 
           <DatePicker
             label="Registration Date"
@@ -2365,7 +2413,11 @@ const EditRegistrationModal = ({
           <FormControl fullWidth size="small">
             <InputLabel>Registration Status</InputLabel>
             <Select
-              value={formData.registrationStatus}
+              value={
+                formData.registrationStatus === "completed" || formData.registrationStatus === "approved" || formData.registrationStatus === "approval"
+                  ? "approval"
+                  : "pending"
+              }
               label="Registration Status"
               onChange={(e) =>
                 setFormData((prev) => ({

@@ -322,12 +322,20 @@ const SITE_SURVEY_GENERAL_ROWS = [
     { key: "existingElectricalLoad", label: "Existing Electrical Load (kW)" },
   ],
   [
+    { key: "kilowattEnhancement", label: "Kilowatt Enhancement (kW)" },
     { key: "mainDistributionBoardLocation", label: "Main Distribution Board Location" },
-    { key: "earthingAvailable", label: "Earthing Available" },
   ],
   [
+    { key: "earthingAvailable", label: "Earthing Available" },
     { key: "phaseType", label: "Phase Type" },
+  ],
+  [
+    { key: "recommendedPanelBrand", label: "Recommended Panel Brand" },
+    { key: "panelCapacity", label: "Panel Capacity" },
+  ],
+  [
     { key: "recommendedInverterBrand", label: "Recommended Inverter Brand" },
+    { key: "inverterCapacity", label: "Inverter Capacity" },
   ],
   [
     { key: "inverterType", label: "Inverter Type" },
@@ -335,7 +343,7 @@ const SITE_SURVEY_GENERAL_ROWS = [
   ],
   [
     { key: "usableRoofArea", label: "Usable Roof Area (sq ft)" },
-    { key: "recommendedPanelBrand", label: "Recommended Panel Brand" },
+    { key: "distanceFromRoofToDb", label: "Distance Roof to DB (meters)" },
   ],
 ];
 
@@ -1784,7 +1792,7 @@ export default function LeadDetailsPage() {
         icon: <CameraAltOutlined />,
         eyebrow: "Next action - Site Survey",
         title: "Complete site survey",
-        detail: "Project creation is blocked until the site survey is complete.",
+        detail: "Capture site survey details for this customer.",
       };
     }
 
@@ -2005,11 +2013,32 @@ export default function LeadDetailsPage() {
     return customReminderEntries.sort((a, b) => new Date(a.sortAt || 0) - new Date(b.sortAt || 0));
   }, [customActivities, leadDetails?._id, leadDetails?.followUpDate, leadDetails?.followUpNotes]);
 
+    const combinedComments = useMemo(() => {
+    const list = [...customActivities.filter(
+      (item) => item.type === "Comment" || isCallActivity(item)
+    )];
+
+    if (leadDetails?.notes?.trim()) {
+      const alreadyHasNotes = list.some((c) => c.message === leadDetails.notes);
+      if (!alreadyHasNotes) {
+        list.push({
+          id: "lead-initial-note",
+          message: leadDetails.notes.trim(),
+          actorName: getPersonDisplayName(leadDetails.createdBy) || "Lead Notes",
+          createdAt: leadDetails.createdAt || new Date(),
+          type: "Comment",
+        });
+      }
+    }
+
+    return list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [customActivities, leadDetails]);
+
   const hasThreeDDesign = Boolean(leadDetails?.threeDDesign && Array.isArray(leadDetails.threeDDesign.points) && leadDetails.threeDDesign.points.length >= 3);
 
   const tabCounts = useMemo(() => ({
     activity: timelineEntries.length + customActivities.length,
-    comments: customActivities.filter((item) => item.type === "Comment" || isCallActivity(item)).length,
+    comments: combinedComments.length,
     documents: uploadedDocumentCount,
     siteVisits: siteVisitEntries.length,
     siteSurvey: hasSiteSurvey ? 1 : 0,
@@ -2356,11 +2385,7 @@ export default function LeadDetailsPage() {
       return;
     }
 
-    if (!hasSiteSurvey) {
-      setTab("siteSurvey");
-      setSnackbar({ open: true, message: "Complete the site survey before creating a project.", severity: "error" });
-      return;
-    }
+
 
     try {
       setProjectDialogSubmitting(true);
@@ -2415,11 +2440,7 @@ export default function LeadDetailsPage() {
       return;
     }
 
-    if (!hasSiteSurvey) {
-      setTab("siteSurvey");
-      setSnackbar({ open: true, message: "Complete the site survey before creating a project.", severity: "error" });
-      return;
-    }
+
 
     setProjectDialogOpen(true);
   }, [hasSiteSurvey, leadDetails, navigate]);
@@ -3170,17 +3191,27 @@ export default function LeadDetailsPage() {
                   disableElevation
                   onClick={handleActivitySubmit}
                   disabled={savingActivity}
-                  endIcon={<ArrowForward sx={{ fontSize: 14 }} />}
+                  endIcon={<ArrowForward sx={{ fontSize: 15 }} />}
                   sx={{
-                    borderRadius: 1.5,
-                    bgcolor: getIsDark() ? TOKEN.primary : "#6b7280",
-                    color: "#fff",
-                    px: 2.25,
-                    py: 0.9,
-                    fontSize: "0.82rem",
+                    borderRadius: 2,
+                    bgcolor: getIsDark() ? "#3b82f6" : "#0f1f3d",
+                    color: "#ffffff",
+                    px: 2.75,
+                    py: 1,
+                    fontSize: "0.85rem",
                     fontWeight: 700,
                     textTransform: "none",
-                    "&:hover": { bgcolor: getIsDark() ? TOKEN.primaryLight : "#4b5563" },
+                    boxShadow: "0 4px 12px rgba(15, 31, 61, 0.15)",
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      bgcolor: getIsDark() ? "#2563eb" : "#1a237e",
+                      boxShadow: "0 6px 18px rgba(15, 31, 61, 0.25)",
+                      transform: "translateY(-1px)",
+                    },
+                    "&:disabled": {
+                      opacity: 0.6,
+                      transform: "none",
+                    },
                   }}
                 >
                   {savingActivity ? "Saving..." : activityMode === "Log call" ? "Save call log" : "Post comment"}
@@ -3324,20 +3355,30 @@ export default function LeadDetailsPage() {
                 disableElevation
                 onClick={handleActivitySubmit}
                 disabled={savingActivity}
-                endIcon={<ArrowForward sx={{ fontSize: 14 }} />}
+                endIcon={<ArrowForward sx={{ fontSize: 15 }} />}
                 sx={{
-                  borderRadius: 1.5,
-                  bgcolor: getIsDark() ? TOKEN.primary : "#0f172a",
-                  color: "#fff",
-                  px: 2.25,
-                  py: 0.9,
-                  fontSize: "0.82rem",
+                  borderRadius: 2,
+                  bgcolor: getIsDark() ? "#3b82f6" : "#0f1f3d",
+                  color: "#ffffff",
+                  px: 2.75,
+                  py: 1,
+                  fontSize: "0.85rem",
                   fontWeight: 700,
                   textTransform: "none",
-                  "&:hover": { bgcolor: getIsDark() ? TOKEN.primaryLight : "#111827" },
+                  boxShadow: "0 4px 12px rgba(15, 31, 61, 0.15)",
+                  transition: "all 0.2s ease",
+                  "&:hover": {
+                    bgcolor: getIsDark() ? "#2563eb" : "#1a237e",
+                    boxShadow: "0 6px 18px rgba(15, 31, 61, 0.25)",
+                    transform: "translateY(-1px)",
+                  },
+                  "&:disabled": {
+                    opacity: 0.6,
+                    transform: "none",
+                  },
                 }}
               >
-                {savingActivity ? "Saving..." : "Post"}
+                {savingActivity ? "Saving..." : "Post comment"}
               </Button>
             </Box>
           </Paper>
@@ -4936,22 +4977,65 @@ export default function LeadDetailsPage() {
           </Paper>
 
           {/* Lead score card */}
-          <Paper elevation={0} sx={{ p: 2, borderRadius: TOKEN.radius, bgcolor: GRADIENT_SCORE }}>
-            <Typography sx={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", textTransform: "uppercase", mb: 1 }}>Lead Score</Typography>
-            <Stack direction="row" alignItems="baseline" spacing={0.5} sx={{ mb: 1.5 }}>
-              <Typography sx={{ fontWeight: 600, fontSize: "2.6rem", color: "#fff", lineHeight: 1, letterSpacing: "-0.03em" }}>{leadScore}</Typography>
-              <Typography sx={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.3)", fontWeight: 400 }}>/100</Typography>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.25,
+              borderRadius: TOKEN.radius,
+              background: GRADIENT_SCORE,
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 6px 20px rgba(15, 31, 61, 0.18)",
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.25 }}>
+              <Typography sx={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.8)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Lead Score
+              </Typography>
+              <Chip
+                label={scoreBucket.label}
+                size="small"
+                sx={{
+                  bgcolor: alpha(scoreBucket.color, 0.28),
+                  color: "#fff",
+                  fontWeight: 700,
+                  height: 22,
+                  fontSize: "0.72rem",
+                  border: `1px solid ${alpha(scoreBucket.color, 0.5)}`,
+                }}
+              />
             </Stack>
+
+            <Stack direction="row" alignItems="baseline" spacing={0.75} sx={{ mb: 1.5 }}>
+              <Typography sx={{ fontWeight: 700, fontSize: "2.4rem", color: "#ffffff", lineHeight: 1, letterSpacing: "-0.03em" }}>
+                {leadScore}
+              </Typography>
+              <Typography sx={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.55)", fontWeight: 500 }}>
+                / 100
+              </Typography>
+            </Stack>
+
             <LinearProgress
               variant="determinate"
               value={leadScore}
-              sx={{ height: 3, borderRadius: 999, bgcolor: "rgba(255,255,255,0.1)", mb: 1.25, "& .MuiLinearProgress-bar": { borderRadius: 999, background: `linear-gradient(90deg,${TOKEN.teal},#4c6ef5)` } }}
+              sx={{
+                height: 5,
+                borderRadius: 999,
+                bgcolor: "rgba(255,255,255,0.18)",
+                mb: 1.5,
+                "& .MuiLinearProgress-bar": {
+                  borderRadius: 999,
+                  background:
+                    leadScore >= 75
+                      ? "linear-gradient(90deg, #f59e0b, #ef4444)"
+                      : leadScore >= 45
+                      ? "linear-gradient(90deg, #38bdf8, #3b82f6)"
+                      : "linear-gradient(90deg, #94a3b8, #cbd5e1)",
+                },
+              }}
             />
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography sx={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.4)" }}>Bucket</Typography>
-              <Chip label={scoreBucket.label} size="small" sx={{ bgcolor: alpha(scoreBucket.color, 0.2), color: "#fff", fontWeight: 600, height: 20, fontSize: "0.68rem", border: `0.5px solid ${alpha(scoreBucket.color, 0.35)}` }} />
-            </Stack>
-            <Typography sx={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.28)", mt: 1, lineHeight: 1.5 }}>
+
+            <Typography sx={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.45 }}>
               Auto-computed from profile completeness and journey stage.
             </Typography>
           </Paper>

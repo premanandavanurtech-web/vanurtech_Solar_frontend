@@ -60,6 +60,10 @@ import {
   People,
   Refresh,
   Close,
+  ElectricBolt,
+  SolarPower,
+  AssignmentInd,
+  Tune,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -120,7 +124,10 @@ export default function CreateLeadPage() {
     lastName: "",
     email: "",
     phone: "",
+    discomName: "",
     consumerNumber: "",
+    plantCapacity: "",
+    leadAssociate: "",
     street: "",
     city: "",
     state: "",
@@ -129,6 +136,9 @@ export default function CreateLeadPage() {
     notes: "",
     source: "Manual Entry",
   });
+
+  const [associates, setAssociates] = useState([]);
+  const [loadingAssociates, setLoadingAssociates] = useState(false);
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -146,6 +156,35 @@ export default function CreateLeadPage() {
 
   // Get user role
   const userRole = getUserRole();
+
+  // Load associates for Lead Associate dropdown
+  useEffect(() => {
+    let isMounted = true;
+    const loadAssociates = async () => {
+      try {
+        setLoadingAssociates(true);
+        const response = await fetchAPI("/user/getAllUsers?limit=100&status=active");
+        const list = response?.result?.users || response?.result?.data || response?.result || [];
+        if (isMounted && Array.isArray(list)) {
+          setAssociates(list);
+        }
+      } catch (err) {
+        console.warn("Could not fetch associates:", err);
+      } finally {
+        if (isMounted) setLoadingAssociates(false);
+      }
+    };
+    loadAssociates();
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchAPI]);
+
+  const getAssociateDisplayName = (assoc) => {
+    if (!assoc) return "";
+    const name = [assoc.firstName, assoc.lastName].filter(Boolean).join(" ").trim();
+    return name || assoc.email || assoc.phoneNumber || "Unnamed User";
+  };
 
 
   // Show snackbar helper
@@ -237,7 +276,10 @@ export default function CreateLeadPage() {
       lastName: "",
       email: "",
       phone: "",
+      discomName: "",
       consumerNumber: "",
+      plantCapacity: "",
+      leadAssociate: "",
       street: "",
       city: "",
       state: "",
@@ -268,6 +310,11 @@ export default function CreateLeadPage() {
         lastName: formData.lastName.trim() || null,
         email: formData.email.trim() || null,
         phone: formData.phone.trim(),
+        discomName: formData.discomName.trim() || null,
+        consumerNumber: formData.consumerNumber.trim() || null,
+        plantCapacity: formData.plantCapacity ? parseFloat(formData.plantCapacity) : null,
+        leadAssociate: formData.leadAssociate || null,
+        assignedTo: formData.leadAssociate || (user?.role === "TEAM" ? user?._id || null : null),
         address: {
           consumerNumber: formData.consumerNumber.trim() || null,
           street: formData.street.trim() || null,
@@ -279,7 +326,6 @@ export default function CreateLeadPage() {
         notes: formData.notes.trim() || null,
         source: formData.source,
         createdBy: user?._id || null,
-        assignedTo: user?.role === "TEAM" ? user?._id || null : null,
         status: "New",
       };
       
@@ -723,27 +769,6 @@ export default function CreateLeadPage() {
                     <Grid item xs={12} sm={6}>
                       <TextField
                         fullWidth
-                        name="consumerNumber"
-                        label="Consumer Number"
-                        value={formData.consumerNumber}
-                        onChange={handleChange}
-                        placeholder="CN12345"
-                        helperText="Optional"
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <BadgeIcon fontSize="small" sx={{ color: "text.disabled" }} />
-                            </InputAdornment>
-                          ),
-                        }}
-                        sx={textFieldStyle}
-                        size={isMobile ? "small" : "medium"}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
                         name="street"
                         label="Street Address"
                         value={formData.street}
@@ -761,7 +786,7 @@ export default function CreateLeadPage() {
                         size={isMobile ? "small" : "medium"}
                       />
                     </Grid>
-                    
+
                     <Grid item xs={12} sm={6}>
                       <TextField
                         fullWidth
@@ -803,20 +828,42 @@ export default function CreateLeadPage() {
                         size={isMobile ? "small" : "medium"}
                       />
                     </Grid>
-                    
+                  </Grid>
+                </Box>
+
+                <Divider sx={{ my: 4, borderColor: isDark ? "rgba(255,255,255,0.08)" : undefined }} />
+
+                {/* Additional Information Section */}
+                <Box sx={{ mb: 4 }}>
+                  <Stack direction="row" alignItems="center" spacing={2} mb={3}>
+                    <Avatar sx={{ bgcolor: isDark ? "rgba(96, 165, 250, 0.15)" : alpha(PRIMARY, 0.1), color: isDark ? "#60a5fa" : PRIMARY }}>
+                      <Tune />
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6" fontWeight="bold" sx={{ color: isDark ? "#f8fafc" : "text.primary" }}>
+                        Additional Information
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>
+                        DISCOM, plant capacity, consumer number and lead associate details
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  
+                  <Grid container spacing={isMobile ? 2 : 3}>
+                    {/* Row 1: DISCOM Name | Consumer Number */}
                     <Grid item xs={12} sm={6}>
                       <TextField
                         fullWidth
-                        name="postalCode"
-                        label="Postal Code"
-                        value={formData.postalCode}
+                        name="discomName"
+                        label="DISCOM Name"
+                        value={formData.discomName}
                         onChange={handleChange}
-                        helperText="Optional"
-                        placeholder="560001"
+                        placeholder="e.g. BESCOM, TPVML, Tata Power"
+                        helperText="Optional - Electricity distribution company"
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <PinDrop fontSize="small" sx={{ color: "text.disabled" }} />
+                              <ElectricBolt fontSize="small" sx={{ color: "text.disabled" }} />
                             </InputAdornment>
                           ),
                         }}
@@ -824,26 +871,116 @@ export default function CreateLeadPage() {
                         size={isMobile ? "small" : "medium"}
                       />
                     </Grid>
-                    
+
                     <Grid item xs={12} sm={6}>
                       <TextField
                         fullWidth
-                        name="zone"
-                        label="Zone/Area"
-                        value={formData.zone}
+                        name="consumerNumber"
+                        label="Consumer Number"
+                        value={formData.consumerNumber}
                         onChange={handleChange}
-                        placeholder="North Zone"
-                        helperText="Optional"
+                        placeholder="CN12345"
+                        helperText="Optional - Electricity consumer account number"
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Public fontSize="small" sx={{ color: "text.disabled" }} />
+                              <BadgeIcon fontSize="small" sx={{ color: "text.disabled" }} />
                             </InputAdornment>
                           ),
                         }}
                         sx={textFieldStyle}
                         size={isMobile ? "small" : "medium"}
                       />
+                    </Grid>
+
+                    {/* Row 2: Plant Capacity (kW) | Lead Associate */}
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        name="plantCapacity"
+                        label="Plant Capacity (kW)"
+                        type="number"
+                        inputProps={{ min: "0", step: "0.1" }}
+                        value={formData.plantCapacity}
+                        onChange={handleChange}
+                        placeholder="e.g. 5.0"
+                        helperText="Optional - Proposed solar plant capacity in kilowatts"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SolarPower fontSize="small" sx={{ color: "text.disabled" }} />
+                            </InputAdornment>
+                          ),
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary", fontWeight: 700 }}>
+                                kW
+                              </Typography>
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={textFieldStyle}
+                        size={isMobile ? "small" : "medium"}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        select
+                        fullWidth
+                        name="leadAssociate"
+                        label="Lead Associate"
+                        value={formData.leadAssociate}
+                        onChange={handleChange}
+                        helperText="Optional - Select associate/sales person responsible"
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <AssignmentInd fontSize="small" sx={{ color: "text.disabled" }} />
+                            </InputAdornment>
+                          ),
+                        }}
+                        sx={textFieldStyle}
+                        size={isMobile ? "small" : "medium"}
+                      >
+                        <MenuItem value="">
+                          <Typography variant="body2" sx={{ color: "text.secondary", fontStyle: "italic" }}>
+                            None (Unassigned)
+                          </Typography>
+                        </MenuItem>
+                        {loadingAssociates ? (
+                          <MenuItem disabled value="__loading__">
+                            <CircularProgress size={16} sx={{ mr: 1 }} /> Loading associates...
+                          </MenuItem>
+                        ) : associates.length > 0 ? (
+                          associates.map((assoc) => (
+                            <MenuItem key={assoc._id} value={assoc._id}>
+                              <Stack direction="row" alignItems="center" spacing={1} justifyContent="space-between" width="100%">
+                                <Typography variant="body2">
+                                  {getAssociateDisplayName(assoc)}
+                                </Typography>
+                                {assoc.role && (
+                                  <Chip
+                                    label={assoc.role}
+                                    size="small"
+                                    sx={{
+                                      height: 20,
+                                      fontSize: "0.65rem",
+                                      fontWeight: 600,
+                                      bgcolor: isDark ? "rgba(96, 165, 250, 0.15)" : alpha(PRIMARY, 0.08),
+                                      color: isDark ? "#60a5fa" : PRIMARY,
+                                    }}
+                                  />
+                                )}
+                              </Stack>
+                            </MenuItem>
+                          ))
+                        ) : (
+                          <MenuItem disabled value="__none__">
+                            No associates available
+                          </MenuItem>
+                        )}
+                      </TextField>
                     </Grid>
 
                     {/* Notes Field */}

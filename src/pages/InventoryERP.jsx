@@ -52,6 +52,11 @@ import {
   Inventory2,
   ListAlt,
   MoreVert,
+  OutboxOutlined,
+  QrCodeScanner,
+  PersonOutline,
+  TaskAlt,
+  ContentCopy,
   Refresh,
   Search,
   Straighten,
@@ -62,6 +67,8 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosConfig";
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
+import InventoryOutDialog from "../components/InventoryOutDialog";
+import SerialTraceabilityModal from "../components/SerialTraceabilityModal";
 
 const BLUE = "#1e40af";
 const INDIGO = "#4338ca";
@@ -89,8 +96,8 @@ const emptyItem = {
   unit: "pcs",
   description: "",
   discountType: "Rs",
-  discount: 0,
-  pricing: { purchaseCost: 0, sellingPrice: 0, taxPercent: 0, igst: 0, cgst: 0, sgst: 0, taxMode: "igst", autoSplitTax: true, totalGst: "" },
+  discount: "",
+  pricing: { purchaseCost: "", sellingPrice: "", taxPercent: "", igst: "", cgst: "", sgst: "", taxMode: "igst", autoSplitTax: true, totalGst: "" },
   tracking: { expiryDate: "" },
   dimensions: { length: "", width: "", height: "", unit: "cm" },
   weight: { value: "", unit: "kg" },
@@ -299,6 +306,20 @@ function InventoryERP() {
   const [selectedCategoryForSub, setSelectedCategoryForSub] = useState(null);
   const [subcategorySearch, setSubcategorySearch] = useState("");
   const [toast, setToast] = useState({ open: false, message: "", severity: "success" });
+
+  // Inventory Out State
+  const [inventoryOutRecords, setInventoryOutRecords] = useState([]);
+  const [inventoryOutPagination, setInventoryOutPagination] = useState({ page: 1, limit: 15, total: 0, pages: 1 });
+  const [inventoryOutLoading, setInventoryOutLoading] = useState(false);
+  const [inventoryOutSearch, setInventoryOutSearch] = useState("");
+  const [inventoryOutStatus, setInventoryOutStatus] = useState("");
+  const [inventoryOutPage, setInventoryOutPage] = useState(1);
+  const [inventoryOutDialogOpen, setInventoryOutDialogOpen] = useState(false);
+  const [serialTraceModalOpen, setSerialTraceModalOpen] = useState(false);
+  const [selectedInventoryOutRecord, setSelectedInventoryOutRecord] = useState(null);
+  const [cancelIssueRecord, setCancelIssueRecord] = useState(null);
+  const [cancelReasonInput, setCancelReasonInput] = useState("");
+  const [cancellingIssue, setCancellingIssue] = useState(false);
 
   const imagePreviewUrl = useMemo(() => {
     if (!itemForm.image) return null;
@@ -653,14 +674,23 @@ function InventoryERP() {
 
   const setScreen = (targetMode) => {
     setMode(targetMode);
-    if (targetMode === "categories" || targetMode === "items") {
-      navigate(`/inventory${targetMode === "items" ? "/items" : ""}`);
+    if (targetMode === "categories") {
+      navigate("/inventory/category");
+    } else if (targetMode === "items") {
+      navigate("/inventory/items");
+    } else if (targetMode === "out") {
+      navigate("/inventory/out");
     }
   };
 
   useEffect(() => {
     if (sectionFromPath === "items") {
       setMode("items");
+    } else if (sectionFromPath === "out" || sectionFromPath === "inventory-out") {
+      setMode("out");
+    } else if (sectionFromPath === "trace" || sectionFromPath === "serial-trace") {
+      setMode("out");
+      setSerialTraceModalOpen(true);
     } else {
       setMode("categories");
     }
@@ -693,6 +723,46 @@ function InventoryERP() {
     }
   }, [itemFilter, page, pageSize, search, showToast]);
 
+  const fetchInventoryOut = useCallback(async () => {
+    setInventoryOutLoading(true);
+    try {
+      const response = await axiosInstance.get("/inventory/inventory-out", {
+        params: {
+          search: inventoryOutSearch || undefined,
+          status: inventoryOutStatus || undefined,
+          page: inventoryOutPage,
+          limit: 15,
+        },
+      });
+      const data = response.data?.result || {};
+      setInventoryOutRecords(data.records || []);
+      setInventoryOutPagination(data.pagination || { page: 1, limit: 15, total: 0, pages: 1 });
+    } catch (error) {
+      showToast("Failed to fetch inventory out records", "error");
+    } finally {
+      setInventoryOutLoading(false);
+    }
+  }, [inventoryOutSearch, inventoryOutStatus, inventoryOutPage, showToast]);
+
+  const handleCancelIssue = async () => {
+    if (!cancelIssueRecord?._id) return;
+    setCancellingIssue(true);
+    try {
+      await axiosInstance.post(`/inventory/inventory-out/${cancelIssueRecord._id}/cancel`, {
+        cancelReason: cancelReasonInput || "Issue reversed by admin",
+      });
+      showToast("Inventory issue reversed & stock returned successfully!");
+      setCancelIssueRecord(null);
+      setCancelReasonInput("");
+      fetchInventoryOut();
+      fetchItems();
+    } catch (error) {
+      showToast(error?.response?.data?.message || "Failed to cancel issue", "error");
+    } finally {
+      setCancellingIssue(false);
+    }
+  };
+
   const fetchSummary = useCallback(async () => {
     try {
       const response = await axiosInstance.get("/inventory/summary");
@@ -711,6 +781,12 @@ function InventoryERP() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  useEffect(() => {
+    if (mode === "out") {
+      fetchInventoryOut();
+    }
+  }, [mode, fetchInventoryOut]);
 
   const startCreateCategory = () => {
     handleOpenAddCategoryModal();
@@ -898,10 +974,24 @@ function InventoryERP() {
   const saveItem = async () => {
     if (!itemForm.itemName.trim()) {
       showToast("Item Name is required", "error");
+      setOpenSection("details");
       return;
     }
     if (!itemForm.category) {
       showToast("Item Category is required", "error");
+      setOpenSection("details");
+      return;
+    }
+    const stockVal = itemForm.openingStock !== undefined && itemForm.openingStock !== null ? String(itemForm.openingStock).trim() : "";
+    if (stockVal === "") {
+      showToast("Opening Stock is required", "error");
+      setOpenSection("inventory");
+      return;
+    }
+    const priceVal = itemForm.pricing?.sellingPrice !== undefined && itemForm.pricing?.sellingPrice !== null ? String(itemForm.pricing.sellingPrice).trim() : "";
+    if (priceVal === "") {
+      showToast("Price (Selling Price) is required", "error");
+      setOpenSection("pricing");
       return;
     }
     setSaving(true);
@@ -926,11 +1016,17 @@ function InventoryERP() {
   const startEditItem = (item) => {
     const stockRows = item.warehouseStock || [];
     const primaryStock = stockRows[0] || {};
-    const currentStock = Number(item.openingStock ?? primaryStock.availableQty ?? getAvailableStock(item) ?? 0);
+    const currentStock = item.openingStock ?? primaryStock.availableQty ?? getAvailableStock(item) ?? "";
     setItemForm({
       ...emptyItem,
       ...item,
-      pricing: { ...emptyItem.pricing, ...(item.pricing || {}) },
+      discount: item.discount ?? "",
+      pricing: {
+        ...emptyItem.pricing,
+        ...(item.pricing || {}),
+        purchaseCost: item.pricing?.purchaseCost ?? "",
+        sellingPrice: item.pricing?.sellingPrice ?? "",
+      },
       tracking: {
         ...emptyItem.tracking,
         ...(item.tracking || {}),
@@ -939,7 +1035,7 @@ function InventoryERP() {
       dimensions: { ...emptyItem.dimensions, ...(item.dimensions || {}) },
       weight: { ...emptyItem.weight, ...(item.weight || {}) },
       image: item.image || null,
-      openingStock: Number.isFinite(currentStock) ? currentStock : "",
+      openingStock: Number.isFinite(Number(currentStock)) && currentStock !== "" ? currentStock : "",
       maxStockLevel: item.maxStockLevel ?? primaryStock.maxStockLevel ?? "",
     });
     setMode("create-item");
@@ -1836,7 +1932,7 @@ function InventoryERP() {
                   </Grid>
                 </SectionCard>
 
-                <SectionCard isDark={isDark} icon={<ListAlt />} title="Inventory management" color="#0f766e" isOpen={openSection === "inventory"} onToggle={() => toggleSection("inventory")}>
+                <SectionCard isDark={isDark} icon={<ListAlt />} title="Inventory management" color="#0f766e" required isOpen={openSection === "inventory"} onToggle={() => toggleSection("inventory")}>
                   <Box sx={{ p: 1.7, border: isDark ? "1px solid rgba(16,185,129,0.3)" : "1px solid #bbf7d0", bgcolor: isDark ? "rgba(16,185,129,0.08)" : "#effdf7", borderRadius: 2, mb: 2 }}>
                     <Stack direction="row" alignItems="center" spacing={1.3}>
                       <Checkbox sx={{ p: 0, color: isDark ? "#4ade80" : undefined, "&.Mui-checked": { color: isDark ? "#4ade80" : undefined } }} />
@@ -1850,7 +1946,7 @@ function InventoryERP() {
                   </Box>
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
-                      <Field isDark={isDark} label="Opening Stock" placeholder="e.g. 100" type="number" value={itemForm.openingStock ?? ""} onChange={(value) => updateItem("openingStock", value)} />
+                      <Field isDark={isDark} label="Opening Stock *" placeholder="e.g. 100" type="number" value={itemForm.openingStock ?? ""} onChange={(value) => updateItem("openingStock", value)} />
                     </Grid>
                     <Grid item xs={12} md={6}>
                       <Field isDark={isDark} label="Low Stock Alert" placeholder="e.g. 10" type="number" value={itemForm.reorderLevel} onChange={(value) => updateItem("reorderLevel", value)} />
@@ -1974,10 +2070,10 @@ function InventoryERP() {
                   </Box>
                 </Card>
 
-                <SectionCard isDark={isDark} icon={<Typography fontWeight={900}>Rs</Typography>} title="Pricing" color={SUCCESS} isOpen={openSection === "pricing"} onToggle={() => toggleSection("pricing")}>
+                <SectionCard isDark={isDark} icon={<Typography fontWeight={900}>Rs</Typography>} title="Pricing" color={SUCCESS} required isOpen={openSection === "pricing"} onToggle={() => toggleSection("pricing")}>
                   <Stack spacing={2}>
-                    <Field isDark={isDark} label="Selling Price (Rs)" type="number" value={itemForm.pricing.sellingPrice} onChange={(value) => updateItem("pricing.sellingPrice", value)} />
-                    <Field isDark={isDark} label="Cost Price (Rs)" type="number" value={itemForm.pricing.purchaseCost} onChange={(value) => updateItem("pricing.purchaseCost", value)} />
+                    <Field isDark={isDark} label="Selling Price (Rs) *" type="number" value={itemForm.pricing?.sellingPrice ?? ""} onChange={(value) => updateItem("pricing.sellingPrice", value)} />
+                    <Field isDark={isDark} label="Cost Price (Rs)" type="number" value={itemForm.pricing?.purchaseCost ?? ""} onChange={(value) => updateItem("pricing.purchaseCost", value)} />
                     <Grid container spacing={1}>
                       <Grid item xs={4}>
                         <Field isDark={isDark} select label="Discount" value={itemForm.discountType || "Rs"} onChange={(val) => updateItem("discountType", val)}>
@@ -1986,7 +2082,7 @@ function InventoryERP() {
                         </Field>
                       </Grid>
                       <Grid item xs={8}>
-                        <Field isDark={isDark} label=" " type="number" value={itemForm.discount || 0} onChange={(value) => updateItem("discount", value)} />
+                        <Field isDark={isDark} label=" " type="number" value={itemForm.discount ?? ""} onChange={(value) => updateItem("discount", value)} />
                       </Grid>
                     </Grid>
                   </Stack>
@@ -2100,8 +2196,19 @@ function InventoryERP() {
 
   return (
     <Box sx={{ p: { xs: 1.5, md: 2.5 }, bgcolor: isDark ? "#070b14" : "#fff", minHeight: "100vh", color: isDark ? "#f8fafc" : "inherit" }}>
+
+
       {mode === "categories" ? (
         <Stack spacing={2.5}>
+          <Box>
+            <Button
+              startIcon={<ArrowBack />}
+              onClick={() => setScreen("items")}
+              sx={{ color: isDark ? "#94a3b8" : MUTED, fontWeight: 800, mb: 1.5, textTransform: "none" }}
+            >
+              Back to Inventory Items
+            </Button>
+          </Box>
           <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "center" }} justifyContent="space-between" spacing={2}>
             <Stack direction="row" alignItems="center" spacing={1.6}>
               <PageIcon icon={<Inventory2 />} />
@@ -2112,9 +2219,27 @@ function InventoryERP() {
                 <Typography color={isDark ? "#94a3b8" : MUTED}>Organize and manage your product categories</Typography>
               </Box>
             </Stack>
-            <Button startIcon={<Add />} variant="contained" onClick={startCreateCategory} sx={{ bgcolor: INDIGO, borderRadius: 2, px: 3, py: 1.2, fontWeight: 900 }}>
-              Add Category
-            </Button>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Button
+                startIcon={<Add />}
+                variant="outlined"
+                onClick={() => {
+                  setItemForm(emptyItem);
+                  setMode("create-item");
+                }}
+                sx={{
+                  borderColor: isDark ? "rgba(99, 102, 241, 0.45)" : alpha(INDIGO, 0.45),
+                  color: isDark ? "#818cf8" : INDIGO,
+                  fontWeight: 800,
+                  borderRadius: 2,
+                }}
+              >
+                Add Item
+              </Button>
+              <Button startIcon={<Add />} variant="contained" onClick={startCreateCategory} sx={{ bgcolor: INDIGO, borderRadius: 2, px: 3, py: 1.2, fontWeight: 900 }}>
+                Add Category
+              </Button>
+            </Stack>
           </Stack>
 
           <Grid container spacing={2}>
@@ -2160,6 +2285,314 @@ function InventoryERP() {
             empty="No categories found."
           />
         </Stack>
+      ) : mode === "out" ? (
+        <Stack spacing={2.5}>
+          {/* Header */}
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} spacing={2}>
+            <Stack direction="row" alignItems="center" spacing={1.6}>
+              <PageIcon icon={<OutboxOutlined />} />
+              <Box>
+                <Typography variant="h3" fontWeight={900} color={isDark ? "#f8fafc" : "#000"}>
+                  Customer & Project Inventory Out
+                </Typography>
+                <Typography color={isDark ? "#94a3b8" : MUTED}>
+                  Issue inventory to customer projects with exact serial number tracking & cost allocation
+                </Typography>
+              </Box>
+            </Stack>
+            <Stack direction="row" spacing={1.5} justifyContent="flex-end" flexWrap="wrap">
+              <Button
+                startIcon={<Refresh />}
+                variant="outlined"
+                onClick={fetchInventoryOut}
+                sx={{
+                  borderColor: isDark ? "rgba(255, 255, 255, 0.15)" : "#e5e7eb",
+                  color: isDark ? "#f8fafc" : "#000",
+                  fontWeight: 800,
+                  borderRadius: 2,
+                }}
+              >
+                Refresh
+              </Button>
+              <Button
+                startIcon={<Add />}
+                variant="contained"
+                onClick={() => setInventoryOutDialogOpen(true)}
+                sx={{ bgcolor: INDIGO, borderRadius: 2, fontWeight: 900, px: 3 }}
+              >
+                Issue Material to Project
+              </Button>
+            </Stack>
+          </Stack>
+
+          {/* Stat Cards */}
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                isDark={isDark}
+                icon={<OutboxOutlined />}
+                label="Total Issues"
+                value={inventoryOutPagination.total || inventoryOutRecords.length}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                isDark={isDark}
+                icon={<Inventory2 />}
+                label="Total Items Issued"
+                value={inventoryOutRecords.reduce((sum, r) => sum + (r.totalQuantity || 0), 0)}
+                color={BLUE}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                isDark={isDark}
+                icon={<TrendingUp />}
+                label="Total Material Cost"
+                value={formatCurrency(inventoryOutRecords.reduce((sum, r) => sum + (r.totalCost || 0), 0))}
+                color={SUCCESS}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <StatCard
+                isDark={isDark}
+                icon={<QrCodeScanner />}
+                label="Serialized Units"
+                value={inventoryOutRecords.reduce(
+                  (sum, r) => sum + (r.items || []).reduce((iSum, it) => iSum + (it.serialNumbers?.length || 0), 0),
+                  0,
+                )}
+                color="#7c3aed"
+              />
+            </Grid>
+          </Grid>
+
+          {/* Filters & Search */}
+          <Paper sx={{ ...getSoftCard(isDark), p: 2 }}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={8}>
+                <TextField
+                  placeholder="Search by Issue #, Project Code, Customer Name, Serial Number or Item..."
+                  value={inventoryOutSearch}
+                  onChange={(e) => setInventoryOutSearch(e.target.value)}
+                  fullWidth
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={getInputSx(isDark)}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Filter by Status"
+                  value={inventoryOutStatus}
+                  onChange={(e) => setInventoryOutStatus(e.target.value)}
+                  sx={getInputSx(isDark)}
+                  InputLabelProps={{ shrink: true }}
+                >
+                  <MenuItem value="">All Statuses</MenuItem>
+                  <MenuItem value="issued">Issued / Completed</MenuItem>
+                  <MenuItem value="cancelled">Cancelled / Reversed</MenuItem>
+                </TextField>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* Table */}
+          <TableCard
+            isDark={isDark}
+            columns={[
+              "Customer & Project",
+              "Items Issued",
+              "Total Qty",
+              "Total Cost",
+              "Serial #s",
+              "Date",
+              "Status",
+              "Actions",
+            ]}
+            columnSx={[
+              { width: "22%" },
+              { width: "22%" },
+              { width: "9%" },
+              { width: "12%" },
+              { width: "13%" },
+              { width: "10%" },
+              { width: "9%" },
+              { width: "8%", textAlign: "right" },
+            ]}
+            rows={inventoryOutRecords.map((record) => {
+              const allSerials = (record.items || []).flatMap((it) => it.serialNumbers || []).filter(Boolean);
+              const isCancelled = record.status === "cancelled";
+
+              return [
+                <Stack spacing={0.3}>
+                  <Typography fontWeight={800} noWrap sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: 13 }}>
+                    {record.customerName || record.customer?.firstName || "Customer"}
+                  </Typography>
+                  <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                    <Chip
+                      size="small"
+                      label={record.projectCode || record.projectName || "Project"}
+                      sx={{
+                        height: 20,
+                        fontSize: 11,
+                        bgcolor: alpha(INDIGO, isDark ? 0.25 : 0.1),
+                        color: isDark ? "#818cf8" : INDIGO,
+                        fontWeight: 800,
+                      }}
+                    />
+                  </Stack>
+                </Stack>,
+
+                <Stack spacing={0.3}>
+                  {(record.items || []).slice(0, 2).map((item, idx) => (
+                    <Typography key={idx} variant="body2" noWrap sx={{ fontSize: 12, color: isDark ? "#e2e8f0" : "#1e293b" }}>
+                      • {item.itemName} <Box component="span" sx={{ color: MUTED }}>({item.quantity} {item.unit || "pcs"})</Box>
+                    </Typography>
+                  ))}
+                  {(record.items || []).length > 2 && (
+                    <Typography variant="caption" color={isDark ? "#60a5fa" : BLUE} fontWeight={700}>
+                      +{(record.items || []).length - 2} more items...
+                    </Typography>
+                  )}
+                </Stack>,
+
+                <Typography fontWeight={900} sx={{ color: isDark ? "#f8fafc" : "#0f172a" }}>
+                  {record.totalQuantity}
+                </Typography>,
+
+                <Box>
+                  <Typography fontWeight={900} sx={{ color: SUCCESS, fontSize: 13 }}>
+                    {formatCurrency(record.totalCost)}
+                  </Typography>
+                  <Typography variant="caption" color={isDark ? "#94a3b8" : MUTED}>
+                    actual cost
+                  </Typography>
+                </Box>,
+
+                <Box>
+                  {allSerials.length > 0 ? (
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ maxWidth: 130 }}>
+                      {allSerials.slice(0, 1).map((s, idx) => (
+                        <Chip
+                          key={idx}
+                          size="small"
+                          label={s}
+                          onClick={() => {
+                            navigator.clipboard?.writeText(s);
+                            showToast(`Copied Serial: ${s}`);
+                          }}
+                          sx={{
+                            height: 20,
+                            fontSize: 10,
+                            bgcolor: alpha("#7c3aed", isDark ? 0.25 : 0.1),
+                            color: isDark ? "#c084fc" : "#7c3aed",
+                            fontWeight: 700,
+                          }}
+                        />
+                      ))}
+                      {allSerials.length > 1 && (
+                        <Chip
+                          size="small"
+                          label={`+${allSerials.length - 1}`}
+                          onClick={() => setSelectedInventoryOutRecord(record)}
+                          sx={{ height: 20, fontSize: 10, bgcolor: isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9" }}
+                        />
+                      )}
+                    </Stack>
+                  ) : (
+                    <Typography variant="caption" color={isDark ? "#64748b" : "#94a3b8"}>
+                      None
+                    </Typography>
+                  )}
+                </Box>,
+
+                <Typography variant="body2" sx={{ color: isDark ? "#cbd5e1" : "#475569", fontSize: 12 }}>
+                  {record.issueDate ? new Date(record.issueDate).toLocaleDateString() : "-"}
+                </Typography>,
+
+                <Chip
+                  size="small"
+                  label={isCancelled ? "Cancelled" : "Issued"}
+                  sx={{
+                    bgcolor: alpha(isCancelled ? DANGER : SUCCESS, isDark ? 0.25 : 0.12),
+                    color: isCancelled ? DANGER : isDark ? "#4ade80" : SUCCESS,
+                    fontWeight: 800,
+                  }}
+                />,
+
+                <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
+                  <Tooltip title="View Details">
+                    <IconButton
+                      size="small"
+                      onClick={() => setSelectedInventoryOutRecord(record)}
+                      sx={{ color: isDark ? "#60a5fa" : BLUE, p: 0.75 }}
+                    >
+                      <VisibilityOutlined fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  {!isCancelled && (
+                    <Tooltip title="Cancel / Reverse Issue">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setCancelIssueRecord(record);
+                          setCancelReasonInput("");
+                        }}
+                        sx={{ color: DANGER, p: 0.75 }}
+                      >
+                        <DeleteOutline fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Stack>,
+              ];
+            })}
+            empty={inventoryOutLoading ? "Loading inventory issues..." : "No inventory out records found."}
+          />
+
+          {/* Pagination */}
+          <Paper sx={{ ...getSoftCard(isDark), p: 2 }}>
+            <Stack direction={{ xs: "column", sm: "row" }} alignItems="center" justifyContent="space-between" spacing={2}>
+              <Typography color={isDark ? "#94a3b8" : MUTED}>
+                {inventoryOutPagination.total
+                  ? `${(inventoryOutPagination.page - 1) * inventoryOutPagination.limit + 1}-${Math.min(
+                      inventoryOutPagination.page * inventoryOutPagination.limit,
+                      inventoryOutPagination.total,
+                    )} of ${inventoryOutPagination.total}`
+                  : "0 of 0"}
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  disabled={inventoryOutPage <= 1}
+                  onClick={() => setInventoryOutPage((prev) => Math.max(prev - 1, 1))}
+                  variant="outlined"
+                  sx={{ borderColor: isDark ? "rgba(255,255,255,0.15)" : "#e5e7eb", color: isDark ? "#f8fafc" : undefined }}
+                >
+                  Prev
+                </Button>
+                <Button variant="contained" sx={{ bgcolor: INDIGO }}>
+                  {inventoryOutPage}
+                </Button>
+                <Button
+                  disabled={inventoryOutPage >= inventoryOutPagination.pages}
+                  onClick={() => setInventoryOutPage((prev) => prev + 1)}
+                  variant="outlined"
+                  sx={{ borderColor: isDark ? "rgba(255,255,255,0.15)" : "#e5e7eb", color: isDark ? "#f8fafc" : undefined }}
+                >
+                  Next
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        </Stack>
       ) : (
         <Stack spacing={2.5}>
           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} spacing={2}>
@@ -2199,6 +2632,19 @@ function InventoryERP() {
                 Import Data
               </Button>
               <Button startIcon={<Refresh />} variant="outlined" onClick={fetchAll} sx={{ borderColor: isDark ? "rgba(255, 255, 255, 0.15)" : "#e5e7eb", color: isDark ? "#f8fafc" : "#000", fontWeight: 800 }}>Refresh</Button>
+              <Button
+                startIcon={<ListAlt />}
+                variant="outlined"
+                onClick={() => setScreen("categories")}
+                sx={{
+                  borderColor: isDark ? "rgba(99, 102, 241, 0.45)" : alpha(INDIGO, 0.45),
+                  color: isDark ? "#818cf8" : INDIGO,
+                  fontWeight: 800,
+                  borderRadius: 2,
+                }}
+              >
+                Categories
+              </Button>
               <Button
                 startIcon={<Add />}
                 variant="contained"
@@ -2583,6 +3029,225 @@ function InventoryERP() {
           <Typography>Delete</Typography>
         </MenuItem>
       </Menu>
+
+      {/* Inventory Out Details Dialog */}
+      <Dialog
+        open={Boolean(selectedInventoryOutRecord)}
+        onClose={() => setSelectedInventoryOutRecord(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            bgcolor: isDark ? "#0f172a" : "#fff",
+            color: isDark ? "#f8fafc" : "inherit",
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Box>
+              <Typography variant="h6" fontWeight={900}>
+                Issue Details: {selectedInventoryOutRecord?.issueNumber}
+              </Typography>
+              <Typography variant="caption" color={isDark ? "#94a3b8" : MUTED}>
+                Issued on {selectedInventoryOutRecord?.issueDate ? new Date(selectedInventoryOutRecord.issueDate).toLocaleString() : "-"}
+              </Typography>
+            </Box>
+            <IconButton onClick={() => setSelectedInventoryOutRecord(null)}>
+              <Close />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers sx={{ borderColor: isDark ? "rgba(255,255,255,0.1)" : undefined }}>
+          {selectedInventoryOutRecord && (
+            <Stack spacing={3}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Paper sx={{ ...getSoftCard(isDark), p: 2 }}>
+                    <Typography variant="caption" color={isDark ? "#94a3b8" : MUTED} fontWeight={700}>
+                      CUSTOMER INFO
+                    </Typography>
+                    <Typography variant="subtitle1" fontWeight={800} sx={{ mt: 0.5 }}>
+                      {selectedInventoryOutRecord.customerName}
+                    </Typography>
+                    {selectedInventoryOutRecord.customerPhone && (
+                      <Typography variant="body2" color={isDark ? "#cbd5e1" : "#475569"}>
+                        📞 {selectedInventoryOutRecord.customerPhone}
+                      </Typography>
+                    )}
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Paper sx={{ ...getSoftCard(isDark), p: 2 }}>
+                    <Typography variant="caption" color={isDark ? "#94a3b8" : MUTED} fontWeight={700}>
+                      PROJECT DETAILS
+                    </Typography>
+                    <Typography variant="subtitle1" fontWeight={800} sx={{ mt: 0.5, color: INDIGO }}>
+                      {selectedInventoryOutRecord.projectName} ({selectedInventoryOutRecord.projectCode})
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              <Box>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
+                  Issued Materials Breakdown
+                </Typography>
+                <TableContainer component={Paper} sx={{ ...getSoftCard(isDark), overflow: "hidden" }}>
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: isDark ? "#1e293b" : "#f8fafc" }}>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 800 }}>Item</TableCell>
+                        <TableCell sx={{ fontWeight: 800 }}>Brand / Model</TableCell>
+                        <TableCell sx={{ fontWeight: 800 }}>Qty</TableCell>
+                        <TableCell sx={{ fontWeight: 800 }}>Unit Cost</TableCell>
+                        <TableCell sx={{ fontWeight: 800 }}>Total Cost</TableCell>
+                        <TableCell sx={{ fontWeight: 800 }}>Serial Numbers</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(selectedInventoryOutRecord.items || []).map((it, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell sx={{ fontWeight: 700 }}>{it.itemName}</TableCell>
+                          <TableCell>{it.brand || it.model || "-"}</TableCell>
+                          <TableCell sx={{ fontWeight: 800 }}>{it.quantity} {it.unit}</TableCell>
+                          <TableCell>{formatCurrency(it.unitCost)}</TableCell>
+                          <TableCell sx={{ fontWeight: 800, color: SUCCESS }}>{formatCurrency(it.totalCost)}</TableCell>
+                          <TableCell>
+                            {(it.serialNumbers || []).length > 0 ? (
+                              <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ maxWidth: 200 }}>
+                                {it.serialNumbers.map((s, sIdx) => (
+                                  <Chip
+                                    key={sIdx}
+                                    size="small"
+                                    label={s}
+                                    sx={{
+                                      height: 20,
+                                      fontSize: 10,
+                                      bgcolor: alpha("#7c3aed", isDark ? 0.25 : 0.1),
+                                      color: isDark ? "#c084fc" : "#7c3aed",
+                                      fontWeight: 700,
+                                    }}
+                                  />
+                                ))}
+                              </Stack>
+                            ) : (
+                              <Typography variant="caption" color={MUTED}>Non-serialized</Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ pt: 1 }}>
+                <Box>
+                  <Typography variant="caption" color={MUTED}>Status</Typography>
+                  <Box>
+                    <Chip
+                      size="small"
+                      label={selectedInventoryOutRecord.status?.toUpperCase()}
+                      sx={{
+                        bgcolor: alpha(selectedInventoryOutRecord.status === "cancelled" ? DANGER : SUCCESS, 0.15),
+                        color: selectedInventoryOutRecord.status === "cancelled" ? DANGER : SUCCESS,
+                        fontWeight: 800,
+                      }}
+                    />
+                  </Box>
+                  {selectedInventoryOutRecord.remarks && (
+                    <Typography variant="body2" sx={{ mt: 1, fontStyle: "italic", color: MUTED }}>
+                      Note: {selectedInventoryOutRecord.remarks}
+                    </Typography>
+                  )}
+                </Box>
+                <Paper sx={{ p: 2, bgcolor: alpha(SUCCESS, isDark ? 0.15 : 0.08), borderRadius: 2, textAlign: "right" }}>
+                  <Typography variant="caption" color={MUTED} fontWeight={700}>
+                    TOTAL MATERIAL VALUE
+                  </Typography>
+                  <Typography variant="h5" fontWeight={900} color={SUCCESS}>
+                    {formatCurrency(selectedInventoryOutRecord.totalCost)}
+                  </Typography>
+                </Paper>
+              </Stack>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button variant="contained" onClick={() => setSelectedInventoryOutRecord(null)} sx={{ bgcolor: INDIGO }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Cancel Issue Confirmation Dialog */}
+      <Dialog
+        open={Boolean(cancelIssueRecord)}
+        onClose={() => setCancelIssueRecord(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            bgcolor: isDark ? "#0f172a" : "#fff",
+            color: isDark ? "#f8fafc" : "inherit",
+          },
+        }}
+      >
+        <DialogTitle>
+          <Typography variant="h6" fontWeight={900} color={DANGER}>
+            Cancel Inventory Issue & Restore Stock
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2, color: isDark ? "#cbd5e1" : "#475569" }}>
+            Are you sure you want to cancel Issue <strong>{cancelIssueRecord?.issueNumber}</strong>?
+            This will reverse the transaction, return all issued quantities back to warehouse stock, release serial numbers, and deduct the material cost from the project total.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Reason for Cancellation"
+            placeholder="e.g. Issued wrong item, project cancelled, or material returned"
+            value={cancelReasonInput}
+            onChange={(e) => setCancelReasonInput(e.target.value)}
+            multiline
+            rows={2}
+            sx={getInputSx(isDark)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={() => setCancelIssueRecord(null)} disabled={cancellingIssue}>
+            Close
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCancelIssue}
+            disabled={cancellingIssue}
+            sx={{ bgcolor: DANGER, "&:hover": { bgcolor: "#dc2626" }, fontWeight: 800 }}
+          >
+            {cancellingIssue ? "Reversing..." : "Confirm & Return Stock"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Inventory Out Creation Dialog */}
+      <InventoryOutDialog
+        open={inventoryOutDialogOpen}
+        onClose={() => setInventoryOutDialogOpen(false)}
+        onSuccess={() => {
+          fetchInventoryOut();
+          fetchItems();
+          showToast("Materials issued successfully to project!");
+        }}
+      />
+
+      {/* Serial Traceability Modal */}
+      <SerialTraceabilityModal
+        open={serialTraceModalOpen}
+        onClose={() => setSerialTraceModalOpen(false)}
+      />
 
       {categoryModalNode}
       {subCategoryModalNode}
