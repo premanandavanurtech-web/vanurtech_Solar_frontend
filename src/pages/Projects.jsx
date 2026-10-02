@@ -80,6 +80,7 @@ import { format, isThisWeek, parseISO } from "date-fns";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { getProjectStage } from "../utils/projectStage";
+import { getAcceptedOrLatestQuotation } from "../utils/quotationStorage";
 
 // ── Design tokens ──────────────────────────────────────────────
 const NAVY     = "#1e3a5f";
@@ -205,10 +206,13 @@ const formatDate = (value, pattern = "dd MMM yyyy") => {
 
 const getProjectAmount = (p) => {
   if (!p) return 0;
+  const quote = p?._id ? getAcceptedOrLatestQuotation(p._id) : null;
+  const quoteCost = Number(quote?.totalCost) || Number(quote?.form?.totalCost) || 0;
   return Number(
-    p.projectSaleValue ||
     p.finalPaymentCost ||
+    p.projectSaleValue ||
     p.totalProjectCost ||
+    (quoteCost > 0 ? quoteCost : null) ||
     p.agreedPrice ||
     p.totalAmount ||
     p.projectValue ||
@@ -245,12 +249,11 @@ const getProjectDueAmount = (p) => {
   const total = getProjectAmount(p);
   if (total <= 0) return 0;
 
-  // Calculate sum of payments recorded
+  // Calculate sum of payments recorded (Excluding demand note which is a separate DISCOM fee)
   const p1 = Number(p.paymentAmount || 0);
   const p2 = (p.disbursementStatus === "completed" || p.disbursementDate) ? Number(p.disbursementAmount || 0) : 0;
-  const p3 = (p.demandNotePaymentPaid === "Yes" || p.demandNotePaymentDate) ? Number(p.demandNotePaymentAmount || 0) : 0;
   const p4 = (p.phase2DisbursementPaid === "Yes" || p.phase2DisbursementDate) ? Number(p.phase2DisbursementAmount || 0) : 0;
-  const calculatedReceived = p1 + p2 + p3 + p4;
+  const calculatedReceived = p1 + p2 + p4;
 
   const totalReceived = Number(p.totalPaymentReceived || p.finalPaymentTotalReceived || 0);
   const received = totalReceived > 0 ? totalReceived : calculatedReceived;

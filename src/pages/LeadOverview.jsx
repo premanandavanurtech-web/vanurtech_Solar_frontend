@@ -134,7 +134,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { format, parseISO, isValid } from "date-fns";
 import { useLocation, useNavigate } from "react-router-dom";
 import ConvertProjectDialog from "../components/ConvertProjectDialog";
-import { getQuotationsForLead, setCurrentQuotation } from "../utils/quotationStorage";
+import { getQuotationsForLead, setCurrentQuotation, updateQuotationStatus } from "../utils/quotationStorage";
 import { resolveVisitStatus } from "../utils/visitStatus";
 
 // ========== CONSTANTS & UTILITIES ==========
@@ -289,6 +289,20 @@ const getStatusColor = (status) => {
       avatar: "linear-gradient(135deg, #dc2626 0%, #f87171 100%)",
       border: alpha("#ef4444", 0.18),
     },
+    "Project Converted": {
+      bg: "linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(110,231,183,0.32) 100%)",
+      color: "#047857",
+      icon: <CheckCircle />,
+      avatar: "linear-gradient(135deg, #059669 0%, #34d399 100%)",
+      border: alpha("#10b981", 0.18),
+    },
+    Converted: {
+      bg: "linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(110,231,183,0.32) 100%)",
+      color: "#047857",
+      icon: <CheckCircle />,
+      avatar: "linear-gradient(135deg, #059669 0%, #34d399 100%)",
+      border: alpha("#10b981", 0.18),
+    },
     New: {
       bg: "linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(134,239,172,0.3) 100%)",
       color: "#15803d",
@@ -304,6 +318,11 @@ const getStatusColor = (status) => {
     avatar: GRADIENT_BLUE,
     border: alpha(PRIMARY_COLOR, 0.18),
   };
+};
+
+const getLeadDisplayStatus = (lead) => {
+  if (lead?.isProject) return "Project Converted";
+  return lead?.status || "New";
 };
 
 const getRoleColor = (role) => {
@@ -903,7 +922,8 @@ const MobileLeadCard = ({ lead, onView, onEdit, onAssign, onDelete, onConvertToP
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
   const [expanded, setExpanded] = useState(false);
-  const statusColor = getStatusColor(lead.status);
+  const displayStatus = getLeadDisplayStatus(lead);
+  const statusColor = getStatusColor(displayStatus);
   const initials = `${lead.firstName?.[0] || ""}${lead.lastName?.[0] || ""}`;
 
   const handleDeleteClick = () => {
@@ -951,7 +971,7 @@ const MobileLeadCard = ({ lead, onView, onEdit, onAssign, onDelete, onConvertToP
           </Stack>
         </Box>
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          <Chip label={lead.status} icon={statusColor.icon} size="small" sx={{ background: isDark ? (lead.status === "Missed Leads" ? "rgba(239, 68, 68, 0.2)" : "rgba(37, 99, 235, 0.2)") : statusColor.bg, color: isDark ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color, fontWeight: 700, height: 24, fontSize: "0.7rem", border: `1px solid ${isDark ? (lead.status === "Missed Leads" ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)") : statusColor.border}`, "& .MuiChip-icon": { fontSize: 14, color: isDark ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color } }} />
+          <Chip label={displayStatus} icon={statusColor.icon} size="small" sx={{ background: isDark ? (displayStatus === "Missed Leads" ? "rgba(239, 68, 68, 0.2)" : "rgba(37, 99, 235, 0.2)") : statusColor.bg, color: isDark ? (displayStatus === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color, fontWeight: 700, height: 24, fontSize: "0.7rem", border: `1px solid ${isDark ? (displayStatus === "Missed Leads" ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)") : statusColor.border}`, "& .MuiChip-icon": { fontSize: 14, color: isDark ? (displayStatus === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color } }} />
         </Box>
         <Collapse in={expanded}>
           <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : alpha(PRIMARY_COLOR, 0.1)}` }}>
@@ -1048,21 +1068,12 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
   const availableTabs = [
     { label: "Basic Info", icon: <Person /> },
-    { label: "Visit Info", icon: <CalendarToday /> },
-    { label: "Registration", icon: <HowToReg /> },
-    { label: "Loan Info", icon: <AccountBalance /> },
+    { label: "Site Survey", icon: <Build /> },
     { label: "Documents", icon: <FolderOpen /> },
-    { label: "Bank", icon: <LocalAtm /> },
-    { label: "Disbursement", icon: <AccountBalance /> },
-    { label: "Installation", icon: <Build /> },
     { label: "Timeline", icon: <Timeline /> },
-  ].filter((tab, i) => {
-    if (userRole === "TEAM" && (i === 3 || i === 5)) return false;
-    return true;
-  });
+  ];
 
-  const tabKeys = ["basic", "visit", "registration", "loan", "documents", "bank", "disbursement", "installation", "timeline"]
-    .filter((_, i) => !(userRole === "TEAM" && (i === 3 || i === 5)));
+  const tabKeys = ["basic", "sitesurvey", "documents", "timeline"];
 
   const activeTabKey = tabKeys[activeTab] || "basic";
 
@@ -1096,7 +1107,8 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
 
   if (!leadDetails) return null;
 
-  const statusColor = getStatusColor(leadDetails.status);
+  const displayStatus = getLeadDisplayStatus(leadDetails);
+  const statusColor = getStatusColor(displayStatus);
   const orderedTimeline = [...(leadDetails.stageTimeline || [])].sort(
     (a, b) => new Date(a.updatedAt || 0) - new Date(b.updatedAt || 0)
   );
@@ -1152,7 +1164,7 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
         gap: 2,
         flexWrap: "wrap",
       }}>
-        <Chip label={leadDetails.status} icon={statusColor.icon} size="small"
+        <Chip label={displayStatus} icon={statusColor.icon} size="small"
           sx={{ background: statusColor.bg, color: statusColor.color, fontWeight: 700, fontSize: "0.75rem", border: `1px solid ${statusColor.border}`, "& .MuiChip-icon": { color: statusColor.color } }} />
         {leadDetails.assignedUser && (
           <Stack direction="row" spacing={0.75} alignItems="center">
@@ -1191,26 +1203,47 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Paper elevation={0} sx={getModalSectionSx(isDark)}>
-                <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Person fontSize="small" /> Personal Information</Typography>
+                <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <Person fontSize="small" /> Personal & Address Information
+                </Typography>
                 <Stack spacing={2}>
-                  <InfoRow label="Full Name" value={`${leadDetails.firstName} ${leadDetails.lastName}`} icon={<AccountCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Full Name" value={`${leadDetails.firstName || ""} ${leadDetails.lastName || ""}`.trim() || "Not set"} icon={<AccountCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
                   <InfoRow label="Email" value={leadDetails.email || "Not set"} icon={<Email sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
                   <InfoRow label="Phone" value={leadDetails.phone || "Not set"} icon={<Phone sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                  <InfoRow label="Address" value={leadDetails.address || "Not set"} icon={<Home sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                  <InfoRow label="Pincode" value={leadDetails.pincode || "Not set"} icon={<LocationOn sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                  <InfoRow label="Solar Requirement" value={leadDetails.solarRequirement || "Not set"} icon={<Build sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Street Address" value={leadDetails.address?.street || (typeof leadDetails.address === "string" ? leadDetails.address : "") || leadDetails.street || "Not set"} icon={<Home sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="City" value={leadDetails.address?.city || leadDetails.city || "Not set"} icon={<LocationOn sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="State" value={leadDetails.address?.state || leadDetails.state || "Not set"} icon={<LocationOn sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Pincode" value={leadDetails.address?.postalCode || leadDetails.pincode || leadDetails.postalCode || "Not set"} icon={<LocationOn sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
                 </Stack>
               </Paper>
             </Grid>
             <Grid item xs={12} md={6}>
               <Paper elevation={0} sx={getModalSectionSx(isDark)}>
-                <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Timeline fontSize="small" /> Assignment & Status</Typography>
+                <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+                  <Timeline fontSize="small" /> Additional & Solar Information
+                </Typography>
                 <Stack spacing={2}>
-                  <InfoRow label="Status" value={leadDetails.status} icon={statusColor.icon} chip chipColor={statusColor} />
-                  <InfoRow label="Installation Status" value={leadDetails.installationStatus || "Not set"} icon={<Build sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                  {leadDetails.assignedManager && <InfoRow label="Assigned Manager" value={`${leadDetails.assignedManager.firstName} ${leadDetails.assignedManager.lastName}`} icon={<SupervisorAccount sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} subValue={<RoleBadge role={leadDetails.assignedManager.role} />} />}
-                  {leadDetails.assignedUser && <InfoRow label="Assigned To" value={`${leadDetails.assignedUser.firstName} ${leadDetails.assignedUser.lastName}`} icon={<AssignmentInd sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} subValue={<RoleBadge role={leadDetails.assignedUser.role} />} />}
-                  {leadDetails.createdBy && <InfoRow label="Created By" value={`${leadDetails.createdBy.firstName} ${leadDetails.createdBy.lastName}`} icon={<HowToReg sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} subValue={<RoleBadge role={leadDetails.createdBy.role} />} />}
+                  <InfoRow label="Status" value={displayStatus} icon={statusColor.icon} chip chipColor={statusColor} />
+                  <InfoRow label="DISCOM Name" value={leadDetails.discomName || "Not set"} icon={<Business sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Consumer Number" value={leadDetails.consumerNumber || leadDetails.address?.consumerNumber || "Not set"} icon={<ReceiptLong sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Plant Capacity" value={leadDetails.plantCapacity ? `${leadDetails.plantCapacity} kW` : "Not set"} icon={<Build sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  {(leadDetails.leadAssociate || leadDetails.assignedUser) && (
+                    <InfoRow
+                      label="Lead Associate"
+                      value={`${leadDetails.leadAssociate?.firstName || leadDetails.assignedUser?.firstName || ""} ${leadDetails.leadAssociate?.lastName || leadDetails.assignedUser?.lastName || ""}`.trim() || "Not Assigned"}
+                      icon={<AssignmentInd sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />}
+                      subValue={<RoleBadge role={leadDetails.leadAssociate?.role || leadDetails.assignedUser?.role} />}
+                    />
+                  )}
+                  <InfoRow label="Lead Source" value={leadDetails.source || "Manual Entry"} icon={<Send sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  {leadDetails.createdBy && (
+                    <InfoRow
+                      label="Created By"
+                      value={`${leadDetails.createdBy.firstName} ${leadDetails.createdBy.lastName || ""}`.trim()}
+                      icon={<HowToReg sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />}
+                      subValue={<RoleBadge role={leadDetails.createdBy.role} />}
+                    />
+                  )}
                 </Stack>
               </Paper>
             </Grid>
@@ -1227,12 +1260,12 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
           </Grid>
         )}
 
-        {/* Visit */}
-        {activeTabKey === "visit" && (
+        {/* Site Survey */}
+        {activeTabKey === "sitesurvey" && (
           <Paper elevation={0} sx={getModalSectionSx(isDark)}>
             <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
               <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <CalendarToday fontSize="small" /> Visit Information
+                <Build fontSize="small" /> Site Survey & Visit Information
               </Typography>
               <Button
                 size="small"
@@ -1259,47 +1292,28 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
               </Button>
             </Box>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}><Stack spacing={2}>
-                <InfoRow label="Visit Status" value={resolveVisitStatus(leadDetails)} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Visit Date" value={formatDate(leadDetails.visitDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Visit Time" value={leadDetails.visitTime || "Not set"} icon={<AccessTime sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Visit Location" value={leadDetails.visitLocation || "Not set"} icon={<LocationOn sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-              </Stack></Grid>
-              <Grid item xs={12} md={6}><InfoRow label="Visit Notes" value={leadDetails.visitNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} /></Grid>
-            </Grid>
-          </Paper>
-        )}
-
-        {/* Registration */}
-        {activeTabKey === "registration" && (
-          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
-            <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><HowToReg fontSize="small" /> Registration Information</Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}><Stack spacing={2}>
-                <InfoRow label="Registration Date" value={formatDate(leadDetails.dateOfRegistration)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Registration Status" value={leadDetails.registrationStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
-                {leadDetails.uploadDocument?.url && <InfoRow label="Registration Document" value="View Document" icon={<AttachFile sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} action={<Button size="small" variant="outlined" startIcon={<OpenInNew />} onClick={() => handleDownload(leadDetails.uploadDocument.url, "registration-document")} sx={{ borderColor: isDark ? "rgba(255,255,255,0.18)" : undefined }}>View</Button>} />}
-              </Stack></Grid>
-              <Grid item xs={12} md={6}><InfoRow label="Registration Notes" value={leadDetails.registrationNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} /></Grid>
-            </Grid>
-          </Paper>
-        )}
-
-        {/* Loan */}
-        {activeTabKey === "loan" && (
-          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
-            <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><AccountBalance fontSize="small" /> Loan Information</Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}><Stack spacing={2}>
-                <InfoRow label="Loan Amount" value={leadDetails.loanAmount ? `₹${leadDetails.loanAmount.toLocaleString()}` : "Not set"} icon={<Money sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Bank" value={leadDetails.bank || "Not set"} icon={<AccountBalance sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Branch Name" value={leadDetails.branchName || "Not set"} icon={<AccountBalance sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Loan Status" value={leadDetails.loanStatus || "Not Applied"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
-              </Stack></Grid>
-              <Grid item xs={12} md={6}><Stack spacing={2}>
-                <InfoRow label="Loan Approval Date" value={formatDate(leadDetails.loanApprovalDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Loan Notes" value={leadDetails.loanNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-              </Stack></Grid>
+              <Grid item xs={12} md={6}>
+                <Stack spacing={2}>
+                  <InfoRow label="Visit Status" value={resolveVisitStatus(leadDetails)} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Visit Date" value={formatDate(leadDetails.visitDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Visit Time" value={leadDetails.visitTime || "Not set"} icon={<AccessTime sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Visit Location" value={leadDetails.visitLocation || "Not set"} icon={<LocationOn sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Roof Type" value={leadDetails.siteSurvey?.roofType || leadDetails.visit?.siteSurvey?.roofType || "Not set"} icon={<Home sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Roof Material" value={leadDetails.siteSurvey?.roofMaterial || leadDetails.visit?.siteSurvey?.roofMaterial || "Not set"} icon={<Build sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Roof Condition" value={leadDetails.siteSurvey?.roofCondition || leadDetails.visit?.siteSurvey?.roofCondition || "Not set"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Available Roof Area" value={leadDetails.siteSurvey?.availableRoofArea ? `${leadDetails.siteSurvey.availableRoofArea} sq ft` : "Not set"} icon={<LocationOn sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                </Stack>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Stack spacing={2}>
+                  <InfoRow label="Phase Type" value={leadDetails.siteSurvey?.phaseType || leadDetails.visit?.siteSurvey?.phaseType || "Not set"} icon={<Build sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Recommended Panel" value={leadDetails.siteSurvey?.recommendedPanelBrand || leadDetails.visit?.siteSurvey?.recommendedPanelBrand || "Not set"} icon={<Build sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Recommended Inverter" value={leadDetails.siteSurvey?.recommendedInverterBrand || leadDetails.visit?.siteSurvey?.recommendedInverterBrand || "Not set"} icon={<Build sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Shading Issues" value={leadDetails.siteSurvey?.shadingIssues || leadDetails.visit?.siteSurvey?.shadingIssues || "No"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Visit Notes" value={leadDetails.visitNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                  <InfoRow label="Survey Notes" value={leadDetails.siteSurvey?.notes || leadDetails.siteSurvey?.surveyNotes || "No survey notes"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
+                </Stack>
+              </Grid>
             </Grid>
           </Paper>
         )}
@@ -1323,50 +1337,6 @@ const ViewLeadModal = React.memo(({ open, onClose, lead, userRole }) => {
                 <InfoRow label="Document Notes" value={leadDetails.documentNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
               </Stack>
             </Box>
-          </Paper>
-        )}
-
-        {/* Bank */}
-        {activeTabKey === "bank" && (
-          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
-            <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Pending fontSize="small" /> Bank at Pending</Typography>
-            <Stack spacing={2}>
-              <InfoRow label="Status" value={leadDetails.bankAtPendingStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
-              <InfoRow label="Date" value={formatDate(leadDetails.bankAtPendingDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-              <InfoRow label="Reason" value={leadDetails.reason || "No reason provided"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-              <InfoRow label="Notes" value={leadDetails.bankAtPendingNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-            </Stack>
-          </Paper>
-        )}
-
-        {/* Disbursement */}
-        {activeTabKey === "disbursement" && (
-          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
-            <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><LocalAtm fontSize="small" /> Disbursement Information</Typography>
-            <Stack spacing={2}>
-              <InfoRow label="Disbursement Amount" value={leadDetails.disbursementAmount ? `₹${leadDetails.disbursementAmount.toLocaleString()}` : "Not set"} icon={<Money sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-              <InfoRow label="Disbursement Date" value={formatDate(leadDetails.disbursementDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-              <InfoRow label="Disbursement Status" value={leadDetails.disbursementStatus || "Pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
-              {leadDetails.disbursementBankDetails && <>
-                <InfoRow label="Disbursement Bank" value={leadDetails.disbursementBankDetails.bank || "Not set"} icon={<AccountBalance sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Disbursement Branch" value={leadDetails.disbursementBankDetails.branchName || "Not set"} icon={<AccountBalance sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-              </>}
-              <InfoRow label="Disbursement Notes" value={leadDetails.disbursementNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-            </Stack>
-          </Paper>
-        )}
-
-        {/* Installation */}
-        {activeTabKey === "installation" && (
-          <Paper elevation={0} sx={getModalSectionSx(isDark)}>
-            <Typography variant="subtitle2" fontWeight={700} color={PRIMARY_COLOR} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}><Build fontSize="small" /> Installation Information</Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}><Stack spacing={2}>
-                <InfoRow label="Installation Date" value={formatDate(leadDetails.installationDate)} icon={<Event sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} />
-                <InfoRow label="Installation Status" value={leadDetails.installationStatus || "pending"} icon={<CheckCircle sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} chip chipColor={{ bg: isDark ? "rgba(37,99,235,0.18)" : alpha(PRIMARY_COLOR, 0.08), color: PRIMARY_COLOR }} />
-              </Stack></Grid>
-              <Grid item xs={12} md={6}><InfoRow label="Installation Notes" value={leadDetails.installationNotes || "No notes available"} icon={<Note sx={{ color: alpha(PRIMARY_COLOR, 0.6) }} />} /></Grid>
-            </Grid>
           </Paper>
         )}
 
@@ -2398,7 +2368,7 @@ const LeadOverview = () => {
       setLoading(true);
 
       if (quickFilter === "followUpToday") {
-        const leadData = await fetchAPI(`/lead/getAll?isProject=false&limit=1000&sortBy=followUpDate&sortOrder=asc`);
+        const leadData = await fetchAPI(`/lead/getAll?limit=1000&sortBy=followUpDate&sortOrder=asc`);
         if (leadData.success) {
           const allLeads = leadData.result?.leads || [];
           const filtered = allLeads.filter(leadHasActiveFollowUpToday);
@@ -2423,7 +2393,7 @@ const LeadOverview = () => {
         ? quickFilter.replace("pipeline:", "")
         : "";
 
-      if (pipelineStageKey !== "projectConverted") params.append("isProject", "false");
+      if (pipelineStageKey === "projectConverted") params.append("isProject", "true");
       if (debouncedSearchTerm) params.append("search", debouncedSearchTerm);
       if (statusFilter !== "all") params.append("status", statusFilter);
       if (pipelineStageKey) params.append("pipelineStage", pipelineStageKey);
@@ -2468,7 +2438,7 @@ const LeadOverview = () => {
 
         let allLeads = null;
         try {
-          const leadData = await fetchAPI("/lead/getAll?isProject=false&limit=1000&sortBy=createdAt&sortOrder=desc");
+          const leadData = await fetchAPI("/lead/getAll?limit=1000&sortBy=createdAt&sortOrder=desc");
           if (leadData.success) {
             allLeads = leadData.result?.leads || [];
             totalStatsLeads = leadData.result?.pagination?.total ?? allLeads.length;
@@ -2697,14 +2667,23 @@ const LeadOverview = () => {
 
     try {
       setProjectDialogSubmitting(true);
+      const quotationCost = quotation ? (Number(quotation.totalCost) || Number(quotation.form?.totalCost) || 0) : 0;
       const response = await fetchAPI(`/lead/updateLead/${lead._id}`, {
         method: "PUT",
-        body: JSON.stringify({ isProject: true, projectType: projectDetails.projectType }),
+        body: JSON.stringify({
+          isProject: true,
+          projectType: projectDetails.projectType,
+          ...(quotationCost > 0 && {
+            projectSaleValue: quotationCost,
+            finalPaymentCost: quotationCost,
+          }),
+        }),
       });
       if (response?.success === false) {
         throw new Error(response.message || "Failed to convert lead to project");
       }
       if (quotation) {
+        updateQuotationStatus(quotation.id, "accepted");
         setCurrentQuotation(quotation);
       }
       showSnackbar("Lead converted to project", "success");
@@ -2778,7 +2757,8 @@ const LeadOverview = () => {
 
   const renderTableRow = useCallback((lead) => {
     const isSelected = selectedLeads.includes(lead._id);
-    const statusColor = getStatusColor(lead.status);
+    const displayStatus = getLeadDisplayStatus(lead);
+    const statusColor = getStatusColor(displayStatus);
     return (
       <TableRow key={lead._id} hover selected={isSelected} sx={{
         "&:hover": { bgcolor: isDark ? "rgba(37, 99, 235, 0.12)" : alpha(PRIMARY_COLOR, 0.02) },
@@ -2793,7 +2773,7 @@ const LeadOverview = () => {
           </Box>
         </TableCell>
         <TableCell><Box display="flex" alignItems="center" gap={1}><Phone fontSize="small" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }} /><Typography variant="body2" sx={{ color: isDark ? "#e2e8f0" : "inherit" }}>{lead.phone || "Not set"}</Typography></Box></TableCell>
-        <TableCell><Chip label={lead.status} icon={statusColor.icon} size="small" sx={{ background: statusColor.bg, color: statusColor.color, fontWeight: 700, border: `1px solid ${statusColor.border}`, "& .MuiChip-icon": { color: statusColor.color } }} /></TableCell>
+        <TableCell><Chip label={displayStatus} icon={statusColor.icon} size="small" sx={{ background: statusColor.bg, color: statusColor.color, fontWeight: 700, border: `1px solid ${statusColor.border}`, "& .MuiChip-icon": { color: statusColor.color } }} /></TableCell>
         <TableCell>
           {(() => {
             const assignedPerson = getAssignedPerson(lead);

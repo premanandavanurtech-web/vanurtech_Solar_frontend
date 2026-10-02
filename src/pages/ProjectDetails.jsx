@@ -81,6 +81,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
 import { getProjectStage } from "../utils/projectStage";
+import { getAcceptedOrLatestQuotation } from "../utils/quotationStorage";
 import ProjectProfitabilityCard from "../components/ProjectProfitabilityCard";
 import ProjectImagesWorkspace from "../components/ProjectImagesWorkspace";
 
@@ -418,16 +419,25 @@ const getCustomerName = (project) =>
 const getSystemSize = (project) =>
   project?.solarRequirement || project?.systemSize || project?.capacity || project?.plantCapacity || "";
 
-const getProjectValue = (project) =>
-  project?.finalPaymentCost ||
-  project?.totalProjectCost ||
-  project?.agreedPrice ||
-  project?.totalAmount ||
-  project?.projectValue ||
-  project?.quotationAmount ||
-  project?.paymentAmount ||
-  project?.loanAmount ||
-  project?.disbursementAmount;
+const getProjectValue = (project) => {
+  if (!project) return 0;
+  const quote = project?._id ? getAcceptedOrLatestQuotation(project._id) : null;
+  const quoteCost = Number(quote?.totalCost) || Number(quote?.form?.totalCost) || 0;
+  return (
+    project?.finalPaymentCost ||
+    project?.projectSaleValue ||
+    project?.totalProjectCost ||
+    (quoteCost > 0 ? quoteCost : null) ||
+    project?.agreedPrice ||
+    project?.totalAmount ||
+    project?.projectValue ||
+    project?.quotationAmount ||
+    project?.paymentAmount ||
+    project?.loanAmount ||
+    project?.disbursementAmount ||
+    0
+  );
+};
 
 const getProjectTitle = (project) => {
   const parts = [
@@ -3862,17 +3872,22 @@ const FinalPaymentWorkspace = ({
   // Itemized payment breakdown from stages
   const stage04Cost = Number(project?.paymentAmount || project?.loanAmount || 0);
   const payment1stInstallment = Number(project?.disbursementAmount || 0);
-  const paymentDemandNote = Number(project?.demandNotePaymentAmount || 0);
   const payment2ndInstallment = Number(project?.phase2DisbursementAmount || 0);
 
-  // Installments collected from customer / bank
-  const installmentsCollectedSum = payment1stInstallment + paymentDemandNote + payment2ndInstallment;
+  // Installments collected from customer / bank (Demand Note is a DISCOM fee and not part of contract installments)
+  const installmentsCollectedSum = payment1stInstallment + payment2ndInstallment;
+
+  // Look up quotation cost for lead if available
+  const quote = project?._id ? getAcceptedOrLatestQuotation(project._id) : null;
+  const quoteCost = Number(quote?.totalCost) || Number(quote?.form?.totalCost) || 0;
 
   // Determine project cost
   const cost =
     Number(formData.finalPaymentCost) ||
     Number(project?.finalPaymentCost) ||
+    Number(project?.projectSaleValue) ||
     Number(project?.totalProjectCost) ||
+    (quoteCost > 0 ? quoteCost : 0) ||
     Number(project?.agreedPrice) ||
     (stage04Cost > 0 ? stage04Cost : 0) ||
     (installmentsCollectedSum > 0 ? installmentsCollectedSum : 0);
@@ -3936,18 +3951,6 @@ const FinalPaymentWorkspace = ({
       icon: AccountBalance,
       accent: "#10B981",
       show: payment1stInstallment > 0 || isCompletedStatus(project?.disbursementStatus),
-    },
-    {
-      title: "Stage 11: Demand Note Payment",
-      amount: paymentDemandNote,
-      date: project?.demandNotePaymentDate,
-      mode: "DISCOM / Demand Note Fee",
-      ref: project?.demandNoteNumber ? `Note #${project.demandNoteNumber}` : "",
-      notes: project?.demandNotePaymentNotes || "",
-      status: project?.demandNotePaymentPaid === "Yes" ? "Paid" : "Pending",
-      icon: ReceiptLongOutlined,
-      accent: "#F59E0B",
-      show: paymentDemandNote > 0 || project?.demandNotePaymentPaid === "Yes",
     },
     {
       title: "Stage 13 / 14: 2nd Installment / Phase 2 Disbursement",
@@ -4916,23 +4919,26 @@ function ProjectDetails() {
   const getFinalPaymentForm = useCallback((source) => {
     const stage04Cost = Number(source?.paymentAmount || source?.loanAmount || 0);
     const p1st = Number(source?.disbursementAmount || 0);
-    const pDemand = Number(source?.demandNotePaymentAmount || 0);
     const p2nd = Number(source?.phase2DisbursementAmount || 0);
-    const installmentsCollectedSum = p1st + pDemand + p2nd;
+    const installmentsCollectedSum = p1st + p2nd;
     const hasInstallments = p1st > 0 || p2nd > 0;
 
     const defaultReceived = hasInstallments
       ? installmentsCollectedSum
       : (stage04Cost > 0 ? stage04Cost : installmentsCollectedSum);
 
+    const quote = source?._id ? getAcceptedOrLatestQuotation(source._id) : null;
+    const quoteCost = Number(quote?.totalCost) || Number(quote?.form?.totalCost) || 0;
+
     const costVal =
       source?.finalPaymentCost ??
+      source?.projectSaleValue ??
       source?.totalProjectCost ??
+      (quoteCost > 0 ? String(quoteCost) : null) ??
       source?.agreedPrice ??
       source?.quotationAmount ??
       source?.totalAmount ??
       source?.projectValue ??
-      source?.projectSaleValue ??
       (stage04Cost > 0 ? String(stage04Cost) : "") ??
       (installmentsCollectedSum > 0 ? String(installmentsCollectedSum) : "");
 

@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogContent,
   FormControl,
@@ -92,6 +93,8 @@ const QuotationCard = ({ quotation, selected, onSelect }) => {
   const chips = getQuotationMeta(quotation);
   const issueDate = formatDisplayDate(quotation?.savedAt || quotation?.createdAt);
   const statusLabel = String(quotation?.status || "draft").toUpperCase();
+  const isAccepted = quotation?.status === "accepted";
+  const isSent = quotation?.status === "sent";
 
   return (
     <Paper
@@ -137,8 +140,9 @@ const QuotationCard = ({ quotation, selected, onSelect }) => {
             sx={{
               height: 30,
               fontWeight: 700,
-              color: "#d97706",
-              bgcolor: "#fff7ed",
+              color: isAccepted ? "#15803d" : isSent ? "#2563eb" : "#d97706",
+              bgcolor: isAccepted ? "#f0fdf4" : isSent ? "#eff6ff" : "#fff7ed",
+              border: `1px solid ${isAccepted ? "#bbf7d0" : isSent ? "#bfdbfe" : "#fed7aa"}`,
               borderRadius: 999,
             }}
           />
@@ -220,8 +224,9 @@ export default function ConvertProjectDialog({
 
   useEffect(() => {
     if (!open) return;
-    setSelectedQuotationId(quotations[0]?.id || "");
-    setProjectType(PROJECT_TYPES.includes(lead?.projectType) ? lead.projectType : "");
+    const accepted = quotations.find((q) => q.status === "accepted");
+    setSelectedQuotationId(accepted?.id || quotations[0]?.id || "");
+    setProjectType(PROJECT_TYPES.includes(lead?.projectType) ? lead.projectType : "Residential");
   }, [open, quotations, lead?.projectType]);
 
   const selectedQuotation = useMemo(
@@ -367,29 +372,32 @@ export default function ConvertProjectDialog({
                   </Button>
                   <Button
                     variant="contained"
-                    endIcon={<ArrowForward />}
+                    endIcon={!submitting ? <ArrowForward /> : undefined}
+                    startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : undefined}
                     onClick={() => onContinueWithQuotation(selectedQuotation, { projectType })}
                     disabled={!selectedQuotation || submitting || !projectType}
                     sx={{
                       minHeight: 50,
-                      px: 3,
-                      borderRadius: 2,
+                      px: 3.2,
+                      borderRadius: 2.5,
                       textTransform: "none",
                       fontWeight: 800,
-                      bgcolor: ACCENT_LIGHT,
+                      fontSize: "0.96rem",
+                      bgcolor: "#2563eb",
                       color: "#ffffff",
-                      boxShadow: "none",
+                      boxShadow: "0 10px 24px rgba(37, 99, 235, 0.28)",
                       "&:hover": {
-                        bgcolor: "#93cfbe",
-                        boxShadow: "none",
+                        bgcolor: "#1d4ed8",
+                        boxShadow: "0 12px 28px rgba(37, 99, 235, 0.38)",
                       },
                       "&.Mui-disabled": {
-                        bgcolor: alpha(ACCENT_LIGHT, 0.45),
-                        color: "#ffffff",
+                        bgcolor: "#e2e8f0",
+                        color: "#94a3b8",
+                        boxShadow: "none",
                       },
                     }}
                   >
-                    Continue with Selected Quote
+                    {submitting ? "Converting to Project..." : "Continue with Selected Quote"}
                   </Button>
                 </Stack>
               </>

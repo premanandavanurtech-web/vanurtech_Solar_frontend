@@ -2389,9 +2389,17 @@ export default function LeadDetailsPage() {
 
     try {
       setProjectDialogSubmitting(true);
+      const quotationCost = quotation ? (Number(quotation.totalCost) || Number(quotation.form?.totalCost) || 0) : 0;
       const response = await fetchAPI(`/lead/updateLead/${leadDetails._id}`, {
         method: "PUT",
-        body: JSON.stringify({ isProject: true, projectType: projectDetails.projectType }),
+        body: JSON.stringify({
+          isProject: true,
+          projectType: projectDetails.projectType,
+          ...(quotationCost > 0 && {
+            projectSaleValue: quotationCost,
+            finalPaymentCost: quotationCost,
+          }),
+        }),
       });
       if (response?.success === false) {
         throw new Error(response.message || "Failed to convert lead to project.");
@@ -2402,8 +2410,13 @@ export default function LeadDetailsPage() {
         ...(prev || {}),
         ...updatedLead,
         isProject: true,
+        ...(quotationCost > 0 && {
+          projectSaleValue: quotationCost,
+          finalPaymentCost: quotationCost,
+        }),
       }));
       if (quotation) {
+        updateQuotationStatus(quotation.id, "accepted");
         setCurrentQuotation(quotation);
       }
       setProjectDialogOpen(false);
@@ -2724,16 +2737,40 @@ export default function LeadDetailsPage() {
       },
     });
   }, [leadDetails, navigate]);
-  const handleQuotationStatusChange = useCallback((quotationId, status) => {
+  const handleQuotationStatusChange = useCallback(async (quotationId, status) => {
     const nextQuotations = updateQuotationStatus(quotationId, status);
     const activeLeadId = leadDetails?._id || leadId;
     setQuotationEntries(nextQuotations.filter((quotation) => quotation.leadId === activeLeadId));
+
+    if (status === "accepted") {
+      const acceptedQuote = nextQuotations.find((q) => q.id === quotationId);
+      const quoteCost = acceptedQuote ? (Number(acceptedQuote.totalCost) || Number(acceptedQuote.form?.totalCost) || 0) : 0;
+      if (quoteCost > 0 && activeLeadId) {
+        try {
+          await fetchAPI(`/lead/updateLead/${activeLeadId}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              projectSaleValue: quoteCost,
+              finalPaymentCost: quoteCost,
+            }),
+          });
+          setLeadDetails((prev) => ({
+            ...(prev || {}),
+            projectSaleValue: quoteCost,
+            finalPaymentCost: quoteCost,
+          }));
+        } catch (e) {
+          console.error("Failed to sync accepted quotation cost to lead", e);
+        }
+      }
+    }
+
     setSnackbar({
       open: true,
       message: status === "accepted" ? "Quotation accepted." : "Quotation marked as sent.",
       severity: "success",
     });
-  }, [leadDetails?._id, leadId]);
+  }, [fetchAPI, leadDetails?._id, leadId]);
   const handleQuotationDelete = useCallback((quotationId) => {
     if (!window.confirm("Delete this quotation?")) return;
     const nextQuotations = deleteQuotation(quotationId);
@@ -4803,9 +4840,16 @@ export default function LeadDetailsPage() {
                     LD-{leadDetails._id?.slice(-5) || "00000"}
                   </Typography>
                   <Chip
-                    label={leadDetails.status || "Lead"}
+                    label={leadDetails.isProject ? "Project Converted" : (leadDetails.status || "Lead")}
                     size="small"
-                    sx={{ bgcolor: "rgba(255,255,255,0.12)", color: "#fff", fontWeight: 500, height: 20, fontSize: "0.65rem" }}
+                    sx={{
+                      bgcolor: leadDetails.isProject ? "rgba(16, 185, 129, 0.25)" : "rgba(255,255,255,0.12)",
+                      color: leadDetails.isProject ? "#34d399" : "#fff",
+                      fontWeight: 600,
+                      height: 20,
+                      fontSize: "0.65rem",
+                      border: leadDetails.isProject ? "1px solid rgba(52, 211, 153, 0.4)" : "none",
+                    }}
                   />
                 </Stack>
                 <Typography sx={{ fontWeight: 600, color: "#fff", fontSize: "1.15rem", letterSpacing: "-0.01em", lineHeight: 1.15 }}>
@@ -4960,7 +5004,8 @@ export default function LeadDetailsPage() {
               {[
                 { label: "Phone",   value: leadDetails.phone || "—", icon: <Phone sx={{ fontSize: 13 }} /> },
                 { label: "Email",   value: leadDetails.email || "—", icon: <Email sx={{ fontSize: 13 }} /> },
-                { label: "Source",  value: leadDetails.status || "—", icon: <Workspaces sx={{ fontSize: 13 }} /> },
+                { label: "Source",  value: leadDetails.source || "Manual Entry", icon: <Workspaces sx={{ fontSize: 13 }} /> },
+                { label: "Status",  value: leadDetails.isProject ? "Project Converted" : (leadDetails.status || "New"), icon: <CheckCircle sx={{ fontSize: 13 }} /> },
                 { label: "Address", value: leadDetails.city || leadDetails.address || "—", icon: <LocationOn sx={{ fontSize: 13 }} /> },
               ].map((item) => (
                 <Stack key={item.label} direction="row" spacing={1.25} alignItems="flex-start" sx={{ py: 1.25, px: 2, borderBottom: `0.5px solid ${TOKEN.border}`, "&:last-of-type": { borderBottom: "none" } }}>
