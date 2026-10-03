@@ -54,7 +54,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import ViewInAr from "@mui/icons-material/ViewInAr";
 import { useAuth } from "../contexts/AuthContext";
-import sidebarLogo from "../assets/sidebar-logo.webp";
+import sidebarLogoLight from "../assets/sidebar-logo-light.webp";
+import sidebarLogoDark from "../assets/sidebar-logo-dark.webp";
 
 // ─── Design Tokens ─────────────────────────────────────────────────────────────
 const BLUE = "#1e40af";
@@ -460,6 +461,8 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
     </Box>
   );
 
+  const currentLogo = isDark ? sidebarLogoDark : sidebarLogoLight;
+
   // ── Logo Bar ───────────────────────────────────────────────────────────────
   const logoBar = (
     <Box
@@ -478,28 +481,25 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
           width: effectiveCollapsed ? 36 : 42,
           height: effectiveCollapsed ? 36 : 42,
           borderRadius: "12px", 
-          bgcolor: "#fff",
+          bgcolor: isDark ? "#000" : "#fff",
           display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0, overflow: "hidden",
-          border: `1px solid ${borderCol}`,
-          boxShadow: "0 6px 16px rgba(30,64,175,0.14)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : borderCol}`,
+          boxShadow: isDark ? "0 6px 16px rgba(0,0,0,0.4)" : "0 6px 16px rgba(30,64,175,0.14)",
           transition: "all 0.25s ease",
         }}
       >
         <Box
-          component="img" src={sidebarLogo} alt="Solar CRM"
-          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = sidebarLogo; }}
-          sx={{ width: "100%", height: "100%", objectFit: "contain", p: 0.4 }}
+          component="img" src={currentLogo} alt="Myra Enterprise Pvt.Ltd."
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = currentLogo; }}
+          sx={{ width: "100%", height: "100%", objectFit: "contain", p: 0.3 }}
         />
       </Box>
       {!effectiveCollapsed && (
         <Box sx={{ overflow: "hidden" }}>
           <Typography variant="subtitle1" color={textPri} fontWeight={800}
             sx={{ lineHeight: 1.2, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
-            Vanurtech Pvt Ltd
-          </Typography>
-          <Typography variant="caption" sx={{ color: textSec, fontSize: "0.68rem" }}>
-            Solar CRM
+            Myra Enterprise Pvt.Ltd.
           </Typography>
         </Box>
       )}
@@ -519,22 +519,19 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
         <Box sx={{
-          height: 42, minWidth: 64, px: 1, borderRadius: "12px", bgcolor: "#fff",
+          height: 42, minWidth: 64, px: 1, borderRadius: "12px", bgcolor: isDark ? "#000" : "#fff",
           display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-          border: `1px solid ${borderCol}`,
-          boxShadow: "0 6px 16px rgba(30,64,175,0.14)",
+          border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : borderCol}`,
+          boxShadow: isDark ? "0 6px 16px rgba(0,0,0,0.4)" : "0 6px 16px rgba(30,64,175,0.14)",
         }}>
-          <Box component="img" src={sidebarLogo} alt="Solar CRM"
-            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = sidebarLogo; }}
+          <Box component="img" src={currentLogo} alt="Myra Enterprise Pvt.Ltd."
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = currentLogo; }}
             sx={{ height: "85%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
           />
         </Box>
         <Box>
           <Typography variant="subtitle1" color={textPri} fontWeight={800} sx={{ lineHeight: 1.2 }}>
-            Vanurtech Pvt Ltd
-          </Typography>
-          <Typography variant="caption" sx={{ color: textSec, fontSize: "0.68rem" }}>
-            Solar CRM
+            Myra Enterprise Pvt.Ltd.
           </Typography>
         </Box>
       </Box>
