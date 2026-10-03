@@ -3252,7 +3252,8 @@ function ProjectDetails() {
     }
 
     const token = createDocumentUploadToken(project._id);
-    const link = `${window.location.origin}/documents/upload/${token}`;
+    const publicOrigin = process.env.REACT_APP_PUBLIC_APP_URL || (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? window.location.origin : "https://vanurtech-solar-frontend.vercel.app");
+    const link = `${publicOrigin}/documents/upload/${token}`;
     setDocumentUploadLinks([link]);
     setSnackbar({ open: true, message: "Upload link created", severity: "success" });
   }, [createDocumentUploadToken, project?._id]);

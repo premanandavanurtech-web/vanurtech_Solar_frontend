@@ -65,7 +65,7 @@ import * as THREE from "../vendor/three.module.js";
 const GOOGLE_MAPS_KEY =
   process.env.REACT_APP_GOOGLE_MAPS_API_KEY ||
   "AIzaSyDQYrvUxQPWUrpqWIy-tLg4f3DGrr4GTlg";
-const PUBLIC_APP_URL = (process.env.REACT_APP_PUBLIC_APP_URL || "").replace(/\/+$/, "");
+const PUBLIC_APP_URL = (process.env.REACT_APP_PUBLIC_APP_URL || "https://vanurtech-solar-frontend.vercel.app").replace(/\/+$/, "");
 
 const MAP_LIBRARIES = ["places"];
 const DEFAULT_CENTER = { lat: 20.2961, lng: 85.8245 };
@@ -4837,7 +4837,8 @@ export const ThreeDDesignPreview = () => {
   const shareUrl = useMemo(() => {
     if (!modelPoints.length || typeof window === "undefined") return "";
     const encoded = encodeSharePayload(sharePayload);
-    const shareBaseUrl = PUBLIC_APP_URL || window.location.origin;
+    const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+    const shareBaseUrl = PUBLIC_APP_URL || (!isLocalhost && window.location?.origin ? window.location.origin : "https://vanurtech-solar-frontend.vercel.app");
     return encoded
       ? `${shareBaseUrl}${SHARE_ROUTE}?${SHARE_DATA_PARAM}=${encoded}`
       : "";

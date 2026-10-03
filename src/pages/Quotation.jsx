@@ -1662,7 +1662,8 @@ export default function Page() {
 
     setSavedQuotation(nextQuotation)
     setCurrentQuotation(nextQuotation)
-    setShareLink(`${window.location.origin}/q/${nextQuotation.shareToken}`)
+    const publicOrigin = process.env.REACT_APP_PUBLIC_APP_URL || (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1" ? window.location.origin : "https://vanurtech-solar-frontend.vercel.app");
+    setShareLink(`${publicOrigin}/q/${nextQuotation.shareToken}`)
     setShareDialogOpen(true)
   }
 
