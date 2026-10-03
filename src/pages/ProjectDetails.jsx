@@ -366,26 +366,6 @@ const isStrictWorkflowStageComplete = (project, stageKey) => {
 };
 
 const getStrictWorkflowLock = (project, stageKey) => {
-  if (stageKey === "summary" || !STRICT_WORKFLOW_STAGES.includes(stageKey)) {
-    return { locked: false, message: "" };
-  }
-
-  const stagePosition = STRICT_WORKFLOW_STAGES.indexOf(stageKey);
-  for (let index = 0; index < stagePosition; index += 1) {
-    const previousKey = STRICT_WORKFLOW_STAGES[index];
-    if (project?.paymentType === "Cash" && previousKey === "loan_pending") {
-      continue;
-    }
-    if (!isStrictWorkflowStageComplete(project, previousKey)) {
-      const previousStage = getStageMeta(previousKey);
-      return {
-        locked: true,
-        blockerKey: previousKey,
-        message: `Complete ${previousStage.label} before opening ${getStageMeta(stageKey).label}.`,
-      };
-    }
-  }
-
   return { locked: false, message: "" };
 };
 
@@ -1893,6 +1873,8 @@ const PaymentWorkspace = ({
   readOnly = false,
   onEdit,
 }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const paymentType = formData.paymentType || "Bank Loan";
   const isCash = paymentType === "Cash";
   const isBankLoan = paymentType === "Bank Loan";
@@ -2068,7 +2050,7 @@ const PaymentWorkspace = ({
   );
 };
 
-const workflowStatusHeader = (Icon, title, customerName, onCancel) => (
+const workflowStatusHeader = (Icon, title, customerName, onCancel, isDark = false) => (
   <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 2.5, bgcolor: alpha(BRAND, 0.04), borderBottom: `1px solid ${BORDER}` }}>
     <Stack direction="row" spacing={1.75} alignItems="center">
       <Box sx={{ width: 46, height: 46, borderRadius: "13px", bgcolor: alpha(BRAND, 0.12), color: BRAND, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2121,6 +2103,8 @@ const InstallationWorkspace = ({
   readOnly = false,
   onEdit,
 }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const currentInstallation =
     INSTALLATION_STATUS_OPTIONS.find((status) => status.value === project?.installationStatus)?.label ||
     formatStatusLabel(project?.installationStatus);
@@ -2244,6 +2228,8 @@ const DisbursementWorkspace = ({
   readOnly = false,
   onEdit,
 }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const currentDisbursement =
     DISBURSEMENT_STATUS_OPTIONS.find((status) => status.value === project?.disbursementStatus)?.label ||
     formatStatusLabel(project?.disbursementStatus);
@@ -2403,6 +2389,8 @@ const LoanPendingWorkspace = ({
   readOnly = false,
   onEdit,
 }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
   const currentBank =
     BANK_STATUS_OPTIONS.find((status) => status.value === project?.bankAtPendingStatus)?.label ||
     formatStatusLabel(project?.bankAtPendingStatus);

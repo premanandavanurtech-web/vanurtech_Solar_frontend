@@ -8,7 +8,7 @@ Compiled successfully!
 
 You can now view client in the browser.
 
-  Local:            http://localhost:3000
+  Local:            https://vanurtech-solar-frontend.vercel.app/
   On Your Network:  http://192.168.29.169:3000
 
 Note that the development build is not optimized.
