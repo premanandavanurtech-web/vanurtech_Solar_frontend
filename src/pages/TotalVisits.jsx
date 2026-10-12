@@ -307,7 +307,34 @@ const formatDate = (dateString, formatStr = "dd MMM yyyy, hh:mm a") => {
   } catch { return "Invalid Date"; }
 };
 
-const formatTime = (timeString) => timeString || "Not set";
+const formatTime = (timeString) => {
+  if (!timeString) return "Not set";
+  if (typeof timeString === "string") {
+    const trimmed = timeString.trim();
+    if (/^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(trimmed)) {
+      return trimmed;
+    }
+    if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+      try {
+        const [h, m] = trimmed.split(":").map(Number);
+        const d = new Date();
+        d.setHours(h, m, 0, 0);
+        return format(d, "hh:mm a");
+      } catch {}
+    }
+    try {
+      const parsed = parseISO(trimmed);
+      if (isValid(parsed)) {
+        return format(parsed, "hh:mm a");
+      }
+    } catch {}
+  }
+  try {
+    const d = new Date(timeString);
+    if (isValid(d)) return format(d, "hh:mm a");
+  } catch {}
+  return String(timeString);
+};
 
 const getVisitDateValue = (visit) =>
   visit?.visitDate || visit?.siteSurvey?.savedAt || visit?.siteSurvey?.createdAt || null;
@@ -452,9 +479,10 @@ const StatusPill = ({ status }) => {
     <Box sx={{
       display: "inline-flex", alignItems: "center", gap: "5px",
       px: 1.25, py: 0.5, borderRadius: "20px",
-      background: cfg.gradBg,
-      border: `1px solid ${cfg.border}`,
-      fontSize: "12px", fontWeight: 600, color: cfg.color,
+      background: isDark ? alpha(cfg.dotColor, 0.18) : cfg.gradBg,
+      border: `1px solid ${isDark ? alpha(cfg.dotColor, 0.35) : cfg.border}`,
+      fontSize: "12px", fontWeight: 700,
+      color: isDark ? cfg.dotColor : cfg.color,
       whiteSpace: "nowrap",
     }}>
       <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: cfg.dotColor, flexShrink: 0 }} />
@@ -692,10 +720,12 @@ const MobileVisitCard = ({ visit, onView, onOpenLead }) => {
   return (
     <Paper elevation={0} sx={{
       mb: 1.5, borderRadius: 3,
-      border: `1px solid ${alpha(PRIMARY, 0.1)}`,
+      border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY, 0.1)}`,
+      bgcolor: isDark ? "#0b0e1a" : "#fff",
+      color: isDark ? "#f8fafc" : "inherit",
       overflow: "hidden",
       transition: "box-shadow .2s",
-      "&:hover": { boxShadow: "0 4px 20px rgba(15,31,61,.1)" },
+      "&:hover": { boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.4)" : "0 4px 20px rgba(15,31,61,.1)" },
     }}>
       <Box sx={{ height: 3, background: visitStatusConfig.gradBg.replace("135deg", "90deg") }} />
       <Box sx={{ p: 2 }}>
@@ -707,14 +737,14 @@ const MobileVisitCard = ({ visit, onView, onOpenLead }) => {
               {initials}
             </Avatar>
             <Box>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ color: PRIMARY }}>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : PRIMARY }}>
                 {visit.firstName} {visit.lastName}
               </Typography>
               <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>ID: {visit._id?.slice(-8) || "N/A"}</Typography>
             </Box>
           </Box>
           <IconButton size="small" onClick={() => setExpanded(!expanded)}
-            sx={{ background: GRAD_CARD, border: `1px solid ${alpha(PRIMARY, 0.1)}`, transition: "transform .3s", transform: expanded ? "rotate(180deg)" : "none" }}>
+            sx={{ background: isDark ? "rgba(255,255,255,0.06)" : GRAD_CARD, border: isDark ? "1px solid rgba(255,255,255,0.1)" : `1px solid ${alpha(PRIMARY, 0.1)}`, color: isDark ? "#f8fafc" : "inherit", transition: "transform .3s", transform: expanded ? "rotate(180deg)" : "none" }}>
             <ExpandMore sx={{ fontSize: 18 }} />
           </IconButton>
         </Box>
@@ -722,34 +752,34 @@ const MobileVisitCard = ({ visit, onView, onOpenLead }) => {
         <Grid container spacing={1} sx={{ mb: 1.5 }}>
           <Grid item xs={6}>
             <Stack direction="row" spacing={0.5} alignItems="center">
-              <Phone sx={{ fontSize: 13, color: alpha(PRIMARY, 0.5) }} />
-              <Typography variant="caption" noWrap>{visit.phone || "No phone"}</Typography>
+              <Phone sx={{ fontSize: 13, color: isDark ? "#94a3b8" : alpha(PRIMARY, 0.5) }} />
+              <Typography variant="caption" sx={{ color: isDark ? "#cbd5e1" : "inherit" }} noWrap>{visit.phone || "No phone"}</Typography>
             </Stack>
           </Grid>
           <Grid item xs={6}>
             <Stack direction="row" spacing={0.5} alignItems="center">
-              <Email sx={{ fontSize: 13, color: alpha(PRIMARY, 0.5) }} />
-              <Typography variant="caption" noWrap>{visit.email || "No email"}</Typography>
+              <Email sx={{ fontSize: 13, color: isDark ? "#94a3b8" : alpha(PRIMARY, 0.5) }} />
+              <Typography variant="caption" sx={{ color: isDark ? "#cbd5e1" : "inherit" }} noWrap>{visit.email || "No email"}</Typography>
             </Stack>
           </Grid>
         </Grid>
 
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.5 }}>
-          <CalendarToday sx={{ fontSize: 13, color: alpha(PRIMARY, 0.5) }} />
-          <Typography variant="body2" fontWeight={500}>
+          <CalendarToday sx={{ fontSize: 13, color: isDark ? "#94a3b8" : alpha(PRIMARY, 0.5) }} />
+          <Typography variant="body2" fontWeight={600} sx={{ color: isDark ? "#f8fafc" : "inherit" }}>
             {getVisitDisplayDate(visit)}
           </Typography>
           <FiberManualRecord sx={{ fontSize: 4, color: "text.disabled" }} />
-          <AccessTime sx={{ fontSize: 13, color: alpha(PRIMARY, 0.5) }} />
-          <Typography variant="body2" fontWeight={500}>
+          <AccessTime sx={{ fontSize: 13, color: isDark ? "#94a3b8" : alpha(PRIMARY, 0.5) }} />
+          <Typography variant="body2" fontWeight={600} sx={{ color: isDark ? "#f8fafc" : "inherit" }}>
             {getVisitDisplayTime(visit)}
           </Typography>
         </Stack>
 
         {visit.visitLocation && (
           <Stack direction="row" spacing={0.5} alignItems="flex-start" sx={{ mb: 1.5 }}>
-            <LocationOn sx={{ fontSize: 13, color: alpha(PRIMARY, 0.5), mt: 0.3 }} />
-            <Typography variant="caption" color="text.secondary" noWrap>{visit.visitLocation}</Typography>
+            <LocationOn sx={{ fontSize: 13, color: isDark ? "#94a3b8" : alpha(PRIMARY, 0.5), mt: 0.3 }} />
+            <Typography variant="caption" sx={{ color: isDark ? "#cbd5e1" : "text.secondary" }} noWrap>{visit.visitLocation}</Typography>
           </Stack>
         )}
 
@@ -758,7 +788,7 @@ const MobileVisitCard = ({ visit, onView, onOpenLead }) => {
         </Box>
 
         <Collapse in={expanded}>
-          <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${alpha(PRIMARY, 0.08)}` }}>
+          <Box sx={{ mt: 2, pt: 2, borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY, 0.08)}` }}>
             <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
               <Button fullWidth size="small" variant="contained" startIcon={<Visibility sx={{ fontSize: 15 }} />}
                 onClick={() => onView(visit)}
@@ -767,7 +797,7 @@ const MobileVisitCard = ({ visit, onView, onOpenLead }) => {
               </Button>
               <Button fullWidth size="small" variant="outlined" startIcon={<OpenInNew sx={{ fontSize: 15 }} />}
                 onClick={() => onOpenLead(visit)}
-                sx={{ borderColor: ACCENT, color: ACCENT, borderRadius: "10px", fontSize: "12px", "&:hover": { background: alpha(ACCENT, 0.05) } }}>
+                sx={{ borderColor: ACCENT, color: isDark ? "#93c5fd" : ACCENT, borderRadius: "10px", fontSize: "12px", "&:hover": { background: alpha(ACCENT, 0.05) } }}>
                 Lead Details
               </Button>
             </Stack>
@@ -1839,10 +1869,10 @@ export default function TotalVisitsPage() {
                   <TableRow>
                     <SortableHeader label="Customer" sortKey="firstName" />
                     <SortableHeader label="Date & Time" sortKey="visitDate" />
-                    <TableCell sx={{ background: isDark ? "#0e1220" : "linear-gradient(180deg,#f8faff,#f0f6ff)", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase", letterSpacing: ".06em", color: "text.secondary", py: 1.75 }}>Location</TableCell>
+                    <TableCell sx={{ background: isDark ? "#0e1220" : "linear-gradient(180deg,#f8faff,#f0f6ff)", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase", letterSpacing: ".06em", color: isDark ? "#94a3b8" : "text.secondary", py: 1.75 }}>Location</TableCell>
                     <SortableHeader label="Status" sortKey="visitStatus" />
-                    <TableCell sx={{ background: isDark ? "#0e1220" : "linear-gradient(180deg,#f8faff,#f0f6ff)", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase", letterSpacing: ".06em", color: "text.secondary", py: 1.75 }}>Assigned To</TableCell>
-                    <TableCell sx={{ background: isDark ? "#0e1220" : "linear-gradient(180deg,#f8faff,#f0f6ff)", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase", letterSpacing: ".06em", color: "text.secondary", py: 1.75, pr: 3 }}>Actions</TableCell>
+                    <TableCell sx={{ background: isDark ? "#0e1220" : "linear-gradient(180deg,#f8faff,#f0f6ff)", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase", letterSpacing: ".06em", color: isDark ? "#94a3b8" : "text.secondary", py: 1.75 }}>Assigned To</TableCell>
+                    <TableCell sx={{ background: isDark ? "#0e1220" : "linear-gradient(180deg,#f8faff,#f0f6ff)", fontWeight: 700, fontSize: "11.5px", textTransform: "uppercase", letterSpacing: ".06em", color: isDark ? "#94a3b8" : "text.secondary", py: 1.75, pr: 3 }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1862,12 +1892,12 @@ export default function TotalVisitsPage() {
                             {getInitials(visit.firstName, visit.lastName)}
                           </Avatar>
                           <Box>
-                            <Typography variant="body2" fontWeight={600} sx={{ color: isDark ? "#f8fafc" : PRIMARY }}>{visit.firstName} {visit.lastName}</Typography>
+                            <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : PRIMARY }}>{visit.firstName} {visit.lastName}</Typography>
                           </Box>
                         </Stack>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight={500} sx={{ color: isDark ? "#f8fafc" : PRIMARY }}>
+                        <Typography variant="body2" fontWeight={600} sx={{ color: isDark ? "#f8fafc" : PRIMARY }}>
                           {getVisitDisplayDate(visit)}
                         </Typography>
                         <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>
@@ -1875,7 +1905,7 @@ export default function TotalVisitsPage() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <Typography variant="body2" sx={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isDark ? "#cbd5e1" : "text.secondary" }}>
                           {visit.visitLocation || "—"}
                         </Typography>
                       </TableCell>
@@ -1883,12 +1913,12 @@ export default function TotalVisitsPage() {
                       <TableCell>
                         {visit.assignedUser || visit.assignedManager ? (
                           <Box>
-                            <Typography variant="body2" fontWeight={600}>
+                            <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : PRIMARY }}>
                               {visit.assignedUser
                                 ? `${visit.assignedUser.firstName || ""} ${visit.assignedUser.lastName || ""}`.trim()
                                 : `${visit.assignedManager?.firstName || ""} ${visit.assignedManager?.lastName || ""}`.trim()}
                             </Typography>
-                          <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>
+                            <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>
                               {visit.assignedUser ? visit.assignedUser.role || "Assigned User" : visit.assignedManager?.role || "Manager"}
                             </Typography>
                           </Box>
@@ -1908,20 +1938,20 @@ export default function TotalVisitsPage() {
                               py: 0.5,
                               borderRadius: 2,
                               borderStyle: "dashed",
-                              borderColor: alpha(PRIMARY, 0.45),
-                              color: PRIMARY,
-                              fontWeight: 600,
+                              borderColor: isDark ? "rgba(147, 197, 253, 0.4)" : alpha(PRIMARY, 0.45),
+                              color: isDark ? "#93c5fd" : PRIMARY,
+                              fontWeight: 700,
                               textTransform: "none",
                               cursor: "pointer",
                               "&.Mui-disabled": {
-                                color: PRIMARY,
-                                WebkitTextFillColor: PRIMARY,
-                                borderColor: alpha(PRIMARY, 0.45),
+                                color: isDark ? "rgba(255,255,255,0.3)" : PRIMARY,
+                                WebkitTextFillColor: isDark ? "rgba(255,255,255,0.3)" : PRIMARY,
+                                borderColor: isDark ? "rgba(255,255,255,0.12)" : alpha(PRIMARY, 0.45),
                                 opacity: 0.8,
                               },
                               "&:hover": {
-                                borderColor: PRIMARY,
-                                bgcolor: alpha(PRIMARY, 0.05),
+                                borderColor: isDark ? "#60a5fa" : PRIMARY,
+                                bgcolor: isDark ? "rgba(59, 130, 246, 0.1)" : alpha(PRIMARY, 0.05),
                               },
                             }}
                           >
@@ -1941,10 +1971,11 @@ export default function TotalVisitsPage() {
                           </Tooltip>
                           <Tooltip title="Open Lead Details">
                             <IconButton size="small" onClick={() => handleEditClick(visit)} sx={{
-                              background: "linear-gradient(135deg,#eff6ff,#dbeafe)", color: ACCENT,
-                              border: `1px solid ${alpha(ACCENT, 0.25)}`,
+                              background: isDark ? "rgba(37,99,235,0.2)" : "linear-gradient(135deg,#eff6ff,#dbeafe)",
+                              color: isDark ? "#93c5fd" : ACCENT,
+                              border: `1px solid ${isDark ? "rgba(37,99,235,0.4)" : alpha(ACCENT, 0.25)}`,
                               width: 32, height: 32, borderRadius: "8px",
-                              transition: "all .15s", "&:hover": { background: alpha(ACCENT, 0.12) },
+                              transition: "all .15s", "&:hover": { background: isDark ? "rgba(37,99,235,0.3)" : alpha(ACCENT, 0.12) },
                             }}>
                               <OpenInNew sx={{ fontSize: 15 }} />
                             </IconButton>

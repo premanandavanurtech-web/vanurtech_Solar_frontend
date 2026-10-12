@@ -1,34 +1,40 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  alpha,
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogContent,
+  DialogTitle,
+  Divider,
   FormControl,
   IconButton,
-  InputLabel,
+  InputAdornment,
   MenuItem,
   Paper,
   Select,
   Stack,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import {
   Add,
   ArrowForward,
-  CalendarToday,
-  Check,
-  ChevronRight,
+  Bolt,
+  CalendarMonthOutlined,
+  CheckCircleOutline,
   Close,
   DescriptionOutlined,
+  GridViewRounded,
+  HomeOutlined,
+  PaidOutlined,
+  RemoveRedEyeOutlined,
+  ViewInArRounded,
+  KeyboardArrowDownRounded,
 } from "@mui/icons-material";
 import { format, isValid, parseISO } from "date-fns";
-
-const PRIMARY = "#31384d";
-const ACCENT = "#5160d6";
-const ACCENT_LIGHT = "#a6d9cc";
 
 const PROJECT_TYPES = ["Residential", "Commercial", "ULA 1kw On-grid", "Maintenance", "Others"];
 
@@ -40,10 +46,13 @@ const resolveLeadName = (lead) =>
   "Lead";
 
 const formatDisplayDate = (value) => {
-  if (!value) return "";
-  const parsed = typeof value === "string" ? parseISO(value) : new Date(value);
-  if (!isValid(parsed)) return "";
-  return format(parsed, "d MMM yyyy");
+  if (!value) return "—";
+  try {
+    const parsed = typeof value === "string" ? parseISO(value) : new Date(value);
+    return isValid(parsed) ? format(parsed, "dd MMM yyyy") : "—";
+  } catch {
+    return "—";
+  }
 };
 
 const formatCurrency = (value) => {
@@ -57,41 +66,51 @@ const formatCurrency = (value) => {
 
 const getQuotationMeta = (quotation) => {
   const form = quotation?.form || {};
-  return [
+  const tags = [
     form.panelBrand || form.brand || quotation?.panelBrand,
     form.inverterBrand || quotation?.inverterBrand,
     form.customerType || form.projectType || quotation?.projectType,
   ].filter(Boolean);
+
+  if (!tags.length && quotation?.systemType) {
+    tags.push(quotation.systemType);
+  }
+  return tags;
 };
 
-const StepItem = ({ active, label, completed = false }) => (
-  <Box
-    sx={{
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 1,
-      px: 2,
-      py: 1.2,
-      borderRadius: 999,
-      bgcolor: active ? PRIMARY : "transparent",
-      color: active ? "#fff" : "#a1a1aa",
-      fontWeight: 700,
-      fontSize: "0.98rem",
-      minWidth: 320,
-      maxWidth: "100%",
-    }}
-  >
-    <Check sx={{ fontSize: 18, opacity: completed || active ? 1 : 0.55 }} />
-    <Typography sx={{ fontSize: "inherit", fontWeight: "inherit", color: "inherit" }}>
-      {label}
-    </Typography>
-  </Box>
-);
+const getStatusDetails = (status) => {
+  const norm = String(status || "draft").toLowerCase();
+  if (norm === "approved" || norm === "accepted") {
+    return {
+      label: "Approved",
+      color: "#16a34a",
+      bg: "#dcfce7",
+      border: "#bbf7d0",
+    };
+  }
+  if (norm === "sent" || norm === "pending") {
+    return {
+      label: "Pending",
+      color: "#6366f1",
+      bg: "#eef2ff",
+      border: "#c7d2fe",
+    };
+  }
+  return {
+    label: "Draft",
+    color: "#d97706",
+    bg: "#fef3c7",
+    border: "#fde68a",
+  };
+};
 
-const QuotationCard = ({ quotation, selected, onSelect }) => {
+const QuotationCard = ({ quotation, selected, onSelect, onViewDetails }) => {
   const chips = getQuotationMeta(quotation);
-  const issueDate = formatDisplayDate(quotation?.savedAt || quotation?.createdAt);
-  const statusLabel = String(quotation?.status || "draft").toUpperCase();
+  const issueDate = formatDisplayDate(quotation?.savedAt || quotation?.createdAt || quotation?.issueDate);
+  const statusInfo = getStatusDetails(quotation?.status);
+  const systemSize = Number(quotation?.systemSize || quotation?.form?.systemSize || 0).toFixed(2);
+  const totalCost = quotation?.totalCost || quotation?.form?.totalCost || 0;
+  const subsidyAmount = Number(quotation?.form?.subsidy || quotation?.subsidy || 0);
 
   return (
     <Paper
@@ -99,106 +118,194 @@ const QuotationCard = ({ quotation, selected, onSelect }) => {
       onClick={onSelect}
       sx={{
         cursor: "pointer",
-        borderRadius: 3,
-        border: `1px solid ${selected ? alpha(ACCENT, 0.6) : "#e5e7eb"}`,
-        boxShadow: selected ? "0 18px 32px rgba(81, 96, 214, 0.12)" : "none",
-        bgcolor: selected ? alpha(ACCENT, 0.03) : "#fff",
-        p: 3,
-        transition: "all 0.2s ease",
+        borderRadius: 2,
+        border: selected ? "2px solid #4f46e5" : "1.5px solid #e2e8f0",
+        boxShadow: selected
+          ? "0 8px 24px rgba(79, 70, 229, 0.16)"
+          : "0 2px 8px rgba(15, 23, 42, 0.02)",
+        bgcolor: "#ffffff",
+        p: 2.2,
+        position: "relative",
+        transition: "all 0.2s ease-in-out",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
         "&:hover": {
-          borderColor: alpha(ACCENT, 0.45),
-          boxShadow: "0 14px 28px rgba(15, 23, 42, 0.08)",
+          borderColor: selected ? "#4f46e5" : "#cbd5e1",
+          transform: "translateY(-1px)",
+          boxShadow: selected
+            ? "0 10px 28px rgba(79, 70, 229, 0.2)"
+            : "0 6px 18px rgba(15, 23, 42, 0.06)",
         },
       }}
     >
-      <Stack spacing={2}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+      <Box>
+        {/* Top Row: Radio + Status + View Details */}
+        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+          <Stack direction="row" spacing={1.2} alignItems="center">
+            {/* Custom Radio Button */}
             <Box
               sx={{
-                width: 42,
-                height: 42,
-                borderRadius: 2,
-                bgcolor: alpha(ACCENT, 0.08),
-                color: ACCENT,
-                display: "grid",
-                placeItems: "center",
+                width: 20,
+                height: 20,
+                borderRadius: "50%",
+                border: selected ? "2.5px solid #4f46e5" : "2px solid #cbd5e1",
+                bgcolor: "#ffffff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                transition: "all 0.15s ease",
               }}
             >
-              <DescriptionOutlined />
+              {selected && (
+                <Box
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    bgcolor: "#4f46e5",
+                  }}
+                />
+              )}
             </Box>
-            <Typography sx={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a" }}>
-              {quotation?.quotationNumber || "Quotation"}
-            </Typography>
+
+            {/* Status Chip */}
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.5,
+                height: 24,
+                px: 1,
+                borderRadius: 999,
+                fontWeight: 700,
+                fontSize: "0.72rem",
+                color: statusInfo.color,
+                bgcolor: statusInfo.bg,
+                border: `1px solid ${statusInfo.border}`,
+              }}
+            >
+              <DescriptionOutlined sx={{ fontSize: 13, color: statusInfo.color }} />
+              {statusInfo.label}
+            </Box>
           </Stack>
-          <Chip
-            label={statusLabel}
+
+          {/* View Details Ghost Button */}
+          <Button
             size="small"
-            sx={{
-              height: 30,
-              fontWeight: 700,
-              color: "#d97706",
-              bgcolor: "#fff7ed",
-              borderRadius: 999,
+            startIcon={<RemoveRedEyeOutlined sx={{ fontSize: "14px !important" }} />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDetails?.(quotation);
             }}
-          />
+            sx={{
+              minWidth: "auto",
+              py: 0.3,
+              px: 1.2,
+              borderRadius: 999,
+              textTransform: "none",
+              fontSize: "0.74rem",
+              fontWeight: 700,
+              color: "#4f46e5",
+              bgcolor: "#eef2ff",
+              "&:hover": {
+                bgcolor: "#e0e7ff",
+              },
+            }}
+          >
+            View Details
+          </Button>
         </Stack>
 
-        <Box>
-          <Typography sx={{ fontSize: "1rem", color: "#0f172a", fontWeight: 800 }}>
-            {Number(quotation?.systemSize || 0).toFixed(2)}{" "}
-            <Box component="span" sx={{ color: "#64748b", fontWeight: 500 }}>
-              kW System
-            </Box>
-          </Typography>
-          {issueDate ? (
-            <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mt: 0.7, color: "#64748b" }}>
-              <CalendarToday sx={{ fontSize: 16 }} />
-              <Typography sx={{ fontSize: "0.95rem" }}>{issueDate}</Typography>
+        {/* Quotation Number */}
+        <Typography sx={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", mt: 1.8, mb: 1.4 }}>
+          {quotation?.quotationNumber || `QT-${String(quotation?.id || "").slice(-4)}`}
+        </Typography>
+
+        {/* Two Column Specs: System Size & Created On */}
+        <Stack direction="row" spacing={3} alignItems="flex-start" sx={{ mb: 1.6 }}>
+          <Box>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <Bolt sx={{ fontSize: 16, color: "#0f172a" }} />
+              <Typography sx={{ fontWeight: 800, fontSize: "0.88rem", color: "#0f172a" }}>
+                {systemSize} kW
+              </Typography>
             </Stack>
-          ) : null}
+            <Typography sx={{ fontSize: "0.72rem", color: "#64748b", mt: 0.2, pl: 2.4 }}>
+              System Size
+            </Typography>
+          </Box>
+
+          <Box>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <CalendarMonthOutlined sx={{ fontSize: 16, color: "#0f172a" }} />
+              <Typography sx={{ fontWeight: 800, fontSize: "0.88rem", color: "#0f172a" }}>
+                {issueDate}
+              </Typography>
+            </Stack>
+            <Typography sx={{ fontSize: "0.72rem", color: "#64748b", mt: 0.2, pl: 2.4 }}>
+              Created On
+            </Typography>
+          </Box>
+        </Stack>
+
+        {/* Component Tags Row */}
+        <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+          {chips.map((chip, idx) => (
+            <Box
+              key={`${chip}-${idx}`}
+              sx={{
+                bgcolor: "#f1f3fd",
+                color: "#4338ca",
+                fontWeight: 600,
+                fontSize: "0.72rem",
+                borderRadius: 999,
+                px: 1.2,
+                py: 0.35,
+                border: "1px solid rgba(67, 56, 202, 0.08)",
+              }}
+            >
+              {chip}
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+
+      {/* Bottom Financials */}
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-end" sx={{ pt: 1, borderTop: "1px solid #f8fafc" }}>
+        <Box>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <CheckCircleOutline sx={{ fontSize: 14, color: "#64748b" }} />
+            <Typography sx={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 600 }}>
+              Total Cost
+            </Typography>
+          </Stack>
+          <Typography sx={{ fontWeight: 900, fontSize: "1.15rem", color: "#0f172a", mt: 0.2 }}>
+            {formatCurrency(totalCost)}
+          </Typography>
         </Box>
 
-        {chips.length ? (
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            {chips.map((chip) => (
-              <Chip
-                key={chip}
-                label={chip}
-                size="small"
-                sx={{
-                  bgcolor: "#f8fafc",
-                  color: "#64748b",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 2,
-                }}
-              />
-            ))}
-          </Stack>
-        ) : null}
-
-        <Box
-          sx={{
-            borderRadius: 2.5,
-            border: "1px solid #e5e7eb",
-            px: 2,
-            py: 1.8,
-            display: "grid",
-            gap: 1,
-          }}
-        >
-          <Stack direction="row" justifyContent="space-between" spacing={2}>
-            <Typography sx={{ color: "#64748b" }}>Total Cost</Typography>
-            <Typography sx={{ color: "#0f172a", fontWeight: 800 }}>
-              {formatCurrency(quotation?.totalCost)}
-            </Typography>
-          </Stack>
-          <Stack direction="row" justifyContent="space-between" spacing={2}>
-            <Typography sx={{ color: "#64748b" }}>Subsidy</Typography>
-            <Typography sx={{ color: "#14b8a6", fontWeight: 800 }}>
-              {formatCurrency(quotation?.form?.subsidy || quotation?.subsidy)}
-            </Typography>
-          </Stack>
+        <Box sx={{ textAlign: "right" }}>
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              px: 1,
+              py: 0.2,
+              borderRadius: 999,
+              bgcolor: "#dcfce7",
+              border: "1px solid #bbf7d0",
+              color: "#16a34a",
+              fontWeight: 800,
+              fontSize: "0.78rem",
+            }}
+          >
+            ₹ {subsidyAmount ? Math.round(subsidyAmount).toLocaleString("en-IN") : "0"}
+          </Box>
+          <Typography sx={{ fontSize: "0.7rem", color: "#64748b", mt: 0.3 }}>
+            Subsidy
+          </Typography>
         </Box>
       </Stack>
     </Paper>
@@ -212,16 +319,19 @@ export default function ConvertProjectDialog({
   submitting = false,
   onClose,
   onCreateQuotation,
-  onCreateWithoutQuotation,
   onContinueWithQuotation,
 }) {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
   const [selectedQuotationId, setSelectedQuotationId] = useState("");
   const [projectType, setProjectType] = useState("");
+  const [previewQuotation, setPreviewQuotation] = useState(null);
 
   useEffect(() => {
     if (!open) return;
-    setSelectedQuotationId(quotations[0]?.id || "");
-    setProjectType(PROJECT_TYPES.includes(lead?.projectType) ? lead.projectType : "");
+    const accepted = quotations.find((q) => q.status === "accepted" || q.status === "approved");
+    setSelectedQuotationId(accepted?.id || quotations[0]?.id || "");
+    setProjectType(PROJECT_TYPES.includes(lead?.projectType) ? lead.projectType : "Residential");
   }, [open, quotations, lead?.projectType]);
 
   const selectedQuotation = useMemo(
@@ -230,246 +340,421 @@ export default function ConvertProjectDialog({
   );
 
   return (
-    <Dialog
-      open={open}
-      onClose={submitting ? undefined : onClose}
-      maxWidth="lg"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 4,
-          overflow: "hidden",
-          boxShadow: "0 30px 80px rgba(15, 23, 42, 0.18)",
-        },
-      }}
-    >
-      <Box
-        sx={{
-          px: { xs: 2.5, md: 4 },
-          py: 2.6,
-          borderBottom: "1px solid #e5e7eb",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 2,
+    <>
+      <Dialog
+        open={open}
+        onClose={submitting ? undefined : onClose}
+        maxWidth="lg"
+        fullWidth
+        fullScreen={fullScreen}
+        PaperProps={{
+          sx: {
+            borderRadius: fullScreen ? 0 : 5,
+            overflow: "hidden",
+            bgcolor: "#ffffff",
+            color: "#0f172a",
+            boxShadow: "0 25px 70px rgba(15, 23, 42, 0.16)",
+            maxWidth: 1040,
+          },
         }}
       >
-        <Typography sx={{ fontSize: { xs: "1.35rem", md: "1.6rem" }, fontWeight: 800, color: "#1f2937" }}>
-          {`Create Project for ${resolveLeadName(lead)}`}
-        </Typography>
-        <IconButton onClick={onClose} disabled={submitting} sx={{ color: "#52525b" }}>
-          <Close />
-        </IconButton>
-      </Box>
-
-      <DialogContent sx={{ px: { xs: 2.5, md: 4 }, py: { xs: 2.5, md: 3.5 } }}>
+        {/* ── Dialog Header ── */}
         <Box
           sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "320px minmax(0, 1fr)" },
-            gap: { xs: 3, md: 5 },
-            minHeight: { md: 520 },
+            px: { xs: 2.5, sm: 3.5, md: 4 },
+            py: 2.5,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 2,
+            bgcolor: "#ffffff",
           }}
         >
-          <Stack spacing={1.4}>
-            <StepItem active completed label="Step 1  Select Quote" />
-            <StepItem label="Step 2  Project Details" completed />
-          </Stack>
-
-          <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-            <Box sx={{ mb: 3, maxWidth: 520 }}>
-              <Typography sx={{ fontSize: { xs: "1.35rem", md: "1.65rem" }, fontWeight: 800, color: "#1f2937", mb: 0.8 }}>
-                Select Project Type
-              </Typography>
-              <Typography sx={{ color: "#64748b", fontSize: "0.98rem", mb: 1.8 }}>
-                Choose the project category before converting this lead into a project.
-              </Typography>
-              <FormControl fullWidth required>
-                <InputLabel id="convert-project-type-label">Project Type</InputLabel>
-                <Select
-                  labelId="convert-project-type-label"
-                  value={projectType}
-                  label="Project Type"
-                  onChange={(event) => setProjectType(event.target.value)}
-                  disabled={submitting}
-                  sx={{ borderRadius: 2 }}
-                >
-                  {PROJECT_TYPES.map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: 3,
+                bgcolor: "#eef2ff",
+                color: "#4f46e5",
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <ViewInArRounded sx={{ fontSize: 24 }} />
             </Box>
+            <Box>
+              <Typography sx={{ fontSize: { xs: "1.15rem", md: "1.25rem" }, fontWeight: 800, color: "#0f172a", lineHeight: 1.2 }}>
+                {`Create Project for ${resolveLeadName(lead)}`}
+              </Typography>
+              <Typography sx={{ color: "#64748b", fontSize: "0.84rem", mt: 0.3 }}>
+                Set up your project details and select a suitable quote to proceed.
+              </Typography>
+            </Box>
+          </Stack>
+          <IconButton onClick={onClose} disabled={submitting} sx={{ color: "#64748b", "&:hover": { color: "#0f172a", bgcolor: "#f1f5f9" } }}>
+            <Close />
+          </IconButton>
+        </Box>
 
-            {quotations.length ? (
-              <>
-                <Box sx={{ mb: 3 }}>
-                  <Typography sx={{ fontSize: { xs: "1.5rem", md: "1.9rem" }, fontWeight: 800, color: "#1f2937" }}>
-                    Select a Quote
+        <DialogContent sx={{ p: 0, bgcolor: "#ffffff" }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: { xs: "column", md: "row" },
+              minHeight: 490,
+            }}
+          >
+            {/* ── Left Sidebar Stepper ── */}
+            <Box
+              sx={{
+                width: { xs: "100%", md: 240 },
+                flexShrink: 0,
+                bgcolor: "#f8fafc",
+                p: 3,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {/* Step 1: Active */}
+              <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Box
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    bgcolor: "#4f46e5",
+                    color: "#ffffff",
+                    display: "grid",
+                    placeItems: "center",
+                    fontWeight: 800,
+                    fontSize: "0.88rem",
+                    flexShrink: 0,
+                    boxShadow: "0 4px 10px rgba(79, 70, 229, 0.3)",
+                  }}
+                >
+                  1
+                </Box>
+                <Box sx={{ pt: 0.2 }}>
+                  <Typography sx={{ fontWeight: 800, color: "#0f172a", fontSize: "0.9rem" }}>
+                    Select Quote
                   </Typography>
-                  <Typography sx={{ mt: 0.6, color: "#64748b", fontSize: "1rem" }}>
-                    Choose a quotation to create the project from
+                  <Typography sx={{ color: "#64748b", fontSize: "0.76rem", mt: 0.3, lineHeight: 1.4 }}>
+                    Choose a quotation from the list below to continue.
                   </Typography>
                 </Box>
+              </Stack>
+            </Box>
 
-                <Stack spacing={2.2} sx={{ maxWidth: 520 }}>
-                  {quotations.map((quotation) => (
-                    <QuotationCard
-                      key={quotation.id}
-                      quotation={quotation}
-                      selected={quotation.id === selectedQuotationId}
-                      onSelect={() => setSelectedQuotationId(quotation.id)}
-                    />
-                  ))}
-                </Stack>
-
-                <Stack
-                  direction={{ xs: "column", md: "row" }}
-                  spacing={1.8}
-                  justifyContent="flex-end"
-                  sx={{ mt: "auto", pt: 4, borderTop: "1px solid #e5e7eb" }}
-                >
-                  <Button
-                    variant="outlined"
-                    startIcon={<Add />}
-                    onClick={onCreateQuotation}
-                    disabled={submitting}
-                    sx={{
-                      minHeight: 50,
-                      px: 2.8,
-                      borderRadius: 2,
-                      textTransform: "none",
-                      fontWeight: 700,
-                      color: "#475569",
-                      borderColor: "#dbe2ea",
-                    }}
-                  >
-                    Create New Quote
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<ChevronRight />}
-                    onClick={() => onCreateWithoutQuotation({ projectType })}
-                    disabled={submitting || !projectType}
-                    sx={{
-                      minHeight: 50,
-                      px: 2.8,
-                      borderRadius: 2,
-                      textTransform: "none",
-                      fontWeight: 700,
-                      color: "#475569",
-                      borderColor: "#dbe2ea",
-                    }}
-                  >
-                    Create without a quotation
-                  </Button>
-                  <Button
-                    variant="contained"
-                    endIcon={<ArrowForward />}
-                    onClick={() => onContinueWithQuotation(selectedQuotation, { projectType })}
-                    disabled={!selectedQuotation || submitting || !projectType}
-                    sx={{
-                      minHeight: 50,
-                      px: 3,
-                      borderRadius: 2,
-                      textTransform: "none",
-                      fontWeight: 800,
-                      bgcolor: ACCENT_LIGHT,
-                      color: "#ffffff",
-                      boxShadow: "none",
-                      "&:hover": {
-                        bgcolor: "#93cfbe",
-                        boxShadow: "none",
-                      },
-                      "&.Mui-disabled": {
-                        bgcolor: alpha(ACCENT_LIGHT, 0.45),
-                        color: "#ffffff",
-                      },
-                    }}
-                  >
-                    Continue with Selected Quote
-                  </Button>
-                </Stack>
-              </>
-            ) : (
-              <Box
-                sx={{
-                  flex: 1,
-                  minHeight: 420,
-                  display: "grid",
-                  placeItems: "center",
-                }}
-              >
-                <Stack spacing={2.4} alignItems="center" textAlign="center" sx={{ maxWidth: 560 }}>
+            {/* ── Main Content Area ── */}
+            <Box sx={{ flex: 1, p: { xs: 2.5, sm: 3.5, md: 3.8 }, display: "flex", flexDirection: "column" }}>
+              {/* Section 1: Select Project Type */}
+              <Box sx={{ mb: 3 }}>
+                <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1.2 }}>
                   <Box
                     sx={{
-                      width: 92,
-                      height: 92,
-                      borderRadius: 4,
-                      bgcolor: "#f1f5f9",
-                      color: "#6474a4",
+                      width: 32,
+                      height: 32,
+                      borderRadius: 2,
+                      bgcolor: "#eef2ff",
+                      color: "#4f46e5",
                       display: "grid",
                       placeItems: "center",
+                      flexShrink: 0,
                     }}
                   >
-                    <DescriptionOutlined sx={{ fontSize: 42 }} />
+                    <GridViewRounded sx={{ fontSize: 18 }} />
                   </Box>
                   <Box>
-                    <Typography sx={{ fontSize: { xs: "1.6rem", md: "2rem" }, fontWeight: 800, color: "#1f2937", mb: 1 }}>
-                      No Quotations Yet
+                    <Typography sx={{ fontWeight: 800, color: "#0f172a", fontSize: "1.05rem" }}>
+                      Select Project Type
                     </Typography>
-                    <Typography sx={{ color: "#64748b", fontSize: "1rem", lineHeight: 1.8 }}>
-                      No quotation found for this lead. You can create one first, or proceed directly to create the project without a quotation.
+                    <Typography sx={{ color: "#64748b", fontSize: "0.8rem" }}>
+                      Choose the project category before selecting a quotation.
                     </Typography>
                   </Box>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.6} sx={{ pt: 1 }}>
+                </Stack>
+
+                <FormControl fullWidth>
+                  <Select
+                    value={projectType}
+                    onChange={(e) => setProjectType(e.target.value)}
+                    disabled={submitting}
+                    IconComponent={KeyboardArrowDownRounded}
+                    startAdornment={
+                      <InputAdornment position="start" sx={{ pl: 0.5, mr: 1 }}>
+                        <HomeOutlined sx={{ color: "#4f46e5", fontSize: 22 }} />
+                      </InputAdornment>
+                    }
+                    renderValue={(selected) => (
+                      <Box sx={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
+                        <Typography sx={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 700, lineHeight: 1 }}>
+                          Project Type <Box component="span" sx={{ color: "#ef4444" }}>*</Box>
+                        </Typography>
+                        <Typography sx={{ fontSize: "0.92rem", color: "#0f172a", fontWeight: 800, mt: 0.3 }}>
+                          {selected}
+                        </Typography>
+                      </Box>
+                    )}
+                    sx={{
+                      height: 56,
+                      borderRadius: 3.5,
+                      bgcolor: "#ffffff",
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: "#e2e8f0",
+                        borderWidth: "1.5px",
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: "#c7d2fe",
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: "#4f46e5",
+                      },
+                    }}
+                  >
+                    {PROJECT_TYPES.map((type) => (
+                      <MenuItem key={type} value={type}>
+                        {type}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+
+              {/* Section 2: Available Quotations */}
+              <Box sx={{ mb: 2.5 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.6 }}>
+                  <Stack direction="row" spacing={1.2} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 2,
+                        bgcolor: "#eef2ff",
+                        color: "#4f46e5",
+                        display: "grid",
+                        placeItems: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <DescriptionOutlined sx={{ fontSize: 18 }} />
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontWeight: 800, color: "#0f172a", fontSize: "1.05rem" }}>
+                        Available Quotations
+                      </Typography>
+                      <Typography sx={{ color: "#64748b", fontSize: "0.8rem" }}>
+                        Select one of the quotations below to create your project.
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  {quotations.length > 0 && (
+                    <Box
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 0.6,
+                        bgcolor: "#eef2ff",
+                        color: "#4f46e5",
+                        fontWeight: 700,
+                        fontSize: "0.78rem",
+                        px: 1.4,
+                        py: 0.4,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <DescriptionOutlined sx={{ fontSize: 14, color: "#4f46e5" }} />
+                      {`${quotations.length} quote${quotations.length === 1 ? "" : "s"} found`}
+                    </Box>
+                  )}
+                </Stack>
+
+                {/* Quotation Cards Grid */}
+                {quotations.length > 0 ? (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        sm: "repeat(auto-fit, minmax(250px, 1fr))",
+                      },
+                      gap: 2,
+                    }}
+                  >
+                    {quotations.map((quotation) => (
+                      <QuotationCard
+                        key={quotation.id}
+                        quotation={quotation}
+                        selected={quotation.id === selectedQuotationId}
+                        onSelect={() => setSelectedQuotationId(quotation.id)}
+                        onViewDetails={(q) => setPreviewQuotation(q)}
+                      />
+                    ))}
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      borderRadius: 3.5,
+                      border: "1px dashed #cbd5e1",
+                      p: 4,
+                      textAlign: "center",
+                      bgcolor: "#f8fafc",
+                    }}
+                  >
+                    <DescriptionOutlined sx={{ fontSize: 40, color: "#94a3b8", mb: 1 }} />
+                    <Typography sx={{ fontWeight: 700, color: "#1e293b", fontSize: "1rem" }}>
+                      No Quotations Found
+                    </Typography>
+                    <Typography sx={{ color: "#64748b", fontSize: "0.85rem", mt: 0.5, mb: 2 }}>
+                      Create a quotation first to convert this lead to a project.
+                    </Typography>
                     <Button
                       variant="contained"
                       startIcon={<Add />}
                       onClick={onCreateQuotation}
-                      disabled={submitting}
                       sx={{
-                        minHeight: 56,
-                        minWidth: 240,
+                        borderRadius: 999,
                         px: 3,
-                        borderRadius: 2.5,
+                        py: 1,
                         textTransform: "none",
-                        fontWeight: 800,
-                        bgcolor: ACCENT,
-                        boxShadow: "0 18px 34px rgba(81, 96, 214, 0.24)",
-                        "&:hover": { bgcolor: "#4454c9" },
+                        fontWeight: 700,
+                        bgcolor: "#4f46e5",
+                        "&:hover": {
+                          bgcolor: "#4338ca",
+                        },
                       }}
                     >
                       Create Quotation
                     </Button>
-                    <Button
-                      variant="contained"
-                      onClick={() => onCreateWithoutQuotation({ projectType })}
-                      disabled={submitting || !projectType}
-                      sx={{
-                        minHeight: 56,
-                        minWidth: 270,
-                        px: 3,
-                        borderRadius: 2.5,
-                        textTransform: "none",
-                        fontWeight: 800,
-                        color: "#475569",
-                        bgcolor: "#f8fafc",
-                        boxShadow: "0 18px 34px rgba(15, 23, 42, 0.08)",
-                        "&:hover": { bgcolor: "#eef2f7" },
-                      }}
-                    >
-                      Create without a quotation
-                    </Button>
-                  </Stack>
-                </Stack>
+                  </Box>
+                )}
               </Box>
-            )}
+
+              {/* ── Footer Actions ── */}
+              <Stack
+                direction="row"
+                spacing={1.5}
+                justifyContent="flex-end"
+                alignItems="center"
+                sx={{ mt: "auto", pt: 2.5 }}
+              >
+                <Button
+                  variant="outlined"
+                  startIcon={<Add />}
+                  onClick={onCreateQuotation}
+                  disabled={submitting}
+                  sx={{
+                    minHeight: 44,
+                    px: 2.8,
+                    borderRadius: 999,
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "0.88rem",
+                    color: "#0f172a",
+                    borderColor: "#cbd5e1",
+                    bgcolor: "#ffffff",
+                    "&:hover": {
+                      borderColor: "#94a3b8",
+                      bgcolor: "#f8fafc",
+                    },
+                  }}
+                >
+                  Create New Quote
+                </Button>
+
+                <Button
+                  variant="contained"
+                  endIcon={!submitting ? <ArrowForward sx={{ fontSize: 17 }} /> : undefined}
+                  startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}
+                  onClick={() => onContinueWithQuotation(selectedQuotation, { projectType })}
+                  disabled={!selectedQuotation || submitting || !projectType}
+                  sx={{
+                    minHeight: 44,
+                    px: 3,
+                    borderRadius: 999,
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "0.88rem",
+                    bgcolor: "#4f46e5",
+                    color: "#ffffff",
+                    boxShadow: "0 6px 20px rgba(79, 70, 229, 0.3)",
+                    "&:hover": {
+                      bgcolor: "#4338ca",
+                      boxShadow: "0 8px 24px rgba(79, 70, 229, 0.4)",
+                    },
+                    "&.Mui-disabled": {
+                      bgcolor: "#e2e8f0",
+                      color: "#94a3b8",
+                      boxShadow: "none",
+                    },
+                  }}
+                >
+                  {submitting ? "Converting to Project..." : "Continue with Selected Quote"}
+                </Button>
+              </Stack>
+            </Box>
           </Box>
-        </Box>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Quotation Details Preview Dialog ── */}
+      <Dialog
+        open={Boolean(previewQuotation)}
+        onClose={() => setPreviewQuotation(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3.5, p: 1 } }}
+      >
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 800 }}>
+          {previewQuotation?.quotationNumber || "Quotation Details"}
+          <IconButton onClick={() => setPreviewQuotation(null)} size="small">
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography color="text.secondary">System Size</Typography>
+              <Typography fontWeight={700}>
+                {Number(previewQuotation?.systemSize || previewQuotation?.form?.systemSize || 0).toFixed(2)} kW
+              </Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography color="text.secondary">Panel Brand</Typography>
+              <Typography fontWeight={700}>{previewQuotation?.form?.panelBrand || previewQuotation?.panelBrand || "—"}</Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography color="text.secondary">Inverter Brand</Typography>
+              <Typography fontWeight={700}>{previewQuotation?.form?.inverterBrand || previewQuotation?.inverterBrand || "—"}</Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography color="text.secondary">Total Cost</Typography>
+              <Typography fontWeight={800} color="#4f46e5">
+                {formatCurrency(previewQuotation?.totalCost || previewQuotation?.form?.totalCost || 0)}
+              </Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography color="text.secondary">Estimated Subsidy</Typography>
+              <Typography fontWeight={800} color="#16a34a">
+                {formatCurrency(previewQuotation?.form?.subsidy || previewQuotation?.subsidy || 0)}
+              </Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography color="text.secondary">Net Price</Typography>
+              <Typography fontWeight={800}>
+                {formatCurrency(
+                  (previewQuotation?.totalCost || previewQuotation?.form?.totalCost || 0) -
+                  (previewQuotation?.form?.subsidy || previewQuotation?.subsidy || 0)
+                )}
+              </Typography>
+            </Stack>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+

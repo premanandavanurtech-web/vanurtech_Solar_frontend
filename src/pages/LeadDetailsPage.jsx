@@ -56,7 +56,9 @@ import {
   MoreVert,
   OpenInNew,
   Phone,
+  Groups,
   PictureAsPdfOutlined,
+  SupervisorAccount,
   PlaceOutlined,
   RemoveRedEye,
   Restore,
@@ -1570,7 +1572,7 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, s
                   {availableRoles.map((role) => (
                     <Box key={role} onClick={() => handleRoleChange({ target: { value: role } })}
                       sx={{ flex: 1, p: 1.5, borderRadius: 2, border: `2px solid ${assignToRole === role ? "#f97316" : TOKEN.borderMid}`, bgcolor: assignToRole === role ? alpha("#f97316", 0.08) : TOKEN.surfaceAlt, cursor: "pointer" }}>
-                      <Typography variant="body2" fontWeight={700} sx={{ color: assignToRole === role ? "#f97316" : TOKEN.text }}>{role}</Typography>
+                      <Typography variant="body2" fontWeight={700} sx={{ color: assignToRole === role ? "#f97316" : TOKEN.text }}>{role === "TEAM" || role === "Team" ? "Supervisor" : role}</Typography>
                     </Box>
                   ))}
                 </Stack>
@@ -1578,7 +1580,7 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, s
             )}
             {(assignToRole || !showRoleSelection) && (
               <Box>
-                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: TOKEN.text }}>Select User</Typography>
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, color: TOKEN.text }}>Select {assignToRole === "TEAM" || assignToRole === "Supervisor" ? "Supervisor" : assignToRole || "User"}</Typography>
                 <Stack spacing={1} sx={{ maxHeight: 220, overflow: "auto" }}>
                   {getAvailableUsers().map((u) => (
                     <Box key={u._id} onClick={() => setSelectedUserId(u._id)}
@@ -1645,6 +1647,7 @@ export default function LeadDetailsPage() {
   const [savingActivity, setSavingActivity] = useState(false);
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
   const [siteVisitDialogOpen, setSiteVisitDialogOpen] = useState(false);
+  const [siteVisitAssignRole, setSiteVisitAssignRole] = useState("Incharge");
   const [siteVisitUsers, setSiteVisitUsers] = useState([]);
   const [siteVisitUsersLoading, setSiteVisitUsersLoading] = useState(false);
   const [siteVisitUserError, setSiteVisitUserError] = useState("");
@@ -1813,35 +1816,43 @@ export default function LeadDetailsPage() {
     const options = [];
     const normalizeRole = (role) => {
       const normalized = String(role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-      if (["team", "team_member", "field_executive"].includes(normalized)) return "TEAM";
+      if (["team", "team_member", "field_executive", "supervisor", "installer"].includes(normalized)) return "TEAM";
       if (normalized === "admin_panel" || normalized === "head_office") return "Admin_panel";
-      if (normalized === "zsm" || normalized === "operation_lead") return "ZSM";
-      if (normalized === "incharge") return "Incharge";
+      if (["manager", "zsm", "operation_lead", "operationlead", "project_head", "incharge"].includes(normalized)) return "Incharge";
+
       return role || "";
     };
-    const isTeamMember = (person, fallbackRole = "") => normalizeRole(person?.role || fallbackRole) === "TEAM";
+
     const pushOption = (person, fallbackRole = "") => {
-      if (!person?._id || seen.has(person._id) || !isTeamMember(person, fallbackRole)) return;
+      const normRole = normalizeRole(person?.role || fallbackRole);
+      if (!person?._id || seen.has(person._id) || (normRole !== "Incharge" && normRole !== "TEAM")) return;
       seen.add(person._id);
       options.push({
         _id: person._id,
         firstName: person.firstName || "",
         lastName: person.lastName || "",
         email: person.email || "",
-        role: "TEAM",
+        role: normRole === "Incharge" ? "Incharge" : "TEAM",
       });
     };
 
     pushOption(assignedPerson, leadDetails?.assignedUser ? "TEAM" : leadDetails?.assignedManager ? "Incharge" : "");
-    if (normalizeRole(user?.role || userRole) === "TEAM") {
+    if (user?._id) {
       pushOption(user, user?.role || userRole);
     }
     return options;
   }, [assignedPerson, leadDetails?.assignedManager, leadDetails?.assignedUser, user, userRole]);
   const siteVisitAssigneeOptions = siteVisitUsers.length ? siteVisitUsers : fallbackSiteVisitUsers;
+  const filteredSiteVisitOptions = useMemo(() => {
+    return siteVisitAssigneeOptions.filter((option) => {
+      const r = String(option.role || "").toUpperCase();
+      if (siteVisitAssignRole === "Incharge") return r === "INCHARGE" || r === "MANAGER" || r === "ZSM" || r === "PROJECT_HEAD";
+      return r === "TEAM" || r === "SUPERVISOR" || r === "INSTALLER";
+    });
+  }, [siteVisitAssignRole, siteVisitAssigneeOptions]);
   const selectedSiteVisitAssignee = useMemo(
-    () => siteVisitAssigneeOptions.find((option) => option._id === siteVisitAssigneeId) || null,
-    [siteVisitAssigneeId, siteVisitAssigneeOptions],
+    () => filteredSiteVisitOptions.find((option) => option._id === siteVisitAssigneeId) || null,
+    [filteredSiteVisitOptions, siteVisitAssigneeId],
   );
 
   useEffect(() => {
@@ -2105,54 +2116,72 @@ export default function LeadDetailsPage() {
   }, []);
   const loadSiteVisitUsers = useCallback(async () => {
     const extractUsers = (response) => {
-      if (!response?.success) return [];
-      if (Array.isArray(response.result?.users)) return response.result.users;
-      if (Array.isArray(response.result?.data)) return response.result.data;
+      if (!response) return [];
+      const result = response?.result !== undefined ? response.result : response;
+      if (Array.isArray(result?.users)) return result.users;
+      if (Array.isArray(result?.data)) return result.data;
       if (Array.isArray(response.result)) return response.result;
       return response.result ? [response.result] : [];
     };
     const normalizeRole = (role) => {
       const normalized = String(role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-      if (["team", "team_member", "field_executive"].includes(normalized)) return "TEAM";
+      if (["team", "team_member", "field_executive", "supervisor", "installer"].includes(normalized)) return "TEAM";
       if (normalized === "admin_panel" || normalized === "head_office") return "Admin_panel";
-      if (normalized === "zsm" || normalized === "operation_lead") return "ZSM";
-      if (normalized === "incharge") return "Incharge";
+      if (["manager", "zsm", "operation_lead", "operationlead", "project_head", "incharge"].includes(normalized)) return "Incharge";
+
       return role || "";
     };
-    const normalizeUsers = (usersData, expectedRole = "TEAM") => usersData
+    const normalizeUsers = (usersData) => usersData
       .filter((entry) => {
         const status = String(entry?.status || "active").toLowerCase();
-        return entry?._id && status === "active" && normalizeRole(entry.role) === expectedRole;
+        const normRole = normalizeRole(entry?.role);
+        return entry?._id && status === "active" && (normRole === "Incharge" || normRole === "TEAM");
       })
       .map((entry) => ({
         _id: entry._id,
         firstName: entry.firstName || "",
         lastName: entry.lastName || "",
         email: entry.email || "",
-        role: expectedRole,
+        role: normalizeRole(entry.role) === "Incharge" ? "Incharge" : "TEAM",
       }));
 
-    if (!(userRole === "Admin_panel" || userRole === "ZSM" || userRole === "Incharge")) {
-      setSiteVisitUsers(fallbackSiteVisitUsers);
-      return;
-    }
+
+
+
+
 
     try {
       setSiteVisitUsersLoading(true);
       setSiteVisitUserError("");
       const responses = [];
 
-      if (userRole === "Admin_panel" || userRole === "ZSM") {
+      const allUsersRes = await fetchAPI("/user/getAllUsers?page=1&limit=100");
+      if (allUsersRes?.success) {
+        responses.push({ items: normalizeUsers(extractUsers(allUsersRes)) });
+      }
+      try {
+        const mgrRes = await fetchAPI("/user/managerList?page=1&limit=100");
+        if (mgrRes?.success) {
+          responses.push({ items: normalizeUsers(extractUsers(mgrRes)) });
+        }
+      } catch (_) {}
+      try {
+        const teamRes = await fetchAPI("/user/getManagerUnderUserList?page=1&limit=100");
+        if (teamRes?.success) {
+          responses.push({ items: normalizeUsers(extractUsers(teamRes)) });
+        }
+      } catch (_) {}
+      if (false) {
         responses.push(
-          { items: normalizeUsers(extractUsers(await safeFetchAPI("/user/getAllUsers?page=1&limit=100")), "TEAM") },
+          { items: [] },
         );
-      } else if (userRole === "Incharge" && user?._id) {
+      /* clean2 */
         responses.push({
           items: normalizeUsers(
-            extractUsers(await safeFetchAPI("/user/getAllUsers?page=1&limit=100")),
+            [],
             "TEAM",
           ),
-        });
+        }); /* done */
       }
 
       const deduped = [];
@@ -2165,7 +2194,7 @@ export default function LeadDetailsPage() {
 
       setSiteVisitUsers(deduped);
       if (!deduped.length) {
-        setSiteVisitUserError("No active team members available for scheduling site visits.");
+        setSiteVisitUserError("No active users available for scheduling site visits.");
       }
     } catch (error) {
       setSiteVisitUsers(fallbackSiteVisitUsers);
@@ -2173,7 +2202,7 @@ export default function LeadDetailsPage() {
     } finally {
       setSiteVisitUsersLoading(false);
     }
-  }, [fallbackSiteVisitUsers, safeFetchAPI, user?._id, userRole]);
+  }, [fallbackSiteVisitUsers, fetchAPI]);
   const openSiteVisitDialog = useCallback(() => {
     setActivityMode("Site visit");
     setActivityForm((prev) => ({
@@ -2182,6 +2211,8 @@ export default function LeadDetailsPage() {
       scheduledAt: "",
       location: [leadDetails?.address, leadDetails?.city].filter(Boolean).join(", "),
     }));
+    const initialRole = isTeamRole(assignedPerson?.role) ? "Supervisor" : (assignedPerson?.role === "Incharge" ? "Incharge" : "Incharge");
+    setSiteVisitAssignRole(initialRole);
     setSiteVisitAssigneeId(
       (isTeamRole(assignedPerson?.role) ? assignedPerson?._id : "") || (isTeamRole(user?.role) ? user?._id : "") || "",
     );
@@ -2227,9 +2258,9 @@ export default function LeadDetailsPage() {
     loadSiteVisitUsers();
   }, [loadSiteVisitUsers, siteVisitDialogOpen]);
   useEffect(() => {
-    if (!siteVisitDialogOpen || siteVisitAssigneeId || !siteVisitAssigneeOptions.length) return;
-    setSiteVisitAssigneeId(siteVisitAssigneeOptions[0]._id);
-  }, [siteVisitAssigneeId, siteVisitAssigneeOptions, siteVisitDialogOpen]);
+    if (siteVisitAssigneeId && filteredSiteVisitOptions.some((opt) => opt._id === siteVisitAssigneeId)) return;
+    setSiteVisitAssigneeId(filteredSiteVisitOptions[0]?._id || "");
+  }, [filteredSiteVisitOptions, siteVisitAssigneeId, siteVisitDialogOpen]);
 
   const handleActivitySubmit = useCallback(async () => {
     if (!leadDetails?._id || savingActivity) return;
@@ -5452,21 +5483,68 @@ export default function LeadDetailsPage() {
             )}
 
             <Box>
+              <Typography sx={{ mb: 1, fontSize: "0.92rem", color: TOKEN.textSub, fontWeight: 600 }}>
+                Assign To Role *
+              </Typography>
+              <Stack direction="row" spacing={1.5}>
+                {["Incharge", "Supervisor"].map((role) => {
+                  const selected = siteVisitAssignRole === role;
+                  const icon = role === "Incharge" ? <SupervisorAccount fontSize="small" /> : <Groups fontSize="small" />;
+                  return (
+                    <Button
+                      key={role}
+                      type="button"
+                      onClick={() => setSiteVisitAssignRole(role)}
+                      variant="outlined"
+                      startIcon={icon}
+                      sx={{
+                        flex: 1,
+                        justifyContent: "flex-start",
+                        px: 2,
+                        py: 1.25,
+                        borderRadius: 2.5,
+                        borderWidth: 1.5,
+                        textTransform: "none",
+                        fontSize: "0.95rem",
+                        fontWeight: 600,
+                        borderColor: selected ? TOKEN.primary : TOKEN.borderMid,
+                        color: selected ? (getIsDark() ? "#93c5fd" : TOKEN.primary) : TOKEN.text,
+                        bgcolor: selected ? (getIsDark() ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.08)") : (getIsDark() ? "#172338" : "#fff"),
+                        "&:hover": {
+                          borderWidth: 1.5,
+                          borderColor: TOKEN.primary,
+                          bgcolor: getIsDark() ? "rgba(59, 130, 246, 0.2)" : "rgba(59, 130, 246, 0.12)",
+                        },
+                      }}
+                    >
+                      {role}
+                      {selected && (
+                        <Box sx={{ ml: "auto", display: "flex", color: TOKEN.primary }}>
+                          <CheckCircle fontSize="small" />
+                        </Box>
+                      )}
+                    </Button>
+                  );
+                })}
+              </Stack>
+            </Box>
+
+            <Box>
               <Typography sx={{ mb: 1, fontSize: "1rem", color: TOKEN.textSub, fontWeight: 500 }}>
-                Assign To *
+                Select {siteVisitAssignRole} *
               </Typography>
               <Autocomplete
-                options={siteVisitAssigneeOptions}
+                options={filteredSiteVisitOptions}
                 value={selectedSiteVisitAssignee}
                 loading={siteVisitUsersLoading}
                 onChange={(_, value) => setSiteVisitAssigneeId(value?._id || "")}
                 getOptionLabel={(option) => getPersonDisplayName(option)}
                 isOptionEqualToValue={(option, value) => option._id === value._id}
-                noOptionsText="No users found"
+                noOptionsText={`No ${siteVisitAssignRole.toLowerCase()}s found`}
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    placeholder="Search user..."
+                    placeholder={`Search ${siteVisitAssignRole.toLowerCase()}...`}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         borderRadius: 2.5,

@@ -60,75 +60,100 @@ import { useAttendance } from "../hooks/useAttendance";
 import { format } from "date-fns";
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
 
-// ─── Theme Colors matching dark UI ───────────────────────────────────────────
-const THEME = {
-  dialogBg: "#0b1222",
-  cardBg: "#111b33",
-  cardBorder: "rgba(255, 255, 255, 0.08)",
-  inputBg: "#0c1527",
-  textPrimary: "#f8fafc",
-  textSecondary: "#94a3b8",
-  textMuted: "#64748b",
+// ─── Theme Colors supporting Light & Dark Mode ─────────────────────────────
+const getDialogTheme = (isDark) => ({
+  dialogBg: isDark ? "#0b1222" : "#ffffff",
+  cardBg: isDark ? "#111b33" : "#f8fafc",
+  cardBorder: isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0",
+  inputBg: isDark ? "#0c1527" : "#ffffff",
+  textPrimary: isDark ? "#f8fafc" : "#0f172a",
+  textSecondary: isDark ? "#94a3b8" : "#64748b",
+  textMuted: isDark ? "#64748b" : "#94a3b8",
+  headerBg: isDark ? "rgba(255, 255, 255, 0.02)" : "#f8fafc",
   blue: "#2563eb",
-  sky: "#38bdf8",
-  green: "#10b981",
-  greenLight: "#34d399",
-  orange: "#f59e0b",
-  orangeLight: "#fbbf24",
+  sky: isDark ? "#38bdf8" : "#0284c7",
+  green: isDark ? "#10b981" : "#059669",
+  greenLight: isDark ? "#34d399" : "#16a34a",
+  greenCardBg: isDark ? "rgba(16, 185, 129, 0.05)" : "rgba(16, 185, 129, 0.06)",
+  greenCardBorder: isDark ? "rgba(16, 185, 129, 0.25)" : "rgba(16, 185, 129, 0.25)",
+  orange: isDark ? "#f59e0b" : "#d97706",
+  orangeLight: isDark ? "#fbbf24" : "#ea580c",
+  orangeCardBg: isDark ? "rgba(245, 158, 11, 0.05)" : "rgba(245, 158, 11, 0.06)",
+  orangeCardBorder: isDark ? "rgba(245, 158, 11, 0.25)" : "rgba(245, 158, 11, 0.25)",
   red: "#ef4444",
   purple: "#a855f7",
-};
+  divider: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9",
+  closeBtnBg: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)",
+  btnBorder: isDark ? "rgba(255, 255, 255, 0.12)" : "#cbd5e1",
+  btnBg: isDark ? "rgba(255, 255, 255, 0.04)" : "#f1f5f9",
+  btnHoverBg: isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0",
+});
 
-const STATUS_CONFIG = {
+export const getAllStatusConfigs = (isDark = false) => ({
   present: {
-    bg: "rgba(16, 185, 129, 0.12)",
-    color: "#34d399",
-    border: "rgba(16, 185, 129, 0.3)",
-    icon: <CheckCircle sx={{ fontSize: 16, color: "#34d399" }} />,
+    bg: isDark ? "rgba(16, 185, 129, 0.12)" : "#d1fae5",
+    color: isDark ? "#34d399" : "#065f46",
+    border: isDark ? "rgba(16, 185, 129, 0.3)" : "#a7f3d0",
+    iconColor: isDark ? "#34d399" : "#059669",
+    icon: <CheckCircle sx={{ fontSize: 16 }} />,
     label: "Present",
   },
   punch_in_mobile: {
-    bg: "rgba(6, 182, 212, 0.12)",
-    color: "#22d3ee",
-    border: "rgba(6, 182, 212, 0.3)",
-    icon: <TouchApp sx={{ fontSize: 16, color: "#22d3ee" }} />,
+    bg: isDark ? "rgba(6, 182, 212, 0.12)" : "#cffafe",
+    color: isDark ? "#22d3ee" : "#0e7490",
+    border: isDark ? "rgba(6, 182, 212, 0.3)" : "#a5f3fc",
+    iconColor: isDark ? "#22d3ee" : "#0891b2",
+    icon: <TouchApp sx={{ fontSize: 16 }} />,
     label: "Punch In (Mobile)",
   },
   absent: {
-    bg: "rgba(239, 68, 68, 0.12)",
-    color: "#f87171",
-    border: "rgba(239, 68, 68, 0.3)",
-    icon: <ErrorIcon sx={{ fontSize: 16, color: "#f87171" }} />,
+    bg: isDark ? "rgba(239, 68, 68, 0.12)" : "#fee2e2",
+    color: isDark ? "#f87171" : "#991b1b",
+    border: isDark ? "rgba(239, 68, 68, 0.3)" : "#fecaca",
+    iconColor: isDark ? "#f87171" : "#dc2626",
+    icon: <ErrorIcon sx={{ fontSize: 16 }} />,
     label: "Absent",
   },
   late: {
-    bg: "rgba(245, 158, 11, 0.12)",
-    color: "#fbbf24",
-    border: "rgba(245, 158, 11, 0.3)",
-    icon: <WarningIcon sx={{ fontSize: 16, color: "#fbbf24" }} />,
+    bg: isDark ? "rgba(245, 158, 11, 0.12)" : "#fef3c7",
+    color: isDark ? "#fbbf24" : "#92400e",
+    border: isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a",
+    iconColor: isDark ? "#fbbf24" : "#d97706",
+    icon: <WarningIcon sx={{ fontSize: 16 }} />,
     label: "Late",
   },
   leave: {
-    bg: "rgba(168, 85, 247, 0.12)",
-    color: "#c084fc",
-    border: "rgba(168, 85, 247, 0.3)",
-    icon: <Person sx={{ fontSize: 16, color: "#c084fc" }} />,
+    bg: isDark ? "rgba(168, 85, 247, 0.12)" : "#f3e8ff",
+    color: isDark ? "#c084fc" : "#6b21a8",
+    border: isDark ? "rgba(168, 85, 247, 0.3)" : "#e9d5ff",
+    iconColor: isDark ? "#c084fc" : "#9333ea",
+    icon: <Person sx={{ fontSize: 16 }} />,
     label: "Leave",
   },
   holiday: {
-    bg: "rgba(59, 130, 246, 0.12)",
-    color: "#60a5fa",
-    border: "rgba(59, 130, 246, 0.3)",
-    icon: <CalendarToday sx={{ fontSize: 16, color: "#60a5fa" }} />,
+    bg: isDark ? "rgba(59, 130, 246, 0.12)" : "#dbeafe",
+    color: isDark ? "#60a5fa" : "#1e40af",
+    border: isDark ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe",
+    iconColor: isDark ? "#60a5fa" : "#2563eb",
+    icon: <CalendarToday sx={{ fontSize: 16 }} />,
     label: "Holiday",
   },
   "half-day": {
-    bg: "rgba(245, 158, 11, 0.12)",
-    color: "#fbbf24",
-    border: "rgba(245, 158, 11, 0.3)",
-    icon: <WarningIcon sx={{ fontSize: 16, color: "#fbbf24" }} />,
+    bg: isDark ? "rgba(245, 158, 11, 0.12)" : "#fef3c7",
+    color: isDark ? "#fbbf24" : "#92400e",
+    border: isDark ? "rgba(245, 158, 11, 0.3)" : "#fde68a",
+    iconColor: isDark ? "#fbbf24" : "#d97706",
+    icon: <WarningIcon sx={{ fontSize: 16 }} />,
     label: "Half Day",
   },
+});
+
+export const STATUS_CONFIG = getAllStatusConfigs(false);
+
+export const getStatusConfig = (status, isDark = false) => {
+  const norm = String(status || "present").toLowerCase().replace(/\s+/g, "_");
+  const configs = getAllStatusConfigs(isDark);
+  return configs[norm] || configs.present;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -177,13 +202,14 @@ const resolveAddress = (addr) => {
 
 // ─── StatusChip Component ─────────────────────────────────────────────────────
 const StatusChip = ({ status }) => {
-  const norm = String(status || "present").toLowerCase().replace(/\s+/g, "_");
-  const cfg = STATUS_CONFIG[norm] || STATUS_CONFIG.present;
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  const cfg = getStatusConfig(status, isDark);
   return (
     <Chip
       size="small"
       label={cfg.label}
-      icon={cfg.icon}
+      icon={React.cloneElement(cfg.icon, { sx: { fontSize: 16, color: `${cfg.iconColor} !important` } })}
       sx={{
         bgcolor: cfg.bg,
         color: cfg.color,
@@ -193,7 +219,7 @@ const StatusChip = ({ status }) => {
         border: `1px solid ${cfg.border}`,
         px: 0.5,
         height: 28,
-        "& .MuiChip-icon": { color: cfg.color, ml: 0.5 },
+        "& .MuiChip-icon": { color: `${cfg.iconColor} !important`, ml: 0.5 },
       }}
     />
   );
@@ -357,8 +383,10 @@ export const printRecord = (a) => {
   win.print();
 };
 
-// ─── Export Menu Component ────────────────────────────────────────────────────
 const ActionExportMenu = ({ attendance, onSnack }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  const T = getDialogTheme(isDark);
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
@@ -415,15 +443,15 @@ const ActionExportMenu = ({ attendance, onSnack }) => {
         onClick={(e) => setAnchorEl(e.currentTarget)}
         sx={{
           borderRadius: "10px",
-          borderColor: THEME.cardBorder,
-          bgcolor: "rgba(255, 255, 255, 0.04)",
-          color: THEME.textPrimary,
+          borderColor: T.btnBorder,
+          bgcolor: T.btnBg,
+          color: T.textPrimary,
           fontWeight: 700,
           fontSize: "0.82rem",
           textTransform: "none",
           px: 1.8,
           py: 0.8,
-          "&:hover": { bgcolor: "rgba(255, 255, 255, 0.08)", borderColor: "rgba(255, 255, 255, 0.2)" },
+          "&:hover": { bgcolor: T.btnHoverBg, borderColor: isDark ? "rgba(255, 255, 255, 0.2)" : "#94a3b8" },
         }}
       >
         Export
@@ -438,10 +466,10 @@ const ActionExportMenu = ({ attendance, onSnack }) => {
             mt: 1,
             borderRadius: "12px",
             minWidth: 180,
-            bgcolor: THEME.cardBg,
-            border: `1px solid ${THEME.cardBorder}`,
-            color: THEME.textPrimary,
-            boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+            bgcolor: isDark ? "#111b33" : "#ffffff",
+            border: `1px solid ${T.cardBorder}`,
+            color: T.textPrimary,
+            boxShadow: isDark ? "0 12px 32px rgba(0,0,0,0.5)" : "0 10px 25px rgba(15,23,42,0.12)",
           },
         }}
         transformOrigin={{ horizontal: "left", vertical: "bottom" }}
@@ -451,7 +479,7 @@ const ActionExportMenu = ({ attendance, onSnack }) => {
           <Typography
             variant="caption"
             sx={{
-              color: THEME.textMuted,
+              color: T.textMuted,
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: 0.5,
@@ -461,22 +489,22 @@ const ActionExportMenu = ({ attendance, onSnack }) => {
             Export This Record
           </Typography>
         </Box>
-        <MenuItem onClick={exportCSV} sx={{ py: 1, "&:hover": { bgcolor: "rgba(255, 255, 255, 0.06)" } }}>
-          <ListItemIcon><FileDownload fontSize="small" sx={{ color: THEME.greenLight }} /></ListItemIcon>
-          <ListItemText primary="Export as CSV" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }} />
+        <MenuItem onClick={exportCSV} sx={{ py: 1, "&:hover": { bgcolor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9" } }}>
+          <ListItemIcon><FileDownload fontSize="small" sx={{ color: T.greenLight }} /></ListItemIcon>
+          <ListItemText primary="Export as CSV" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600, color: T.textPrimary }} />
         </MenuItem>
-        <MenuItem onClick={exportJSON} sx={{ py: 1, "&:hover": { bgcolor: "rgba(255, 255, 255, 0.06)" } }}>
-          <ListItemIcon><FileDownload fontSize="small" sx={{ color: THEME.sky }} /></ListItemIcon>
-          <ListItemText primary="Export as JSON" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }} />
+        <MenuItem onClick={exportJSON} sx={{ py: 1, "&:hover": { bgcolor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9" } }}>
+          <ListItemIcon><FileDownload fontSize="small" sx={{ color: T.sky }} /></ListItemIcon>
+          <ListItemText primary="Export as JSON" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600, color: T.textPrimary }} />
         </MenuItem>
-        <Divider sx={{ my: 0.5, borderColor: THEME.cardBorder }} />
-        <MenuItem onClick={copyClip} sx={{ py: 1, "&:hover": { bgcolor: "rgba(255, 255, 255, 0.06)" } }}>
-          <ListItemIcon><ContentCopy fontSize="small" sx={{ color: THEME.textSecondary }} /></ListItemIcon>
-          <ListItemText primary="Copy to Clipboard" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }} />
+        <Divider sx={{ my: 0.5, borderColor: T.cardBorder }} />
+        <MenuItem onClick={copyClip} sx={{ py: 1, "&:hover": { bgcolor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9" } }}>
+          <ListItemIcon><ContentCopy fontSize="small" sx={{ color: T.textSecondary }} /></ListItemIcon>
+          <ListItemText primary="Copy to Clipboard" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600, color: T.textPrimary }} />
         </MenuItem>
-        <MenuItem onClick={print} sx={{ py: 1, "&:hover": { bgcolor: "rgba(255, 255, 255, 0.06)" } }}>
-          <ListItemIcon><Print fontSize="small" sx={{ color: THEME.textSecondary }} /></ListItemIcon>
-          <ListItemText primary="Print" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600 }} />
+        <MenuItem onClick={print} sx={{ py: 1, "&:hover": { bgcolor: isDark ? "rgba(255, 255, 255, 0.06)" : "#f1f5f9" } }}>
+          <ListItemIcon><Print fontSize="small" sx={{ color: T.textSecondary }} /></ListItemIcon>
+          <ListItemText primary="Print" primaryTypographyProps={{ fontSize: "0.82rem", fontWeight: 600, color: T.textPrimary }} />
         </MenuItem>
       </Menu>
     </>
@@ -494,6 +522,9 @@ export default function AttendanceDetails({
   onDelete,
 }) {
   const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  const T = useMemo(() => getDialogTheme(isDark), [isDark]);
+  const statusConfigs = useMemo(() => getAllStatusConfigs(isDark), [isDark]);
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { updateAttendance } = useAttendance();
 
@@ -536,13 +567,13 @@ export default function AttendanceDetails({
     const normStatus = String(attendance.status || "present").toLowerCase().replace(/\s+/g, "_");
 
     setFormData({
-      status: normStatus in STATUS_CONFIG ? normStatus : "present",
+      status: normStatus in statusConfigs ? normStatus : "present",
       punchInTime: inTime || "09:00",
       punchOutTime: outTime || "18:30",
       workHours: String(attendance.workHours || 0),
       remarks: attendance.remarks || "",
     });
-  }, [attendance]);
+  }, [attendance, statusConfigs]);
 
   // Auto-calculate work hours whenever punchInTime or punchOutTime changes
   const calculateWorkHours = (inTime, outTime) => {
@@ -667,10 +698,12 @@ export default function AttendanceDetails({
         PaperProps={{
           sx: {
             borderRadius: isMobile ? 0 : "22px",
-            bgcolor: THEME.dialogBg,
-            color: THEME.textPrimary,
-            border: `1px solid ${THEME.cardBorder}`,
-            boxShadow: "0 24px 64px rgba(0, 0, 0, 0.65)",
+            bgcolor: T.dialogBg,
+            color: T.textPrimary,
+            border: `1px solid ${T.cardBorder}`,
+            boxShadow: isDark
+              ? "0 24px 64px rgba(0, 0, 0, 0.65)"
+              : "0 20px 48px rgba(15, 23, 42, 0.12)",
             overflow: "hidden",
             maxHeight: isMobile ? "100%" : "92vh",
           },
@@ -678,13 +711,13 @@ export default function AttendanceDetails({
         TransitionComponent={isMobile ? Slide : Fade}
         TransitionProps={isMobile ? { direction: "up" } : {}}
       >
-        {/* Header (Image 2) */}
+        {/* Header */}
         <DialogTitle
           sx={{
             px: { xs: 2, sm: 3 },
             py: 2.2,
-            borderBottom: `1px solid ${THEME.cardBorder}`,
-            bgcolor: "rgba(255,255,255,0.02)",
+            borderBottom: `1px solid ${T.cardBorder}`,
+            bgcolor: T.headerBg,
           }}
         >
           <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -692,7 +725,7 @@ export default function AttendanceDetails({
             <Stack direction="row" spacing={1.8} alignItems="center">
               <Avatar
                 sx={{
-                  bgcolor: THEME.blue,
+                  bgcolor: T.blue,
                   color: "#fff",
                   width: 44,
                   height: 44,
@@ -704,10 +737,10 @@ export default function AttendanceDetails({
                 {userInitial}
               </Avatar>
               <Box>
-                <Typography variant="h6" fontWeight={800} sx={{ color: "#fff", fontSize: "1.1rem", lineHeight: 1.2 }}>
+                <Typography variant="h6" fontWeight={800} sx={{ color: T.textPrimary, fontSize: "1.1rem", lineHeight: 1.2 }}>
                   Attendance Details
                 </Typography>
-                <Typography variant="caption" sx={{ color: THEME.textSecondary, fontSize: "0.8rem", mt: 0.2, display: "block" }}>
+                <Typography variant="caption" sx={{ color: T.textSecondary, fontSize: "0.8rem", mt: 0.2, display: "block" }}>
                   {fmtDateFull(a.date || a.createdAt)}
                 </Typography>
               </Box>
@@ -720,12 +753,12 @@ export default function AttendanceDetails({
                 onClick={handleClose}
                 size="small"
                 sx={{
-                  color: THEME.textSecondary,
-                  bgcolor: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${THEME.cardBorder}`,
+                  color: T.textSecondary,
+                  bgcolor: T.closeBtnBg,
+                  border: `1px solid ${T.cardBorder}`,
                   width: 32,
                   height: 32,
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.12)", color: "#fff" },
+                  "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0", color: T.textPrimary },
                 }}
               >
                 <Close sx={{ fontSize: 18 }} />
@@ -734,7 +767,7 @@ export default function AttendanceDetails({
           </Stack>
         </DialogTitle>
 
-        {/* Content (Image 2 & 3) */}
+        {/* Content */}
         <DialogContent sx={{ px: { xs: 2, sm: 3 }, py: 2.5 }}>
           <Stack spacing={2.2}>
             {/* ── Row 1: Summary Cards (Work Hours, Phone, Email) ── */}
@@ -746,18 +779,18 @@ export default function AttendanceDetails({
                   sx={{
                     p: 2,
                     borderRadius: "14px",
-                    bgcolor: THEME.cardBg,
-                    border: `1px solid ${THEME.cardBorder}`,
+                    bgcolor: T.cardBg,
+                    border: `1px solid ${T.cardBorder}`,
                     height: "100%",
                   }}
                 >
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                    <AccessTime sx={{ fontSize: 16, color: THEME.sky }} />
-                    <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textSecondary, letterSpacing: "0.05em" }}>
+                    <AccessTime sx={{ fontSize: 16, color: T.sky }} />
+                    <Typography variant="caption" fontWeight={700} sx={{ color: T.textSecondary, letterSpacing: "0.05em" }}>
                       WORK HOURS
                     </Typography>
                   </Stack>
-                  <Typography variant="h5" fontWeight={800} sx={{ color: THEME.sky, letterSpacing: "-0.02em" }}>
+                  <Typography variant="h5" fontWeight={800} sx={{ color: T.sky, letterSpacing: "-0.02em" }}>
                     {workHoursDisplay}
                   </Typography>
                 </Paper>
@@ -770,18 +803,18 @@ export default function AttendanceDetails({
                   sx={{
                     p: 2,
                     borderRadius: "14px",
-                    bgcolor: THEME.cardBg,
-                    border: `1px solid ${THEME.cardBorder}`,
+                    bgcolor: T.cardBg,
+                    border: `1px solid ${T.cardBorder}`,
                     height: "100%",
                   }}
                 >
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                    <Phone sx={{ fontSize: 16, color: THEME.textSecondary }} />
-                    <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textSecondary, letterSpacing: "0.05em" }}>
+                    <Phone sx={{ fontSize: 16, color: T.textSecondary }} />
+                    <Typography variant="caption" fontWeight={700} sx={{ color: T.textSecondary, letterSpacing: "0.05em" }}>
                       PHONE
                     </Typography>
                   </Stack>
-                  <Typography variant="body1" fontWeight={700} sx={{ color: "#fff" }}>
+                  <Typography variant="body1" fontWeight={700} sx={{ color: T.textPrimary }}>
                     {userPhone}
                   </Typography>
                 </Paper>
@@ -794,19 +827,19 @@ export default function AttendanceDetails({
                   sx={{
                     p: 2,
                     borderRadius: "14px",
-                    bgcolor: THEME.cardBg,
-                    border: `1px solid ${THEME.cardBorder}`,
+                    bgcolor: T.cardBg,
+                    border: `1px solid ${T.cardBorder}`,
                     height: "100%",
                     overflow: "hidden",
                   }}
                 >
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                    <Email sx={{ fontSize: 16, color: THEME.textSecondary }} />
-                    <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textSecondary, letterSpacing: "0.05em" }}>
+                    <Email sx={{ fontSize: 16, color: T.textSecondary }} />
+                    <Typography variant="caption" fontWeight={700} sx={{ color: T.textSecondary, letterSpacing: "0.05em" }}>
                       EMAIL
                     </Typography>
                   </Stack>
-                  <Typography variant="body1" fontWeight={700} sx={{ color: "#fff" }} noWrap title={userEmail}>
+                  <Typography variant="body1" fontWeight={700} sx={{ color: T.textPrimary }} noWrap title={userEmail}>
                     {userEmail}
                   </Typography>
                 </Paper>
@@ -822,8 +855,8 @@ export default function AttendanceDetails({
                   sx={{
                     p: 2.2,
                     borderRadius: "16px",
-                    bgcolor: "rgba(16, 185, 129, 0.05)",
-                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                    bgcolor: T.greenCardBg,
+                    border: `1px solid ${T.greenCardBorder}`,
                     height: "100%",
                   }}
                 >
@@ -833,8 +866,8 @@ export default function AttendanceDetails({
                         width: 36,
                         height: 36,
                         borderRadius: "10px",
-                        bgcolor: "rgba(16, 185, 129, 0.15)",
-                        color: THEME.greenLight,
+                        bgcolor: isDark ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.12)",
+                        color: T.greenLight,
                         display: "grid",
                         placeItems: "center",
                       }}
@@ -842,10 +875,10 @@ export default function AttendanceDetails({
                       <Login sx={{ fontSize: 18 }} />
                     </Box>
                     <Box>
-                      <Typography variant="caption" fontWeight={800} sx={{ color: THEME.green, letterSpacing: "0.05em" }}>
+                      <Typography variant="caption" fontWeight={800} sx={{ color: T.green, letterSpacing: "0.05em" }}>
                         PUNCH IN
                       </Typography>
-                      <Typography variant="h6" fontWeight={800} sx={{ color: THEME.greenLight, lineHeight: 1.1 }}>
+                      <Typography variant="h6" fontWeight={800} sx={{ color: T.greenLight, lineHeight: 1.1 }}>
                         {punchInTimeDisplay}
                       </Typography>
                     </Box>
@@ -853,13 +886,13 @@ export default function AttendanceDetails({
 
                   {/* Location Address */}
                   <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1.5 }}>
-                    <LocationOn sx={{ fontSize: 15, color: THEME.textMuted, mt: 0.2, flexShrink: 0 }} />
+                    <LocationOn sx={{ fontSize: 15, color: T.textMuted, mt: 0.2, flexShrink: 0 }} />
                     <Box>
-                      <Typography variant="caption" sx={{ color: THEME.textSecondary, lineHeight: 1.4, display: "block" }}>
+                      <Typography variant="caption" sx={{ color: T.textSecondary, lineHeight: 1.4, display: "block" }}>
                         {resolveAddress(a.punchIn?.address)}
                       </Typography>
                       {a.punchIn?.location && (
-                        <Typography variant="caption" sx={{ color: THEME.textMuted, fontSize: "0.72rem", display: "block", mt: 0.3 }}>
+                        <Typography variant="caption" sx={{ color: T.textMuted, fontSize: "0.72rem", display: "block", mt: 0.3 }}>
                           {a.punchIn.location.lat?.toFixed(5)}, {a.punchIn.location.lng?.toFixed(5)}
                         </Typography>
                       )}
@@ -875,8 +908,8 @@ export default function AttendanceDetails({
                   sx={{
                     p: 2.2,
                     borderRadius: "16px",
-                    bgcolor: "rgba(245, 158, 11, 0.05)",
-                    border: "1px solid rgba(245, 158, 11, 0.25)",
+                    bgcolor: T.orangeCardBg,
+                    border: `1px solid ${T.orangeCardBorder}`,
                     height: "100%",
                   }}
                 >
@@ -886,8 +919,8 @@ export default function AttendanceDetails({
                         width: 36,
                         height: 36,
                         borderRadius: "10px",
-                        bgcolor: "rgba(245, 158, 11, 0.15)",
-                        color: THEME.orangeLight,
+                        bgcolor: isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.12)",
+                        color: T.orangeLight,
                         display: "grid",
                         placeItems: "center",
                       }}
@@ -895,10 +928,10 @@ export default function AttendanceDetails({
                       <Logout sx={{ fontSize: 18 }} />
                     </Box>
                     <Box>
-                      <Typography variant="caption" fontWeight={800} sx={{ color: THEME.orange, letterSpacing: "0.05em" }}>
+                      <Typography variant="caption" fontWeight={800} sx={{ color: T.orange, letterSpacing: "0.05em" }}>
                         PUNCH OUT
                       </Typography>
-                      <Typography variant="h6" fontWeight={800} sx={{ color: THEME.orangeLight, lineHeight: 1.1 }}>
+                      <Typography variant="h6" fontWeight={800} sx={{ color: T.orangeLight, lineHeight: 1.1 }}>
                         {punchOutTimeDisplay}
                       </Typography>
                     </Box>
@@ -906,13 +939,13 @@ export default function AttendanceDetails({
 
                   {/* Location Address */}
                   <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1.5 }}>
-                    <LocationOn sx={{ fontSize: 15, color: THEME.textMuted, mt: 0.2, flexShrink: 0 }} />
+                    <LocationOn sx={{ fontSize: 15, color: T.textMuted, mt: 0.2, flexShrink: 0 }} />
                     <Box>
-                      <Typography variant="caption" sx={{ color: THEME.textSecondary, lineHeight: 1.4, display: "block" }}>
+                      <Typography variant="caption" sx={{ color: T.textSecondary, lineHeight: 1.4, display: "block" }}>
                         {a.punchOut?.address ? resolveAddress(a.punchOut.address) : (punchOutTimeDisplay === "Ongoing" ? "No punch out location recorded" : "No punch out location recorded")}
                       </Typography>
                       {a.punchOut?.location && (
-                        <Typography variant="caption" sx={{ color: THEME.textMuted, fontSize: "0.72rem", display: "block", mt: 0.3 }}>
+                        <Typography variant="caption" sx={{ color: T.textMuted, fontSize: "0.72rem", display: "block", mt: 0.3 }}>
                           {a.punchOut.location.lat?.toFixed(5)}, {a.punchOut.location.lng?.toFixed(5)}
                         </Typography>
                       )}
@@ -928,64 +961,64 @@ export default function AttendanceDetails({
               sx={{
                 p: 2,
                 borderRadius: "14px",
-                bgcolor: THEME.cardBg,
-                border: `1px solid ${THEME.cardBorder}`,
+                bgcolor: T.cardBg,
+                border: `1px solid ${T.cardBorder}`,
               }}
             >
               <Stack spacing={1.2}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textMuted, letterSpacing: "0.06em" }}>
+                  <Typography variant="caption" fontWeight={700} sx={{ color: T.textMuted, letterSpacing: "0.06em" }}>
                     RECORD ID
                   </Typography>
-                  <Typography variant="body2" fontWeight={800} sx={{ color: "#fff", fontFamily: "monospace" }}>
+                  <Typography variant="body2" fontWeight={800} sx={{ color: T.textPrimary, fontFamily: "monospace" }}>
                     {(a._id || a.id || "—").slice(-10)}
                   </Typography>
                 </Stack>
-                <Divider sx={{ borderColor: "rgba(255,255,255,0.05)" }} />
+                <Divider sx={{ borderColor: T.divider }} />
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textMuted, letterSpacing: "0.06em" }}>
+                  <Typography variant="caption" fontWeight={700} sx={{ color: T.textMuted, letterSpacing: "0.06em" }}>
                     CREATED
                   </Typography>
-                  <Typography variant="body2" fontWeight={700} sx={{ color: "#fff" }}>
+                  <Typography variant="body2" fontWeight={700} sx={{ color: T.textPrimary }}>
                     {fmtDateTime(a.createdAt || a.date)}
                   </Typography>
                 </Stack>
-                <Divider sx={{ borderColor: "rgba(255,255,255,0.05)" }} />
+                <Divider sx={{ borderColor: T.divider }} />
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography variant="caption" fontWeight={700} sx={{ color: THEME.textMuted, letterSpacing: "0.06em" }}>
+                  <Typography variant="caption" fontWeight={700} sx={{ color: T.textMuted, letterSpacing: "0.06em" }}>
                     LAST UPDATED
                   </Typography>
-                  <Typography variant="body2" fontWeight={700} sx={{ color: "#fff" }}>
+                  <Typography variant="body2" fontWeight={700} sx={{ color: T.textPrimary }}>
                     {fmtDateTime(a.updatedAt || a.createdAt || a.date)}
                   </Typography>
                 </Stack>
               </Stack>
             </Paper>
 
-            {/* ── Row 4: Edit Attendance Record Box (Images 3 & 4) ── */}
+            {/* ── Row 4: Edit Attendance Record Box ── */}
             {editMode && (
               <Paper
                 elevation={0}
                 sx={{
                   p: 2.5,
                   borderRadius: "16px",
-                  bgcolor: "rgba(16, 185, 129, 0.03)",
-                  border: "1px solid rgba(16, 185, 129, 0.35)",
-                  boxShadow: "0 8px 24px rgba(16, 185, 129, 0.08)",
+                  bgcolor: isDark ? "rgba(16, 185, 129, 0.03)" : "rgba(16, 185, 129, 0.04)",
+                  border: `1px solid ${isDark ? "rgba(16, 185, 129, 0.35)" : "rgba(16, 185, 129, 0.25)"}`,
+                  boxShadow: isDark ? "0 8px 24px rgba(16, 185, 129, 0.08)" : "0 4px 12px rgba(16, 185, 129, 0.05)",
                 }}
               >
                 {/* Header with green dot */}
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <FiberManualRecord sx={{ fontSize: 10, color: THEME.green }} />
-                  <Typography variant="subtitle1" fontWeight={800} sx={{ color: THEME.green, fontSize: "0.95rem" }}>
+                  <FiberManualRecord sx={{ fontSize: 10, color: T.green }} />
+                  <Typography variant="subtitle1" fontWeight={800} sx={{ color: T.green, fontSize: "0.95rem" }}>
                     Edit Attendance Record
                   </Typography>
                 </Stack>
 
                 <Stack spacing={2.2}>
-                  {/* Status Dropdown (Image 4) */}
+                  {/* Status Dropdown */}
                   <FormControl fullWidth size="small">
-                    <InputLabel sx={{ color: THEME.green, "&.Mui-focused": { color: THEME.greenLight } }}>
+                    <InputLabel sx={{ color: T.green, "&.Mui-focused": { color: T.greenLight } }}>
                       Status
                     </InputLabel>
                     <Select
@@ -994,36 +1027,36 @@ export default function AttendanceDetails({
                       label="Status"
                       sx={{
                         borderRadius: "10px",
-                        bgcolor: THEME.inputBg,
-                        color: "#fff",
+                        bgcolor: T.inputBg,
+                        color: T.textPrimary,
                         fontSize: "0.88rem",
                         fontWeight: 700,
-                        "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(16, 185, 129, 0.4)" },
-                        "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: THEME.greenLight },
-                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: THEME.green },
-                        "& .MuiSvgIcon-root": { color: "#fff" },
+                        "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(16, 185, 129, 0.4)" : "#86efac" },
+                        "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: T.greenLight },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: T.green },
+                        "& .MuiSvgIcon-root": { color: T.textPrimary },
                       }}
                       MenuProps={{
                         PaperProps: {
                           sx: {
-                            bgcolor: "#0d1629",
-                            border: `1px solid ${THEME.cardBorder}`,
-                            color: "#fff",
+                            bgcolor: isDark ? "#0d1629" : "#ffffff",
+                            border: `1px solid ${T.cardBorder}`,
+                            color: T.textPrimary,
                             borderRadius: "12px",
-                            boxShadow: "0 12px 36px rgba(0,0,0,0.6)",
+                            boxShadow: isDark ? "0 12px 36px rgba(0,0,0,0.6)" : "0 10px 25px rgba(15,23,42,0.12)",
                           },
                         },
                       }}
                     >
-                      {Object.entries(STATUS_CONFIG).map(([key, item]) => (
+                      {Object.entries(statusConfigs).map(([key, item]) => (
                         <MenuItem
                           key={key}
                           value={key}
                           sx={{
                             py: 1.2,
                             px: 2,
-                            "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
-                            "&.Mui-selected": { bgcolor: "rgba(16, 185, 129, 0.15)" },
+                            "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9" },
+                            "&.Mui-selected": { bgcolor: isDark ? "rgba(16, 185, 129, 0.15)" : "rgba(16, 185, 129, 0.1)" },
                           }}
                         >
                           <Stack direction="row" spacing={1.5} alignItems="center">
@@ -1037,7 +1070,7 @@ export default function AttendanceDetails({
                     </Select>
                   </FormControl>
 
-                  {/* 3 Inputs Grid: Punch In, Punch Out, Work Hours (Image 3) */}
+                  {/* 3 Inputs Grid: Punch In, Punch Out, Work Hours */}
                   <Grid container spacing={1.5}>
                     <Grid item xs={12} sm={4}>
                       <TextField
@@ -1047,14 +1080,14 @@ export default function AttendanceDetails({
                         fullWidth
                         value={formData.punchInTime}
                         onChange={handlePunchInTimeChange}
-                        InputLabelProps={{ shrink: true, sx: { color: THEME.textSecondary } }}
+                        InputLabelProps={{ shrink: true, sx: { color: T.textSecondary } }}
                         sx={{
                           "& .MuiOutlinedInput-root": {
-                            bgcolor: THEME.inputBg,
+                            bgcolor: T.inputBg,
                             borderRadius: "10px",
-                            color: "#fff",
-                            "& fieldset": { borderColor: THEME.cardBorder },
-                            "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                            color: T.textPrimary,
+                            "& fieldset": { borderColor: T.cardBorder },
+                            "&:hover fieldset": { borderColor: isDark ? "rgba(255,255,255,0.2)" : "#94a3b8" },
                           },
                         }}
                       />
@@ -1068,14 +1101,14 @@ export default function AttendanceDetails({
                         fullWidth
                         value={formData.punchOutTime}
                         onChange={handlePunchOutTimeChange}
-                        InputLabelProps={{ shrink: true, sx: { color: THEME.textSecondary } }}
+                        InputLabelProps={{ shrink: true, sx: { color: T.textSecondary } }}
                         sx={{
                           "& .MuiOutlinedInput-root": {
-                            bgcolor: THEME.inputBg,
+                            bgcolor: T.inputBg,
                             borderRadius: "10px",
-                            color: "#fff",
-                            "& fieldset": { borderColor: THEME.cardBorder },
-                            "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                            color: T.textPrimary,
+                            "& fieldset": { borderColor: T.cardBorder },
+                            "&:hover fieldset": { borderColor: isDark ? "rgba(255,255,255,0.2)" : "#94a3b8" },
                           },
                         }}
                       />
@@ -1089,21 +1122,21 @@ export default function AttendanceDetails({
                         fullWidth
                         value={formData.workHours}
                         onChange={(e) => setFormData((p) => ({ ...p, workHours: e.target.value }))}
-                        InputLabelProps={{ shrink: true, sx: { color: THEME.textSecondary } }}
+                        InputLabelProps={{ shrink: true, sx: { color: T.textSecondary } }}
                         sx={{
                           "& .MuiOutlinedInput-root": {
-                            bgcolor: THEME.inputBg,
+                            bgcolor: T.inputBg,
                             borderRadius: "10px",
-                            color: "#fff",
-                            "& fieldset": { borderColor: THEME.cardBorder },
-                            "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                            color: T.textPrimary,
+                            "& fieldset": { borderColor: T.cardBorder },
+                            "&:hover fieldset": { borderColor: isDark ? "rgba(255,255,255,0.2)" : "#94a3b8" },
                           },
                         }}
                       />
                     </Grid>
                   </Grid>
 
-                  {/* Remarks Textarea (Image 3) */}
+                  {/* Remarks Textarea */}
                   <Box>
                     <TextField
                       placeholder="Remarks"
@@ -1114,18 +1147,18 @@ export default function AttendanceDetails({
                       value={formData.remarks}
                       onChange={(e) => setFormData((p) => ({ ...p, remarks: e.target.value }))}
                       inputProps={{ maxLength: 250 }}
-                      InputLabelProps={{ shrink: true, sx: { color: THEME.textSecondary } }}
+                      InputLabelProps={{ shrink: true, sx: { color: T.textSecondary } }}
                       sx={{
                         "& .MuiOutlinedInput-root": {
-                          bgcolor: THEME.inputBg,
+                          bgcolor: T.inputBg,
                           borderRadius: "10px",
-                          color: "#fff",
-                          "& fieldset": { borderColor: THEME.cardBorder },
-                          "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
+                          color: T.textPrimary,
+                          "& fieldset": { borderColor: T.cardBorder },
+                          "&:hover fieldset": { borderColor: isDark ? "rgba(255,255,255,0.2)" : "#94a3b8" },
                         },
                       }}
                     />
-                    <Typography variant="caption" sx={{ color: THEME.textMuted, display: "block", textAlign: "right", mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: T.textMuted, display: "block", textAlign: "right", mt: 0.5 }}>
                       {formData.remarks.length}/250
                     </Typography>
                   </Box>
@@ -1135,13 +1168,13 @@ export default function AttendanceDetails({
           </Stack>
         </DialogContent>
 
-        {/* Footer Actions (Image 2 & Image 4) */}
+        {/* Footer Actions */}
         <DialogActions
           sx={{
             px: { xs: 2, sm: 3 },
             py: 2,
-            borderTop: `1px solid ${THEME.cardBorder}`,
-            bgcolor: "rgba(255,255,255,0.02)",
+            borderTop: `1px solid ${T.cardBorder}`,
+            bgcolor: T.headerBg,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -1149,7 +1182,7 @@ export default function AttendanceDetails({
             gap: 1.5,
           }}
         >
-          {/* Left: Export & Close (Always visible or in view mode) */}
+          {/* Left: Export & Close */}
           <Stack direction="row" spacing={1.2}>
             <ActionExportMenu attendance={a} onSnack={showSnack} />
             <Button
@@ -1157,14 +1190,14 @@ export default function AttendanceDetails({
               onClick={handleClose}
               sx={{
                 borderRadius: "10px",
-                borderColor: THEME.cardBorder,
-                bgcolor: "rgba(255,255,255,0.04)",
-                color: THEME.textPrimary,
+                borderColor: T.btnBorder,
+                bgcolor: T.btnBg,
+                color: T.textPrimary,
                 fontWeight: 700,
                 fontSize: "0.82rem",
                 textTransform: "none",
                 px: 2,
-                "&:hover": { bgcolor: "rgba(255,255,255,0.08)" },
+                "&:hover": { bgcolor: T.btnHoverBg },
               }}
             >
               Close
@@ -1174,7 +1207,7 @@ export default function AttendanceDetails({
           {/* Right: Actions based on editMode */}
           {editMode ? (
             <Stack direction="row" spacing={1.2}>
-              {/* Cancel Button (Image 4) */}
+              {/* Cancel Button */}
               <Button
                 variant="outlined"
                 startIcon={<Close sx={{ fontSize: 16 }} />}
@@ -1182,20 +1215,20 @@ export default function AttendanceDetails({
                 disabled={editLoad}
                 sx={{
                   borderRadius: "10px",
-                  borderColor: THEME.cardBorder,
-                  bgcolor: "rgba(255,255,255,0.04)",
-                  color: THEME.textPrimary,
+                  borderColor: T.btnBorder,
+                  bgcolor: T.btnBg,
+                  color: T.textPrimary,
                   fontWeight: 700,
                   fontSize: "0.82rem",
                   textTransform: "none",
                   px: 2,
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.08)" },
+                  "&:hover": { bgcolor: T.btnHoverBg },
                 }}
               >
                 Cancel
               </Button>
 
-              {/* Save Changes Button (Image 4) */}
+              {/* Save Changes Button */}
               <Button
                 variant="contained"
                 startIcon={editLoad ? <CircularProgress size={16} color="inherit" /> : <Save sx={{ fontSize: 16 }} />}
@@ -1203,7 +1236,7 @@ export default function AttendanceDetails({
                 disabled={editLoad}
                 sx={{
                   borderRadius: "10px",
-                  bgcolor: THEME.blue,
+                  bgcolor: T.blue,
                   color: "#fff",
                   fontWeight: 800,
                   fontSize: "0.82rem",
@@ -1218,25 +1251,25 @@ export default function AttendanceDetails({
             </Stack>
           ) : (
             <Stack direction="row" spacing={1.2}>
-              {/* Edit Button (Image 2: amber outline, yellow icon/text) */}
+              {/* Edit Button */}
               {canEdit && (
                 <Button
                   variant="outlined"
-                  startIcon={<Edit sx={{ fontSize: 16, color: "#fbbf24" }} />}
+                  startIcon={<Edit sx={{ fontSize: 16, color: isDark ? "#fbbf24" : "#d97706" }} />}
                   onClick={() => setEditMode(true)}
                   sx={{
                     borderRadius: "10px",
-                    borderColor: "rgba(245, 158, 11, 0.5)",
-                    bgcolor: "rgba(245, 158, 11, 0.08)",
-                    color: "#fbbf24",
+                    borderColor: isDark ? "rgba(245, 158, 11, 0.5)" : "#f59e0b",
+                    bgcolor: isDark ? "rgba(245, 158, 11, 0.08)" : "#fffbeb",
+                    color: isDark ? "#fbbf24" : "#b45309",
                     fontWeight: 800,
                     fontSize: "0.82rem",
                     textTransform: "none",
                     px: 2.2,
-                    boxShadow: "0 2px 8px rgba(245, 158, 11, 0.15)",
+                    boxShadow: isDark ? "0 2px 8px rgba(245, 158, 11, 0.15)" : "none",
                     "&:hover": {
-                      bgcolor: "rgba(245, 158, 11, 0.18)",
-                      borderColor: "#fbbf24",
+                      bgcolor: isDark ? "rgba(245, 158, 11, 0.18)" : "#fef3c7",
+                      borderColor: isDark ? "#fbbf24" : "#d97706",
                     },
                   }}
                 >
@@ -1244,7 +1277,7 @@ export default function AttendanceDetails({
                 </Button>
               )}
 
-              {/* Delete Button (Image 2: red background) */}
+              {/* Delete Button */}
               {canDelete && (
                 <Button
                   variant="contained"
@@ -1252,7 +1285,7 @@ export default function AttendanceDetails({
                   onClick={handleDelete}
                   sx={{
                     borderRadius: "10px",
-                    bgcolor: THEME.red,
+                    bgcolor: T.red,
                     color: "#fff",
                     fontWeight: 800,
                     fontSize: "0.82rem",

@@ -130,6 +130,12 @@ export const findQuotationByShareToken = (shareToken) =>
 export const getQuotationsForLead = (leadId) =>
   loadQuotationLibrary().filter((quotation) => getQuotationLeadId(quotation) === leadId);
 
+export const getAcceptedOrLatestQuotation = (leadId) => {
+  const list = getQuotationsForLead(leadId);
+  if (!list.length) return null;
+  return list.find((q) => q.status === "accepted") || list[0];
+};
+
 export const buildQuotationRecord = ({
   existingQuotation = null,
   lead = null,

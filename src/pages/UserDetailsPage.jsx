@@ -33,6 +33,8 @@ import {
   DialogActions,
   TextField,
   Select,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
 import {
   ArrowBack,
@@ -106,6 +108,7 @@ import { toast } from "../components/useToast.jsx";
 import axiosInstance from "../utils/axiosConfig";
 import SalarySlipModal from "../components/SalarySlipDocument";
 import AttendanceDetails from "./AttendanceDetails";
+import { jsPDF } from "jspdf";
 
 // ─── Global Animation Keyframes Styles ────────────────────────────────
 const GlobalAnimationStyles = () => (
@@ -685,45 +688,73 @@ const UserDetailsPage = () => {
       if (!userId) return;
       try {
         const res = await axiosInstance.get("/payroll/salary-structures");
-        const list = res.data?.salaryStructures || [];
-        const found = list.find((item) => String(item.employee?._id || item.employee) === String(userId));
+        const raw = res.data?.result || res.data?.data || res.data;
+        const list = Array.isArray(raw?.salaryStructures) ? raw.salaryStructures : (Array.isArray(raw) ? raw : []);
+        const found = list.find((item) => String(item.employee?._id || item.employee || item.user?._id || item.user) === String(userId));
+
         if (found?.structure) {
           const s = found.structure;
           const comps = [];
+
+          // 1. Basic Salary Component
+          const basicAmt = Number(s.basicSalary) || 0;
+          comps.push({
+            id: 1,
+            name: "Basic Salary",
+            type: "Earning",
+            amount: basicAmt > 0 ? basicAmt : 40000,
+            calculationType: "Fixed",
+          });
+
+          // 2. Additional Earnings
           if (s.earnings && s.earnings.length > 0) {
-            s.earnings.forEach((e, idx) => {
-              comps.push({
-                id: idx + 1,
-                name: e.name,
-                type: "Earning",
-                amount: Number(e.amount) || 0,
-                calculationType: "Fixed",
-              });
+            s.earnings.forEach((e) => {
+              if (!(e.name || "").toLowerCase().includes("basic")) {
+                comps.push({
+                  id: comps.length + 1,
+                  name: e.name,
+                  type: "Earning",
+                  amount: Number(e.amount) || 0,
+                  calculationType: "Fixed",
+                });
+              }
             });
-          } else if (Number(s.basicSalary) > 0) {
-            comps.push({
-              id: 1,
-              name: "Basic Salary",
-              type: "Earning",
-              amount: Number(s.basicSalary) || 40000,
-              calculationType: "Fixed",
-            });
+          } else {
+            comps.push(
+              { id: 2, name: "HRA", type: "Earning", amount: 16000, calculationType: "Fixed" },
+              { id: 3, name: "Special Allowance", type: "Earning", amount: 12000, calculationType: "Fixed" },
+              { id: 4, name: "Other Allowance", type: "Earning", amount: 7000, calculationType: "Fixed" }
+            );
           }
 
+          // 3. Deductions
           if (s.deductions && s.deductions.length > 0) {
-            s.deductions.forEach((d, idx) => {
+            s.deductions.forEach((d) => {
               comps.push({
-                id: comps.length + idx + 1,
+                id: comps.length + 1,
                 name: d.name,
                 type: "Deduction",
                 amount: Number(d.amount) || 0,
                 calculationType: "Fixed",
               });
             });
+          } else {
+            comps.push(
+              { id: comps.length + 1, name: "Provident Fund (PF)", type: "Deduction", amount: 4800, calculationType: "Fixed" },
+              { id: comps.length + 2, name: "Professional Tax", type: "Deduction", amount: 200, calculationType: "Fixed" },
+              { id: comps.length + 3, name: "TDS", type: "Deduction", amount: 5000, calculationType: "Fixed" }
+            );
           }
 
           if (comps.length > 0) {
             setSalaryComponents(comps);
+          }
+
+          if (s.effectiveFrom) {
+            const effDate = new Date(s.effectiveFrom);
+            if (!isNaN(effDate.getTime())) {
+              setEffectiveDate(effDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }));
+            }
           }
         }
       } catch (err) {
@@ -772,7 +803,7 @@ const UserDetailsPage = () => {
       if (userId) {
         const basicComp = Number(salaryComponents.find((c) => (c.name || "").toLowerCase().includes("basic"))?.amount) || 40000;
         const earnings = salaryComponents
-          .filter((c) => c.type === "Earning")
+          .filter((c) => c.type === "Earning" && !(c.name || "").toLowerCase().includes("basic"))
           .map((c) => ({ name: c.name, amount: Number(c.amount) || 0, taxable: true }));
         const deductions = salaryComponents
           .filter((c) => c.type === "Deduction")
@@ -791,8 +822,8 @@ const UserDetailsPage = () => {
         toast.success("Salary structure updated & saved successfully!");
       }
     } catch (err) {
-      console.warn("Salary save notice:", err);
-      toast.success("Salary structure updated & saved successfully!");
+      console.error("Salary save error:", err);
+      toast.error(err.response?.data?.message || "Failed to save salary structure");
     }
   };
 
@@ -813,22 +844,160 @@ const UserDetailsPage = () => {
   // ─── Salary Slips State & Handlers ──────────────────────────────────
   const [salarySlipYear, setSalarySlipYear] = useState("2026");
   const [previewSlip, setPreviewSlip] = useState(null);
-  const [payslipsData] = useState([
-    { id: 1, month: "August 2026", netPay: "75,000", basic: "40,000", hra: "16,000", special: "12,000", incentive: "7,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 Sep 2026", daysWorked: 22, slipNo: "PAY-2026-08-012" },
-    { id: 2, month: "July 2026", netPay: "75,000", basic: "40,000", hra: "16,000", special: "12,000", incentive: "7,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 Aug 2026", daysWorked: 23, slipNo: "PAY-2026-07-012" },
-    { id: 3, month: "June 2026", netPay: "70,500", basic: "38,000", hra: "15,000", special: "11,500", incentive: "6,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 Jul 2026", daysWorked: 21, slipNo: "PAY-2026-06-012" },
-    { id: 4, month: "May 2026", netPay: "70,500", basic: "38,000", hra: "15,000", special: "11,500", incentive: "6,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 Jun 2026", daysWorked: 22, slipNo: "PAY-2026-05-012" },
-    { id: 5, month: "April 2026", netPay: "68,000", basic: "36,000", hra: "14,000", special: "11,000", incentive: "7,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 May 2026", daysWorked: 20, slipNo: "PAY-2026-04-012" },
-    { id: 6, month: "March 2026", netPay: "68,000", basic: "36,000", hra: "14,000", special: "11,000", incentive: "7,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 Apr 2026", daysWorked: 22, slipNo: "PAY-2026-03-012" },
-    // 2025 Slips
-    { id: 7, month: "December 2025", netPay: "65,000", basic: "35,000", hra: "14,000", special: "10,000", incentive: "6,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 Jan 2026", daysWorked: 22, slipNo: "PAY-2025-12-012" },
-    { id: 8, month: "November 2025", netPay: "65,000", basic: "35,000", hra: "14,000", special: "10,000", incentive: "6,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 Dec 2025", daysWorked: 21, slipNo: "PAY-2025-11-012" },
-    // 2024 Slips
-    { id: 9, month: "December 2024", netPay: "60,000", basic: "32,000", hra: "12,000", special: "9,000", incentive: "7,000", pf: "4,800", pt: "200", tds: "5,000", status: "Generated", generatedOn: "01 Jan 2025", daysWorked: 22, slipNo: "PAY-2024-12-012" },
-  ]);
+  const [payslipsData, setPayslipsData] = useState([]);
+  const [payslipsLoading, setPayslipsLoading] = useState(false);
+  const [generateSlipModalOpen, setGenerateSlipModalOpen] = useState(false);
+  const [newSlipMonth, setNewSlipMonth] = useState("October");
+  const [newSlipYear, setNewSlipYear] = useState("2026");
+  const [newSlipStatus, setNewSlipStatus] = useState("Paid");
+  const [slipGenerating, setSlipGenerating] = useState(false);
+
+  const fetchUserPayslips = useCallback(async () => {
+    if (!userId) return;
+    setPayslipsLoading(true);
+    try {
+      const [payslipRes, payrollRes] = await Promise.allSettled([
+        safeFetchAPI(`/payroll/payslips?employee=${userId}&limit=100`),
+        safeFetchAPI(`/payroll/get-all?user=${userId}&limit=100`),
+      ]);
+
+      const allSlips = [];
+      const seenIds = new Set();
+
+      if (payslipRes.status === "fulfilled" && payslipRes.value) {
+        const raw = payslipRes.value.result || payslipRes.value.data || payslipRes.value;
+        const list = Array.isArray(raw?.payslips) ? raw.payslips : (Array.isArray(raw) ? raw : []);
+        list.forEach((p, idx) => {
+          const idKey = String(p._id || `payslip-${idx}`);
+          if (!seenIds.has(idKey)) {
+            seenIds.add(idKey);
+            const basic = p.earnings?.find((e) => (e.name || "").toLowerCase().includes("basic"))?.amount || p.grossSalary || 40000;
+            const hra = p.earnings?.find((e) => (e.name || "").toLowerCase().includes("hra"))?.amount || 0;
+            const special = p.earnings?.find((e) => (e.name || "").toLowerCase().includes("special"))?.amount || 0;
+            const incentive = p.earnings?.find((e) => (e.name || "").toLowerCase().includes("incentive"))?.amount || 0;
+            const pf = p.deductions?.find((d) => (d.name || "").toLowerCase().includes("pf"))?.amount || 0;
+            const pt = p.deductions?.find((d) => (d.name || "").toLowerCase().includes("tax") || (d.name || "").toLowerCase().includes("pt"))?.amount || 0;
+            const tds = p.deductions?.find((d) => (d.name || "").toLowerCase().includes("tds"))?.amount || 0;
+
+            allSlips.push({
+              id: p._id || idx + 1,
+              month: `${p.month} ${p.year}`,
+              year: String(p.year || "2026"),
+              rawMonth: p.month,
+              netPay: (p.netSalary || 0).toLocaleString("en-IN"),
+              basic: Number(basic).toLocaleString("en-IN"),
+              hra: Number(hra).toLocaleString("en-IN"),
+              special: Number(special).toLocaleString("en-IN"),
+              incentive: Number(incentive).toLocaleString("en-IN"),
+              pf: Number(pf).toLocaleString("en-IN"),
+              pt: Number(pt).toLocaleString("en-IN"),
+              tds: Number(tds).toLocaleString("en-IN"),
+              status: p.paymentStatus === "PAID" ? "Paid" : "Generated",
+              generatedOn: p.paymentDate
+                ? new Date(p.paymentDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                : new Date(p.createdAt || Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+              daysWorked: p.daysWorked || 22,
+              slipNo: p.payslipNo || `PAY-${p.year || "2026"}-${p.month || "01"}-${String(idx + 1).padStart(3, "0")}`,
+              raw: p,
+            });
+          }
+        });
+      }
+
+      if (payrollRes.status === "fulfilled" && payrollRes.value) {
+        const raw = payrollRes.value.result || payrollRes.value.data || payrollRes.value;
+        const list = Array.isArray(raw?.payrolls) ? raw.payrolls : (Array.isArray(raw) ? raw : []);
+        list.forEach((p, idx) => {
+          const idKey = String(p._id || `payroll-${idx}`);
+          if (!seenIds.has(idKey)) {
+            seenIds.add(idKey);
+            const basic = p.basicSalary || 40000;
+            const allowances = p.allowanceDetails || [];
+            const deductions = p.deductionDetails || [];
+            const hra = allowances.find((e) => (e.name || "").toLowerCase().includes("hra"))?.amount || 0;
+            const special = allowances.find((e) => (e.name || "").toLowerCase().includes("special"))?.amount || 0;
+            const incentive = allowances.find((e) => (e.name || "").toLowerCase().includes("incentive"))?.amount || 0;
+            const pf = deductions.find((d) => (d.name || "").toLowerCase().includes("pf"))?.amount || 0;
+            const pt = deductions.find((d) => (d.name || "").toLowerCase().includes("tax") || (d.name || "").toLowerCase().includes("pt"))?.amount || 0;
+            const tds = deductions.find((d) => (d.name || "").toLowerCase().includes("tds"))?.amount || 0;
+
+            allSlips.push({
+              id: p._id || `legacy-${idx + 1}`,
+              month: `${p.month} ${p.year}`,
+              year: String(p.year || "2026"),
+              rawMonth: p.month,
+              netPay: (p.netSalary || 0).toLocaleString("en-IN"),
+              basic: Number(basic).toLocaleString("en-IN"),
+              hra: Number(hra).toLocaleString("en-IN"),
+              special: Number(special).toLocaleString("en-IN"),
+              incentive: Number(incentive).toLocaleString("en-IN"),
+              pf: Number(pf).toLocaleString("en-IN"),
+              pt: Number(pt).toLocaleString("en-IN"),
+              tds: Number(tds).toLocaleString("en-IN"),
+              status: p.status || "Paid",
+              generatedOn: p.paidDate
+                ? new Date(p.paidDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                : new Date(p.createdAt || Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+              daysWorked: p.daysWorked || 22,
+              slipNo: p.salarySlipNo || `PAY-${p.year || "2026"}-${p.month || "01"}-${String(idx + 1).padStart(3, "0")}`,
+              raw: p,
+            });
+          }
+        });
+      }
+
+      setPayslipsData(allSlips);
+    } catch (err) {
+      console.warn("User payslips fetch notice:", err);
+      setPayslipsData([]);
+    } finally {
+      setPayslipsLoading(false);
+    }
+  }, [userId, safeFetchAPI]);
+
+  useEffect(() => {
+    if (userId) {
+      fetchUserPayslips();
+    }
+  }, [userId, fetchUserPayslips]);
+
+  const handleGenerateSalarySlip = async () => {
+    try {
+      setSlipGenerating(true);
+      const basicComp = Number(salaryComponents.find((c) => (c.name || "").toLowerCase().includes("basic"))?.amount) || 40000;
+      const allowanceDetails = salaryComponents
+        .filter((c) => c.type === "Earning" && !(c.name || "").toLowerCase().includes("basic"))
+        .map((c) => ({ name: c.name, amount: Number(c.amount) || 0 }));
+      const deductionDetails = salaryComponents
+        .filter((c) => c.type === "Deduction")
+        .map((c) => ({ name: c.name, amount: Number(c.amount) || 0 }));
+
+      await axiosInstance.post("/payroll/generate", {
+        user: userId,
+        month: newSlipMonth,
+        year: Number(newSlipYear),
+        basicSalary: basicComp,
+        allowanceDetails,
+        deductionDetails,
+        status: newSlipStatus,
+        paymentMethod: "Bank Transfer",
+        remarks: "Generated from Employee Profile",
+      });
+
+      toast.success(`Salary slip for ${newSlipMonth} ${newSlipYear} generated successfully!`);
+      setGenerateSlipModalOpen(false);
+      fetchUserPayslips();
+    } catch (err) {
+      console.error("Generate payslip error:", err);
+      toast.error(err.response?.data?.message || "Failed to generate salary slip");
+    } finally {
+      setSlipGenerating(false);
+    }
+  };
 
   const handleDownloadSlip = (slip) => {
-    toast.success(`Downloading salary slip for ${slip.month}...`);
+    toast.success(`Preparing salary slip for ${slip.month}...`);
+    setPreviewSlip(slip);
   };
 
   // ─── Documents Interactive State ─────────────────────────────────────
@@ -973,12 +1142,17 @@ const UserDetailsPage = () => {
       toast.error("Please enter document title");
       return;
     }
+    const fileSizeStr = newDocForm.file
+      ? `${(newDocForm.file.size / (1024 * 1024)).toFixed(1)} MB`
+      : "1.4 MB";
     const newFileObj = {
       id: Date.now(),
-      name: `${newDocForm.name}.pdf`,
-      size: "1.4 MB",
+      name: newDocForm.file?.name || `${newDocForm.name}.pdf`,
+      size: fileSizeStr,
       uploadedOn: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
       verified: false,
+      fileObject: newDocForm.file || null,
+      fileUrl: newDocForm.file ? URL.createObjectURL(newDocForm.file) : null,
     };
     setDocumentsCategories((prev) =>
       prev.map((cat) => {
@@ -989,9 +1163,133 @@ const UserDetailsPage = () => {
         return cat;
       })
     );
+    setSelectedDocCategory((prev) => {
+      if (prev && prev.id === newDocForm.categoryId) {
+        const updatedFiles = [...prev.files, newFileObj];
+        return { ...prev, docCount: updatedFiles.length, files: updatedFiles };
+      }
+      return prev;
+    });
     toast.success(`"${newDocForm.name}" uploaded successfully!`);
     setUploadDocModalOpen(false);
     setNewDocForm({ categoryId: "aadhaar", name: "", file: null });
+  };
+
+  const handleDownloadEmployeeDocument = (file, category) => {
+    try {
+      if (file.fileUrl) {
+        const a = document.createElement("a");
+        a.href = file.fileUrl;
+        a.download = file.name || "document.pdf";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast.success(`Downloading ${file.name}...`);
+        return;
+      }
+
+      if (file.fileObject) {
+        const url = URL.createObjectURL(file.fileObject);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name || "document.pdf";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success(`Downloading ${file.name}...`);
+        return;
+      }
+
+      // Generate verified employee document PDF
+      const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+      const docTitle = (file.name || "Employee_Document").replace(/\.[^/.]+$/, "");
+      const categoryName = category?.title || "Employee Verification Document";
+      const empName = profileData.fullName || userName || "Silu Reddy";
+      const empId = profileData.employeeId || userEmpId || "10064";
+      const department = profileData.department || "Solar Technical & Installation";
+
+      // Header Banner
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, 595, 95, "F");
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("VANURTECH PVT LTD", 40, 42);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(148, 163, 184);
+      doc.text("Solar Technical & Installation Services | Employee Document Record", 40, 62);
+
+      // Card container
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(40, 120, 515, 270, 8, 8, "F");
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(40, 120, 515, 270, 8, 8, "D");
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text(docTitle.replace(/_/g, " "), 60, 155);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Category: ${categoryName}`, 60, 175);
+
+      doc.setDrawColor(226, 232, 240);
+      doc.line(60, 190, 535, 190);
+
+      const details = [
+        ["Employee Name", empName],
+        ["Employee ID", empId],
+        ["Department", department],
+        ["Document Name", file.name],
+        ["File Size", file.size || "1.2 MB"],
+        ["Uploaded On", file.uploadedOn || "Verified Record"],
+        ["Verification Status", file.verified ? "VERIFIED & APPROVED" : "PENDING VERIFICATION"],
+      ];
+
+      let startY = 215;
+      details.forEach(([label, val]) => {
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(71, 85, 105);
+        doc.text(`${label}:`, 60, startY);
+
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(15, 23, 42);
+        doc.text(String(val), 210, startY);
+        startY += 20;
+      });
+
+      // Bottom Notice
+      doc.setFillColor(239, 246, 255);
+      doc.roundedRect(40, 420, 515, 55, 6, 6, "F");
+      doc.setTextColor(29, 78, 216);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Official Employee Document Archive", 60, 442);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(59, 130, 246);
+      doc.text("This document is archived and registered under the Vanurtech HR Employee Management System.", 60, 458);
+
+      // Signatory
+      doc.setTextColor(100, 116, 139);
+      doc.setFontSize(9);
+      doc.text("Authorized HR Signatory", 390, 530);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 23, 42);
+      doc.text("Vanurtech Pvt Ltd", 390, 545);
+
+      doc.save(file.name.endsWith(".pdf") ? file.name : `${file.name}.pdf`);
+      toast.success(`Downloaded ${file.name}`);
+    } catch (err) {
+      console.error("Document download error:", err);
+      toast.error("Failed to download document");
+    }
   };
 
   // ─── Lead Performance State ──────────────────────────────────────────
@@ -1089,7 +1387,7 @@ const UserDetailsPage = () => {
     gender: user?.gender || "—",
     bloodGroup: user?.bloodGroup || "—",
     maritalStatus: user?.maritalStatus || "—",
-    nationality: user?.nationality || "—",
+    nationality: user?.nationality || "Indian",
     aadhaar: user?.aadhaar || user?.nationalId || "—",
     pan: user?.pan || "—",
 
@@ -1097,16 +1395,16 @@ const UserDetailsPage = () => {
     email: userEmail,
     phone: userPhone,
     altPhone: user?.altPhone || user?.alternateNumber || "—",
-    currentAddress: user?.address || user?.currentAddress || (user?.zone ? user.zone : "—"),
+    currentAddress: user?.currentAddress || user?.address || (user?.zone ? user.zone : "—"),
     permanentAddress: user?.permanentAddress || user?.address || "—",
 
     // 3. Employment Information
     empId: userEmpId,
-    designation: displayRole,
-    department: departmentText,
-    joiningDate: joinDate,
-    employmentType: user?.employmentType || "—",
-    workLocation: locationText || "—",
+    designation: user?.designation || displayRole,
+    department: user?.department || departmentText,
+    joiningDate: user?.joiningDate || joinDate,
+    employmentType: user?.employmentType || "Full-time",
+    workLocation: user?.workLocation || locationText || "—",
     reportingManager: managerName,
     experience: user?.experience || "—",
 
@@ -1121,7 +1419,7 @@ const UserDetailsPage = () => {
     accountNumber: user?.accountNumber || "—",
     ifsc: user?.ifsc || "—",
     accountType: user?.accountType || "—",
-    panTds: user?.pan || "—",
+    panTds: user?.panTds || user?.pan || "—",
 
     // 6. Emergency Contact
     emergencyName: user?.emergencyName || (user?.supervisor?.firstName ? `${user.supervisor.firstName} ${user.supervisor.lastName || ""}`.trim() : "—"),
@@ -1138,60 +1436,67 @@ const UserDetailsPage = () => {
   // Keep profileData synchronized with user changes
   useEffect(() => {
     if (user) {
+      const formatDisplayDate = (val) => {
+        if (!val || val === "—") return "—";
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+        }
+        return val;
+      };
+
       const computedName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.name || "Employee";
       const computedEmail = user.email || "—";
       const computedPhone = user.phoneNumber || user.phone || "—";
       const computedEmpId = user.employeeId || (user._id ? `EMP-${user._id.slice(-4).toUpperCase()}` : "—");
-      const computedJoinDate = user.createdAt
-        ? new Date(user.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-        : "—";
+      const computedJoinDate = user.joiningDate ? formatDisplayDate(user.joiningDate) : (user.createdAt ? formatDisplayDate(user.createdAt) : "—");
+      const computedDob = user.dob ? formatDisplayDate(user.dob) : "—";
       const computedManager = user.supervisor
         ? typeof user.supervisor === "object"
           ? `${user.supervisor.firstName || ""} ${user.supervisor.lastName || ""}`.trim() || user.supervisor.email || "—"
           : "—"
-        : "—";
-      const computedLocation = user.zone || user.city || user.state || user.address || "—";
+        : "Direct to Management";
+      const computedLocation = user.workLocation || user.zone || user.city || user.state || user.address || "—";
 
-      setProfileData((prev) => ({
-        ...prev,
+      setProfileData({
         fullName: computedName,
-        dob: user.dob || prev.dob || "—",
-        gender: user.gender || prev.gender || "—",
-        bloodGroup: user.bloodGroup || prev.bloodGroup || "—",
-        maritalStatus: user.maritalStatus || prev.maritalStatus || "—",
-        nationality: user.nationality || prev.nationality || "—",
+        dob: computedDob,
+        gender: user.gender || "—",
+        bloodGroup: user.bloodGroup || "—",
+        maritalStatus: user.maritalStatus || "—",
+        nationality: user.nationality || "Indian",
         email: computedEmail,
         phone: computedPhone,
-        altPhone: user.altPhone || user.alternateNumber || prev.altPhone || "—",
+        altPhone: user.altPhone || user.alternateNumber || "—",
         empId: computedEmpId,
-        designation: displayRole,
-        department: departmentText,
+        designation: user.designation || displayRole,
+        department: user.department || departmentText,
         joiningDate: computedJoinDate,
-        employmentType: user.employmentType || prev.employmentType || "—",
+        employmentType: user.employmentType || "Full-time",
         workLocation: computedLocation,
         reportingManager: computedManager,
-        experience: user.experience || prev.experience || "—",
-        currentAddress: user.address || user.currentAddress || (user.zone ? user.zone : prev.currentAddress),
-        permanentAddress: user.permanentAddress || user.address || prev.permanentAddress,
-        fatherName: user.fatherName || prev.fatherName || "—",
-        motherName: user.motherName || prev.motherName || "—",
-        spouseName: user.spouseName || prev.spouseName || "—",
-        childrenCount: user.childrenCount || prev.childrenCount || "—",
-        aadhaar: user.aadhaar || prev.aadhaar,
-        pan: user.pan || prev.pan,
-        bankName: user.bankName || prev.bankName,
-        accountNumber: user.accountNumber || prev.accountNumber,
-        ifsc: user.ifsc || prev.ifsc,
-        accountType: user.accountType || prev.accountType || "—",
-        panTds: user.pan || prev.panTds || "—",
-        emergencyName: user.emergencyName || prev.emergencyName || (user?.supervisor?.firstName ? `${user.supervisor.firstName} ${user.supervisor.lastName || ""}`.trim() : "—"),
-        emergencyRelation: user.emergencyRelation || prev.emergencyRelation || "—",
-        emergencyPhone: user.emergencyPhone || prev.emergencyPhone || user?.supervisor?.phoneNumber || "—",
-        emergencyAddress: user.emergencyAddress || prev.emergencyAddress || computedLocation || "—",
-        languages: user.languages || prev.languages || "—",
-        hobbies: user.hobbies || prev.hobbies || "—",
-        about: user.about || prev.about || "—",
-      }));
+        experience: user.experience || "—",
+        currentAddress: user.currentAddress || user.address || (user.zone ? user.zone : "—"),
+        permanentAddress: user.permanentAddress || user.address || "—",
+        fatherName: user.fatherName || "—",
+        motherName: user.motherName || "—",
+        spouseName: user.spouseName || "—",
+        childrenCount: user.childrenCount || "—",
+        aadhaar: user.aadhaar || user.nationalId || "—",
+        pan: user.pan || "—",
+        bankName: user.bankName || "—",
+        accountNumber: user.accountNumber || "—",
+        ifsc: user.ifsc || "—",
+        accountType: user.accountType || "—",
+        panTds: user.panTds || user.pan || "—",
+        emergencyName: user.emergencyName || (user?.supervisor?.firstName ? `${user.supervisor.firstName} ${user.supervisor.lastName || ""}`.trim() : "—"),
+        emergencyRelation: user.emergencyRelation || (user?.supervisor ? "Supervisor" : "—"),
+        emergencyPhone: user.emergencyPhone || user?.supervisor?.phoneNumber || "—",
+        emergencyAddress: user.emergencyAddress || computedLocation || "—",
+        languages: user.languages || "—",
+        hobbies: user.hobbies || "—",
+        about: user.about || "—",
+      });
     }
   }, [user, displayRole, departmentText]);
 
@@ -1201,31 +1506,109 @@ const UserDetailsPage = () => {
 
   const handleOpenEditModal = (sectionKey) => {
     setEditModalSection(sectionKey);
-    setTempEditData({ ...profileData });
+    const cleaned = {};
+    const parseToInputDate = (str) => {
+      if (!str || str === "—") return "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      }
+      return "";
+    };
+
+    Object.entries(profileData).forEach(([k, v]) => {
+      if (v === "—" || v === null || v === undefined) {
+        cleaned[k] = "";
+      } else if (k === "dob" || k === "joiningDate") {
+        cleaned[k] = parseToInputDate(v);
+      } else if (typeof v === "string") {
+        cleaned[k] = v.replace(/^🩸\s*/, "").replace(/^🇮🇳\s*/, "");
+      } else {
+        cleaned[k] = v;
+      }
+    });
+    setTempEditData(cleaned);
   };
 
   const handleSaveEditModal = async () => {
     try {
-      setProfileData({ ...tempEditData });
+      const updatedProfile = { ...profileData, ...tempEditData };
+      setProfileData(updatedProfile);
       setEditModalSection(null);
 
       if (userId) {
-        const nameParts = (tempEditData.fullName || "").trim().split(" ");
+        const nameParts = (updatedProfile.fullName || "").trim().split(" ");
         const firstName = nameParts[0] || user?.firstName;
         const lastName = nameParts.slice(1).join(" ") || user?.lastName;
 
-        await axiosInstance.put(`/user/update/${userId}`, {
+        const cleanVal = (val) => (!val || val === "—" ? "" : String(val).trim());
+
+        const payload = {
           firstName,
           lastName,
-          email: tempEditData.email || user?.email,
-          phoneNumber: tempEditData.phone || user?.phoneNumber,
-          address: tempEditData.currentAddress || user?.address,
-        });
+          email: cleanVal(updatedProfile.email) || user?.email,
+          phoneNumber: cleanVal(updatedProfile.phone) || user?.phoneNumber,
+
+          // 1. Personal Information
+          dob: cleanVal(updatedProfile.dob),
+          gender: cleanVal(updatedProfile.gender),
+          bloodGroup: cleanVal(updatedProfile.bloodGroup).replace("🩸 ", ""),
+          maritalStatus: cleanVal(updatedProfile.maritalStatus),
+          nationality: cleanVal(updatedProfile.nationality).replace("🇮🇳 ", "") || "Indian",
+          aadhaar: cleanVal(updatedProfile.aadhaar),
+          pan: cleanVal(updatedProfile.pan),
+
+          // 2. Contact Information
+          altPhone: cleanVal(updatedProfile.altPhone),
+          address: cleanVal(updatedProfile.currentAddress) || cleanVal(updatedProfile.permanentAddress) || user?.address,
+          currentAddress: cleanVal(updatedProfile.currentAddress),
+          permanentAddress: cleanVal(updatedProfile.permanentAddress),
+
+          // 3. Employment Information
+          employeeId: cleanVal(updatedProfile.empId) || user?.employeeId,
+          designation: cleanVal(updatedProfile.designation),
+          department: cleanVal(updatedProfile.department),
+          joiningDate: cleanVal(updatedProfile.joiningDate),
+          employmentType: cleanVal(updatedProfile.employmentType) || "Full-time",
+          workLocation: cleanVal(updatedProfile.workLocation),
+          experience: cleanVal(updatedProfile.experience),
+
+          // 4. Family Information
+          fatherName: cleanVal(updatedProfile.fatherName),
+          motherName: cleanVal(updatedProfile.motherName),
+          spouseName: cleanVal(updatedProfile.spouseName),
+          childrenCount: cleanVal(updatedProfile.childrenCount),
+
+          // 5. Bank Information
+          bankName: cleanVal(updatedProfile.bankName),
+          accountNumber: cleanVal(updatedProfile.accountNumber),
+          ifsc: cleanVal(updatedProfile.ifsc),
+          accountType: cleanVal(updatedProfile.accountType),
+          panTds: cleanVal(updatedProfile.panTds) || cleanVal(updatedProfile.pan),
+
+          // 6. Emergency Contact
+          emergencyName: cleanVal(updatedProfile.emergencyName),
+          emergencyRelation: cleanVal(updatedProfile.emergencyRelation),
+          emergencyPhone: cleanVal(updatedProfile.emergencyPhone),
+          emergencyAddress: cleanVal(updatedProfile.emergencyAddress),
+
+          // 7. Additional Information
+          languages: cleanVal(updatedProfile.languages),
+          hobbies: cleanVal(updatedProfile.hobbies),
+          about: cleanVal(updatedProfile.about),
+        };
+
+        const res = await axiosInstance.put(`/user/update/${userId}`, payload);
+        if (res.data?.success && (res.data.result || res.data.data)) {
+          const savedUser = res.data.result || res.data.data;
+          setUser(savedUser);
+        }
       }
       toast.success("Profile section updated and saved in database!");
     } catch (err) {
-      console.warn("Profile section save notice:", err);
-      toast.success("Profile section updated successfully!");
+      console.warn("Profile section save error:", err);
+      toast.error(err.response?.data?.message || "Profile section updated locally!");
     }
   };
 
@@ -1338,6 +1721,7 @@ const UserDetailsPage = () => {
   }, [userId, selectedAttendanceMonth, attendanceRefreshTrigger]);
 
   // Calculate dynamic Attendance Calendar & Statistics for the selected month
+  // Calculate dynamic Attendance Calendar & Statistics for the selected month
   const attendanceStats = useMemo(() => {
     const year = selectedAttendanceMonth.getFullYear();
     const month = selectedAttendanceMonth.getMonth();
@@ -1347,16 +1731,32 @@ const UserDetailsPage = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Employee joining date to avoid marking pre-joining dates as absent
+    const rawJoin = user?.joiningDate || user?.createdAt;
+    let userJoinDateObj = rawJoin ? new Date(rawJoin) : null;
+    if (userJoinDateObj && !isNaN(userJoinDateObj.getTime())) {
+      userJoinDateObj.setHours(0, 0, 0, 0);
+    } else {
+      userJoinDateObj = null;
+    }
+
     const recordMap = {};
     let totalWorkHoursSum = 0;
     let lateArrivalsCount = 0;
 
     const safeAttendance = Array.isArray(attendanceRecords) ? attendanceRecords : [];
     safeAttendance.forEach((rec) => {
-      const recDate = rec?.date ? new Date(rec.date) : (rec?.punchIn?.time ? new Date(rec.punchIn.time) : null);
+      let recDate = null;
+      if (rec?.date) {
+        recDate = new Date(rec.date);
+      } else if (rec?.punchIn?.time) {
+        recDate = new Date(rec.punchIn.time);
+      }
       if (recDate && !isNaN(recDate.getTime())) {
         const key = `${recDate.getFullYear()}-${String(recDate.getMonth() + 1).padStart(2, "0")}-${String(recDate.getDate()).padStart(2, "0")}`;
         recordMap[key] = rec;
+        const utcKey = recDate.toISOString().split("T")[0];
+        if (!recordMap[utcKey]) recordMap[utcKey] = rec;
 
         if (rec.workHours) {
           totalWorkHoursSum += Number(rec.workHours) || 0;
@@ -1386,12 +1786,14 @@ const UserDetailsPage = () => {
     let onLeaveCount = 0;
     let weeklyOffCount = 0;
     let holidayCount = 0;
+    let notJoinedCount = 0;
 
     for (let day = 1; day <= daysInMonth; day++) {
       const currentDate = new Date(year, month, day);
       currentDate.setHours(0, 0, 0, 0);
       const isFuture = currentDate > today;
       const isSunday = currentDate.getDay() === 0;
+      const isPriorToJoining = userJoinDateObj && currentDate < userJoinDateObj;
       const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       const rec = recordMap[key];
       const holidayName = holidayMap[key];
@@ -1410,6 +1812,10 @@ const UserDetailsPage = () => {
         type = "holiday";
         statusLabel = "Holiday";
         holidayCount++;
+      } else if (isPriorToJoining) {
+        type = "not_joined";
+        statusLabel = "Not Joined";
+        notJoinedCount++;
       } else if (rec) {
         const rawStatus = (rec.status || "").toLowerCase();
         if (rawStatus.includes("leave")) {
@@ -1473,10 +1879,85 @@ const UserDetailsPage = () => {
 
     logEntries.sort((a, b) => b.rawDate - a.rawDate);
 
-    const workingDays = Math.max(0, daysInMonth - weeklyOffCount - holidayCount);
+    const workingDays = Math.max(0, daysInMonth - weeklyOffCount - holidayCount - notJoinedCount);
     const avgWorkHours = presentCount > 0 ? (totalWorkHoursSum / presentCount).toFixed(1) : "0.0";
     const totalHoursWhole = Math.floor(totalWorkHoursSum);
     const totalMinsWhole = Math.round((totalWorkHoursSum - totalHoursWhole) * 60);
+
+    // Dynamic Attendance Insights Calculations:
+    // 1. Longest Present Streak
+    let currentStreak = 0;
+    let maxStreak = 0;
+    let streakStart = null;
+    let streakEnd = null;
+    let tempStreakStart = null;
+
+    const daysAsc = [...calendarCells].sort((a, b) => a.date - b.date);
+    daysAsc.forEach((c) => {
+      if (c.type === "present") {
+        if (currentStreak === 0) tempStreakStart = c.date;
+        currentStreak++;
+        if (currentStreak > maxStreak) {
+          maxStreak = currentStreak;
+          streakStart = tempStreakStart;
+          streakEnd = c.date;
+        }
+      } else if (c.type !== "weekly" && c.type !== "holiday") {
+        currentStreak = 0;
+      }
+    });
+
+    let streakSubtitle = "No active streak";
+    if (maxStreak > 0 && streakStart && streakEnd) {
+      const sStartStr = streakStart.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+      const sEndStr = streakEnd.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+      streakSubtitle = `${sStartStr} - ${sEndStr}`;
+    }
+
+    // 2. Most Productive Day (by weekday hours)
+    const weekdayHours = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    const weekdayCounts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    const weekdayLate = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+    safeAttendance.forEach((rec) => {
+      const d = rec?.date ? new Date(rec.date) : (rec?.punchIn?.time ? new Date(rec.punchIn.time) : null);
+      if (d && !isNaN(d.getTime())) {
+        const dayIdx = d.getDay();
+        const hrs = Number(rec.workHours) || 0;
+        weekdayHours[dayIdx] += hrs;
+        if (hrs > 0) weekdayCounts[dayIdx] += 1;
+        if (rec.isLate || rec.punchIn?.isLate) weekdayLate[dayIdx] += 1;
+      }
+    });
+
+    let mostProductiveDay = "—";
+    let productiveAvgStr = "No data recorded";
+    let maxAvgHrs = 0;
+    for (let i = 1; i <= 6; i++) {
+      if (weekdayCounts[i] > 0) {
+        const avg = weekdayHours[i] / weekdayCounts[i];
+        if (avg > maxAvgHrs) {
+          maxAvgHrs = avg;
+          mostProductiveDay = weekdayNames[i];
+          const wholeH = Math.floor(avg);
+          const wholeM = Math.round((avg - wholeH) * 60);
+          productiveAvgStr = `Avg. ${wholeH}h ${wholeM > 0 ? `${wholeM}m` : "00m"}`;
+        }
+      }
+    }
+
+    // 3. Most Late Arrivals
+    let mostLateDay = "None";
+    let mostLateCount = 0;
+    for (let i = 0; i <= 6; i++) {
+      if (weekdayLate[i] > mostLateCount) {
+        mostLateCount = weekdayLate[i];
+        mostLateDay = weekdayNames[i];
+      }
+    }
+
+    const presentRate = workingDays > 0 ? Math.round((presentCount / workingDays) * 100) : 0;
 
     return {
       daysInMonth,
@@ -1492,34 +1973,229 @@ const UserDetailsPage = () => {
       totalWorkHoursFormatted: `${totalHoursWhole}h ${totalMinsWhole > 0 ? `${totalMinsWhole}m` : "00m"}`,
       avgWorkHoursFormatted: `${avgWorkHours}h`,
       lateArrivalsCount,
+      maxStreak,
+      streakSubtitle,
+      mostProductiveDay,
+      productiveAvgStr,
+      mostLateDay,
+      mostLateCount,
+      presentRate,
     };
-  }, [selectedAttendanceMonth, attendanceRecords, holidaysList]);
+  }, [selectedAttendanceMonth, attendanceRecords, holidaysList, user]);
 
-  const upcomingLeaveList = [
-    { type: "Casual Leave", date: "12 Sep 2026", days: "1", status: "Approved", icon: <Spa sx={{ fontSize: 16, color: "#10b981" }} /> },
-    { type: "Earned Leave", date: "25 Sep - 27 Sep 2026", days: "3", status: "Pending", icon: <Work sx={{ fontSize: 16, color: "#8b5cf6" }} /> },
-    { type: "Comp Off", date: "10 Oct 2026", days: "1", status: "Approved", icon: <Alarm sx={{ fontSize: 16, color: "#f59e0b" }} /> },
-    { type: "Sick Leave", date: "18 Oct 2026", days: "2", status: "Pending", icon: <Favorite sx={{ fontSize: 16, color: "#ef4444" }} /> },
-  ];
+  // ─── Real User Leaves State & Handlers ────────────────────────────────
+  const [userLeaves, setUserLeaves] = useState([]);
+  const [leavesLoading, setLeavesLoading] = useState(false);
+  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+  const [leaveFilterStatus, setLeaveFilterStatus] = useState("all");
+  const [newLeaveData, setNewLeaveData] = useState({
+    leaveType: "Casual Leave",
+    startDate: "",
+    endDate: "",
+    reason: "",
+    status: "approved",
+  });
+  const [reviewNoteModalOpen, setReviewNoteModalOpen] = useState(false);
+  const [selectedLeaveForReview, setSelectedLeaveForReview] = useState(null);
+  const [reviewActionType, setReviewActionType] = useState("approved");
+  const [reviewNoteText, setReviewNoteText] = useState("");
+
+  const fetchUserLeaves = useCallback(async () => {
+    if (!userId) return;
+    setLeavesLoading(true);
+    try {
+      const res = await safeFetchAPI(`/leave?user=${userId}&limit=200`);
+      if (res?.success && (res.result || res.data)) {
+        const payload = res.result || res.data;
+        const list = Array.isArray(payload) ? payload : (payload.leaves || []);
+        setUserLeaves(list);
+      } else if (Array.isArray(res)) {
+        setUserLeaves(res);
+      } else {
+        setUserLeaves([]);
+      }
+    } catch (err) {
+      console.warn("Error fetching user leaves:", err);
+      setUserLeaves([]);
+    } finally {
+      setLeavesLoading(false);
+    }
+  }, [userId, safeFetchAPI]);
+
+  useEffect(() => {
+    if (userId) {
+      fetchUserLeaves();
+    }
+  }, [userId, fetchUserLeaves]);
+
+  const leaveStats = useMemo(() => {
+    const safeList = Array.isArray(userLeaves) ? userLeaves : [];
+    const total = safeList.length;
+    const approved = safeList.filter((l) => (l.status || "").toLowerCase() === "approved");
+    const pending = safeList.filter((l) => (l.status || "").toLowerCase() === "pending");
+    const rejected = safeList.filter((l) => (l.status || "").toLowerCase() === "rejected");
+
+    const approvedDays = approved.reduce((sum, l) => sum + (Number(l.totalDays) || 1), 0);
+    const pendingDays = pending.reduce((sum, l) => sum + (Number(l.totalDays) || 1), 0);
+
+    return {
+      total,
+      approvedCount: approved.length,
+      pendingCount: pending.length,
+      rejectedCount: rejected.length,
+      approvedDays,
+      pendingDays,
+    };
+  }, [userLeaves]);
+
+  const filteredLeaves = useMemo(() => {
+    const safeList = Array.isArray(userLeaves) ? userLeaves : [];
+    if (leaveFilterStatus === "all") return safeList;
+    return safeList.filter((l) => (l.status || "").toLowerCase() === leaveFilterStatus.toLowerCase());
+  }, [userLeaves, leaveFilterStatus]);
+
+  const handleOpenApplyLeaveModal = () => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    setNewLeaveData({
+      leaveType: "Casual Leave",
+      startDate: todayStr,
+      endDate: todayStr,
+      reason: "",
+      status: "approved",
+    });
+    setLeaveModalOpen(true);
+  };
+
+  const handleApplyLeave = async () => {
+    if (!newLeaveData.startDate || !newLeaveData.endDate) {
+      toast.error("Please specify both start date and end date");
+      return;
+    }
+    if (new Date(newLeaveData.endDate) < new Date(newLeaveData.startDate)) {
+      toast.error("End date cannot be earlier than start date");
+      return;
+    }
+    if (!newLeaveData.reason.trim()) {
+      toast.error("Please enter a reason for the leave");
+      return;
+    }
+
+    try {
+      setLeaveSubmitting(true);
+      await axiosInstance.post("/leave", {
+        user: userId,
+        leaveType: newLeaveData.leaveType,
+        startDate: newLeaveData.startDate,
+        endDate: newLeaveData.endDate,
+        reason: newLeaveData.reason.trim(),
+        status: newLeaveData.status || "approved",
+      });
+
+      toast.success("Leave record created successfully!");
+      setLeaveModalOpen(false);
+      fetchUserLeaves();
+      setAttendanceRefreshTrigger((prev) => prev + 1);
+    } catch (err) {
+      console.error("Apply leave failed:", err);
+      toast.error(err.response?.data?.message || "Failed to submit leave request");
+    } finally {
+      setLeaveSubmitting(false);
+    }
+  };
+
+  const handleOpenReviewDialog = (leave, action) => {
+    setSelectedLeaveForReview(leave);
+    setReviewActionType(action);
+    setReviewNoteText("");
+    setReviewNoteModalOpen(true);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!selectedLeaveForReview?._id) return;
+    try {
+      setLeaveSubmitting(true);
+      await axiosInstance.patch(`/leave/${selectedLeaveForReview._id}/status`, {
+        status: reviewActionType,
+        reviewNote: reviewNoteText.trim(),
+      });
+      toast.success(`Leave request ${reviewActionType} successfully!`);
+      setReviewNoteModalOpen(false);
+      fetchUserLeaves();
+      setAttendanceRefreshTrigger((prev) => prev + 1);
+    } catch (err) {
+      console.error("Leave review error:", err);
+      toast.error(err.response?.data?.message || `Failed to update leave status`);
+    } finally {
+      setLeaveSubmitting(false);
+    }
+  };
+
+  const handleDeleteLeave = async (leaveId) => {
+    if (!window.confirm("Are you sure you want to remove this leave record?")) return;
+    try {
+      await axiosInstance.delete(`/leave/${leaveId}`);
+      toast.success("Leave record removed");
+      fetchUserLeaves();
+      setAttendanceRefreshTrigger((prev) => prev + 1);
+    } catch (err) {
+      console.error("Delete leave error:", err);
+      toast.error(err.response?.data?.message || "Failed to delete leave");
+    }
+  };
 
   const getStatusBadge = (status) => {
-    switch (status) {
-      case "Present":
-      case "Approved":
-      case "Active":
-        return { bg: isDark ? "rgba(16, 185, 129, 0.15)" : "#dcfce7", color: "#15803d" };
-      case "Absent":
-      case "Rejected":
-      case "Inactive":
-        return { bg: isDark ? "rgba(239, 68, 68, 0.15)" : "#fee2e2", color: "#b91c1c" };
-      case "On Leave":
-      case "Pending":
-        return { bg: isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7", color: "#b45309" };
-      case "Weekly Off":
-        return { bg: isDark ? "rgba(148, 163, 184, 0.15)" : "#f1f5f9", color: "#475569" };
-      default:
-        return { bg: isDark ? "rgba(148, 163, 184, 0.15)" : "#f1f5f9", color: "#475569" };
+    const s = String(status || "").toLowerCase();
+    if (s === "present" || s === "approved" || s === "active") {
+      return { bg: isDark ? "rgba(16, 185, 129, 0.15)" : "#dcfce7", color: "#15803d", text: "Approved" };
     }
+    if (s === "absent" || s === "rejected" || s === "inactive") {
+      return { bg: isDark ? "rgba(239, 68, 68, 0.15)" : "#fee2e2", color: "#b91c1c", text: "Rejected" };
+    }
+    if (s === "on leave" || s === "pending") {
+      return { bg: isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7", color: "#b45309", text: "Pending" };
+    }
+    if (s === "weekly off") {
+      return { bg: isDark ? "rgba(139, 92, 246, 0.15)" : "#f5f3ff", color: "#7c3aed", text: "Weekly Off" };
+    }
+    if (s === "holiday") {
+      return { bg: isDark ? "rgba(14, 165, 233, 0.15)" : "#f0f9ff", color: "#0284c7", text: "Holiday" };
+    }
+    if (s === "not joined" || s === "not_joined") {
+      return { bg: isDark ? "rgba(148, 163, 184, 0.12)" : "#f1f5f9", color: "#64748b", text: "Not Joined" };
+    }
+    return { bg: isDark ? "rgba(148, 163, 184, 0.15)" : "#f1f5f9", color: "#475569", text: status || "—" };
+  };
+
+  const formatLeaveDuration = (start, end) => {
+    if (!start) return "—";
+    const dStart = new Date(start);
+    const dEnd = end ? new Date(end) : null;
+    if (isNaN(dStart.getTime())) return "—";
+
+    const startStr = dStart.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    if (!dEnd || isNaN(dEnd.getTime()) || dStart.toDateString() === dEnd.toDateString()) {
+      return startStr;
+    }
+    const endStr = dEnd.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return `${startStr} - ${endStr}`;
+  };
+
+  const getLeaveTypeStyle = (type) => {
+    const t = (type || "").toLowerCase();
+    if (t.includes("sick") || t.includes("medical")) {
+      return { label: "Sick Leave", color: "#ef4444", bg: isDark ? "rgba(239, 68, 68, 0.12)" : "#fef2f2", icon: MedicalServices };
+    }
+    if (t.includes("earned") || t.includes("privilege") || t.includes("annual")) {
+      return { label: "Earned Leave", color: "#8b5cf6", bg: isDark ? "rgba(139, 92, 246, 0.12)" : "#f5f3ff", icon: Work };
+    }
+    if (t.includes("comp") || t.includes("off")) {
+      return { label: "Comp Off", color: "#f59e0b", bg: isDark ? "rgba(245, 158, 11, 0.12)" : "#fffbeb", icon: Alarm };
+    }
+    if (t.includes("maternity") || t.includes("paternity")) {
+      return { label: "Maternity / Paternity", color: "#ec4899", bg: isDark ? "rgba(236, 72, 153, 0.12)" : "#fdf2f8", icon: FamilyRestroom };
+    }
+    return { label: type || "Casual Leave", color: "#10b981", bg: isDark ? "rgba(16, 185, 129, 0.12)" : "#f0fdf4", icon: Spa };
   };
 
   const cardStyle = {
@@ -1578,7 +2254,7 @@ const UserDetailsPage = () => {
           <Button
             variant="outlined"
             startIcon={<Edit sx={{ fontSize: 16, color: "#3b82f6" }} />}
-            onClick={() => navigate("/user-management")}
+            onClick={() => handleOpenEditModal("personal")}
             sx={{
               borderRadius: "8px",
               textTransform: "none",
@@ -1840,11 +2516,11 @@ const UserDetailsPage = () => {
             >
               <Stack spacing={1.3}>
                 {[
-                  { icon: <CalendarToday sx={{ fontSize: 15 }} />, label: "Date of Joining", value: joinDate },
-                  { icon: <WorkOutline sx={{ fontSize: 15 }} />, label: "Employment Type", value: user?.employmentType || "Full-time" },
-                  { icon: <SupervisorAccount sx={{ fontSize: 15 }} />, label: "Reporting Manager", value: managerName },
-                  { icon: <LocationOn sx={{ fontSize: 15 }} />, label: "Work Location", value: locationText || "—" },
-                  { icon: <AccessTime sx={{ fontSize: 15 }} />, label: "Experience", value: user?.experience || "—" },
+                  { icon: <CalendarToday sx={{ fontSize: 15 }} />, label: "Date of Joining", value: profileData.joiningDate },
+                  { icon: <WorkOutline sx={{ fontSize: 15 }} />, label: "Employment Type", value: profileData.employmentType },
+                  { icon: <SupervisorAccount sx={{ fontSize: 15 }} />, label: "Reporting Manager", value: profileData.reportingManager },
+                  { icon: <LocationOn sx={{ fontSize: 15 }} />, label: "Work Location", value: profileData.workLocation },
+                  { icon: <AccessTime sx={{ fontSize: 15 }} />, label: "Experience", value: profileData.experience },
                   {
                     icon: <VerifiedUser sx={{ fontSize: 15 }} />,
                     label: "Employee Status",
@@ -3320,10 +3996,10 @@ const UserDetailsPage = () => {
                       Best Attendance Streak
                     </Typography>
                     <Typography variant="subtitle1" fontWeight={900} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.05rem", lineHeight: 1.2 }}>
-                      12 Days
+                      {attendanceStats.maxStreak > 0 ? `${attendanceStats.maxStreak} Days` : "0 Days"}
                     </Typography>
                     <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.65rem" }}>
-                      01 Aug - 12 Aug 2026
+                      {attendanceStats.streakSubtitle}
                     </Typography>
                   </Box>
                 </Paper>
@@ -3362,10 +4038,10 @@ const UserDetailsPage = () => {
                       Most Productive Day
                     </Typography>
                     <Typography variant="subtitle1" fontWeight={900} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.05rem", lineHeight: 1.2 }}>
-                      Thursday
+                      {attendanceStats.mostProductiveDay}
                     </Typography>
                     <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.65rem" }}>
-                      Avg. 9h 20m
+                      {attendanceStats.productiveAvgStr}
                     </Typography>
                   </Box>
                 </Paper>
@@ -3404,10 +4080,10 @@ const UserDetailsPage = () => {
                       Most Late Arrivals
                     </Typography>
                     <Typography variant="subtitle1" fontWeight={900} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.05rem", lineHeight: 1.2 }}>
-                      Monday
+                      {attendanceStats.mostLateDay}
                     </Typography>
                     <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.65rem" }}>
-                      2 times
+                      {attendanceStats.mostLateCount > 0 ? `${attendanceStats.mostLateCount} times` : "0 times"}
                     </Typography>
                   </Box>
                 </Paper>
@@ -3443,13 +4119,13 @@ const UserDetailsPage = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.68rem", fontWeight: 600, display: "block" }}>
-                      Attendance Trend
+                      Attendance Rate
                     </Typography>
                     <Typography variant="subtitle1" fontWeight={900} sx={{ color: "#10b981", fontSize: "1.05rem", lineHeight: 1.2 }}>
-                      +8.2%
+                      {attendanceStats.presentRate}%
                     </Typography>
                     <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.65rem" }}>
-                      Compared to last month
+                      {attendanceStats.presentCount} of {attendanceStats.workingDays} working days
                     </Typography>
                   </Box>
                 </Paper>
@@ -3461,41 +4137,445 @@ const UserDetailsPage = () => {
       )}
 
       {currentTab === 2 && (
-        <Paper elevation={0} sx={{ ...cardStyle }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-            <Typography variant="h6" fontWeight={800}>Leave History & Records</Typography>
-            <Button variant="contained" sx={{ borderRadius: "8px", textTransform: "none", fontWeight: 700, bgcolor: "#1d68f0" }}>
-              + Apply Leave
-            </Button>
-          </Box>
-          <TableContainer>
-            <Table>
-              <TableHead sx={{ bgcolor: isDark ? "#131b2e" : "#f8fafc" }}>
-                <TableRow>
-                  {["Leave Type", "Duration", "Days", "Reason", "Status"].map((h) => (
-                    <TableCell key={h} sx={{ fontWeight: 800, fontSize: "0.78rem" }}>{h}</TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {upcomingLeaveList.map((row, idx) => {
-                  const style = getStatusBadge(row.status);
-                  return (
-                    <TableRow key={idx}>
-                      <TableCell sx={{ fontWeight: 700 }}>{row.type}</TableCell>
-                      <TableCell>{row.date}</TableCell>
-                      <TableCell>{row.days} Day(s)</TableCell>
-                      <TableCell>Personal / Medical</TableCell>
-                      <TableCell>
-                        <Chip label={row.status} size="small" sx={{ bgcolor: style.bg, color: style.color, fontWeight: 700 }} />
-                      </TableCell>
+        <Box key="tab-2" sx={{ animation: "tabContentFade 0.35s cubic-bezier(0.16, 1, 0.3, 1)" }}>
+          {/* 1. Leave KPI Overview Cards */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {/* Total Leaves */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Paper elevation={0} sx={{ ...cardStyle, p: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.75 }}>
+                  <Box
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: "12px",
+                      bgcolor: isDark ? "rgba(59, 130, 246, 0.15)" : "#eff6ff",
+                      color: "#3b82f6",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <CalendarMonth sx={{ fontSize: 22 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.72rem", fontWeight: 600 }}>
+                      Total Leave Requests
+                    </Typography>
+                    <Typography variant="h6" fontWeight={900} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.2rem", lineHeight: 1.2 }}>
+                      {leaveStats.total}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.68rem" }}>
+                      All recorded applications
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Grid>
+
+            {/* Approved Leaves */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Paper elevation={0} sx={{ ...cardStyle, p: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.75 }}>
+                  <Box
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: "12px",
+                      bgcolor: isDark ? "rgba(16, 185, 129, 0.15)" : "#ecfdf5",
+                      color: "#10b981",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <CheckCircle sx={{ fontSize: 22 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.72rem", fontWeight: 600 }}>
+                      Approved Leaves
+                    </Typography>
+                    <Typography variant="h6" fontWeight={900} sx={{ color: "#10b981", fontSize: "1.2rem", lineHeight: 1.2 }}>
+                      {leaveStats.approvedCount}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.68rem" }}>
+                      {leaveStats.approvedDays} Day(s) Taken
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Grid>
+
+            {/* Pending Leaves */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Paper elevation={0} sx={{ ...cardStyle, p: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.75 }}>
+                  <Box
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: "12px",
+                      bgcolor: isDark ? "rgba(245, 158, 11, 0.15)" : "#fffbeb",
+                      color: "#f59e0b",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Schedule sx={{ fontSize: 22 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.72rem", fontWeight: 600 }}>
+                      Pending Approval
+                    </Typography>
+                    <Typography variant="h6" fontWeight={900} sx={{ color: "#f59e0b", fontSize: "1.2rem", lineHeight: 1.2 }}>
+                      {leaveStats.pendingCount}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.68rem" }}>
+                      {leaveStats.pendingDays} Day(s) Awaiting Review
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Grid>
+
+            {/* Rejected Leaves */}
+            <Grid item xs={12} sm={6} md={3}>
+              <Paper elevation={0} sx={{ ...cardStyle, p: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.75 }}>
+                  <Box
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: "12px",
+                      bgcolor: isDark ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                      color: "#ef4444",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Cancel sx={{ fontSize: 22 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.72rem", fontWeight: 600 }}>
+                      Declined / Rejected
+                    </Typography>
+                    <Typography variant="h6" fontWeight={900} sx={{ color: "#ef4444", fontSize: "1.2rem", lineHeight: 1.2 }}>
+                      {leaveStats.rejectedCount}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.68rem" }}>
+                      Requests rejected
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+            </Grid>
+          </Grid>
+
+          {/* 2. Leave Records Table & Controls */}
+          <Paper elevation={0} sx={{ ...cardStyle }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5, flexWrap: "wrap", gap: 2 }}>
+              <Box>
+                <Typography variant="h6" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.1rem" }}>
+                  Leave History & Records
+                </Typography>
+                <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.78rem", mt: 0.3 }}>
+                  Showing all leave applications and records for this employee.
+                </Typography>
+              </Box>
+
+              <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                {/* Filter Pills */}
+                <Stack direction="row" spacing={0.75} sx={{ bgcolor: isDark ? "rgba(255,255,255,0.04)" : "#f1f5f9", p: 0.5, borderRadius: "10px" }}>
+                  {[
+                    { key: "all", label: "All", count: leaveStats.total },
+                    { key: "approved", label: "Approved", count: leaveStats.approvedCount },
+                    { key: "pending", label: "Pending", count: leaveStats.pendingCount },
+                    { key: "rejected", label: "Rejected", count: leaveStats.rejectedCount },
+                  ].map((filter) => {
+                    const active = leaveFilterStatus === filter.key;
+                    return (
+                      <Button
+                        key={filter.key}
+                        size="small"
+                        onClick={() => setLeaveFilterStatus(filter.key)}
+                        sx={{
+                          borderRadius: "8px",
+                          textTransform: "none",
+                          fontSize: "0.75rem",
+                          fontWeight: active ? 800 : 600,
+                          px: 1.5,
+                          py: 0.35,
+                          minWidth: "auto",
+                          bgcolor: active ? (isDark ? "#1d68f0" : "#ffffff") : "transparent",
+                          color: active ? (isDark ? "#ffffff" : "#1d68f0") : (isDark ? "#94a3b8" : "#64748b"),
+                          boxShadow: active && !isDark ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                          "&:hover": {
+                            bgcolor: active ? (isDark ? "#1d68f0" : "#ffffff") : (isDark ? "rgba(255,255,255,0.06)" : "#e2e8f0"),
+                          },
+                        }}
+                      >
+                        {filter.label} ({filter.count})
+                      </Button>
+                    );
+                  })}
+                </Stack>
+
+                {/* + Apply Leave Button */}
+                <Button
+                  variant="contained"
+                  startIcon={<Add sx={{ fontSize: 18 }} />}
+                  onClick={handleOpenApplyLeaveModal}
+                  sx={{
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    px: 2.2,
+                    py: 0.8,
+                    bgcolor: "#1d68f0",
+                    backgroundImage: "linear-gradient(135deg, #1d68f0 0%, #2563eb 100%)",
+                    boxShadow: "0 4px 14px rgba(29, 104, 240, 0.35)",
+                  }}
+                >
+                  + Apply Leave
+                </Button>
+              </Stack>
+            </Box>
+
+            {leavesLoading ? (
+              <Box sx={{ py: 6, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1.5 }}>
+                <CircularProgress size={32} sx={{ color: "#1d68f0" }} />
+                <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.85rem" }}>
+                  Fetching leave history from database...
+                </Typography>
+              </Box>
+            ) : filteredLeaves.length === 0 ? (
+              <Paper
+                elevation={0}
+                sx={{
+                  py: 6,
+                  px: 3,
+                  textAlign: "center",
+                  borderRadius: "12px",
+                  bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc",
+                  border: isDark ? "1px dashed rgba(255,255,255,0.08)" : "1px dashed #e2e8f0",
+                }}
+              >
+                <BeachAccess sx={{ fontSize: 44, color: isDark ? "#475569" : "#94a3b8", mb: 1.5 }} />
+                <Typography variant="subtitle1" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", mb: 0.5 }}>
+                  {leaveFilterStatus === "all" ? "No Leave Records Found" : `No ${leaveFilterStatus.toUpperCase()} Leaves`}
+                </Typography>
+                <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", maxWidth: 420, mx: "auto", mb: 2, fontSize: "0.82rem" }}>
+                  {leaveFilterStatus === "all"
+                    ? "This employee has no leave records logged in the system yet. Click '+ Apply Leave' to add an application."
+                    : `There are currently no leaves with status '${leaveFilterStatus}'.`}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<Add />}
+                  onClick={handleOpenApplyLeaveModal}
+                  sx={{
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    color: "#1d68f0",
+                    borderColor: isDark ? "rgba(29, 104, 240, 0.4)" : "#bfdbfe",
+                  }}
+                >
+                  Apply Leave Now
+                </Button>
+              </Paper>
+            ) : (
+              <TableContainer sx={{ overflowX: "auto" }}>
+                <Table>
+                  <TableHead sx={{ bgcolor: isDark ? "#131b2e" : "#f8fafc" }}>
+                    <TableRow>
+                      {["Leave Type", "Duration / Dates", "Days", "Reason", "Reviewer / Notes", "Status", "Actions"].map((h) => (
+                        <TableCell key={h} sx={{ fontWeight: 800, fontSize: "0.78rem", color: isDark ? "#94a3b8" : "#64748b", py: 1.5 }}>
+                          {h}
+                        </TableCell>
+                      ))}
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
+                  </TableHead>
+                  <TableBody>
+                    {filteredLeaves.map((row, idx) => {
+                      const typeStyle = getLeaveTypeStyle(row.leaveType);
+                      const statusStyle = getStatusBadge(row.status);
+                      const TypeIcon = typeStyle.icon;
+                      const rawStatus = (row.status || "").toLowerCase();
+                      const isPending = rawStatus === "pending";
+
+                      return (
+                        <TableRow
+                          key={row._id || idx}
+                          sx={{
+                            "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc" },
+                            transition: "background 0.2s ease",
+                          }}
+                        >
+                          {/* Leave Type */}
+                          <TableCell sx={{ py: 1.75 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                              <Box
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: "8px",
+                                  bgcolor: typeStyle.bg,
+                                  color: typeStyle.color,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <TypeIcon sx={{ fontSize: 17 }} />
+                              </Box>
+                              <Box>
+                                <Typography variant="body2" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "0.85rem" }}>
+                                  {row.leaveType || "Casual Leave"}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.68rem" }}>
+                                  Applied on {new Date(row.createdAt || row.startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </TableCell>
+
+                          {/* Duration */}
+                          <TableCell sx={{ py: 1.75 }}>
+                            <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "0.82rem" }}>
+                              {formatLeaveDuration(row.startDate, row.endDate)}
+                            </Typography>
+                          </TableCell>
+
+                          {/* Days */}
+                          <TableCell sx={{ py: 1.75 }}>
+                            <Chip
+                              label={`${row.totalDays || 1} Day(s)`}
+                              size="small"
+                              sx={{
+                                fontWeight: 800,
+                                fontSize: "0.72rem",
+                                borderRadius: "6px",
+                                bgcolor: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+                                color: isDark ? "#cbd5e1" : "#334155",
+                              }}
+                            />
+                          </TableCell>
+
+                          {/* Reason */}
+                          <TableCell sx={{ py: 1.75, maxWidth: 220 }}>
+                            <Tooltip title={row.reason || "No reason specified"} arrow placement="top">
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: isDark ? "#cbd5e1" : "#475569",
+                                  fontSize: "0.8rem",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {row.reason || "—"}
+                              </Typography>
+                            </Tooltip>
+                          </TableCell>
+
+                          {/* Reviewer / Notes */}
+                          <TableCell sx={{ py: 1.75 }}>
+                            {row.reviewedBy ? (
+                              <Box>
+                                <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#334155", display: "block" }}>
+                                  Reviewed by: {typeof row.reviewedBy === "object" ? `${row.reviewedBy.firstName || ""} ${row.reviewedBy.lastName || ""}`.trim() || row.reviewedBy.email : "Management"}
+                                </Typography>
+                                {row.reviewNote && (
+                                  <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontStyle: "italic", fontSize: "0.68rem" }}>
+                                    "{row.reviewNote}"
+                                  </Typography>
+                                )}
+                              </Box>
+                            ) : (
+                              <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontStyle: "italic" }}>
+                                {isPending ? "Awaiting review" : "Direct Approval"}
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          {/* Status Badge */}
+                          <TableCell sx={{ py: 1.75 }}>
+                            <Chip
+                              label={statusStyle.text || row.status}
+                              size="small"
+                              sx={{
+                                bgcolor: statusStyle.bg,
+                                color: statusStyle.color,
+                                fontWeight: 800,
+                                fontSize: "0.72rem",
+                                borderRadius: "6px",
+                                px: 0.5,
+                              }}
+                            />
+                          </TableCell>
+
+                          {/* Actions */}
+                          <TableCell sx={{ py: 1.75 }}>
+                            <Stack direction="row" spacing={0.5} alignItems="center">
+                              {isPending && (
+                                <>
+                                  <Tooltip title="Approve Leave" arrow>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleOpenReviewDialog(row, "approved")}
+                                      sx={{
+                                        color: "#10b981",
+                                        bgcolor: isDark ? "rgba(16, 185, 129, 0.1)" : "#ecfdf5",
+                                        "&:hover": { bgcolor: "#10b981", color: "#ffffff" },
+                                      }}
+                                    >
+                                      <Check sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Reject Leave" arrow>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleOpenReviewDialog(row, "rejected")}
+                                      sx={{
+                                        color: "#ef4444",
+                                        bgcolor: isDark ? "rgba(239, 68, 68, 0.1)" : "#fef2f2",
+                                        "&:hover": { bgcolor: "#ef4444", color: "#ffffff" },
+                                      }}
+                                    >
+                                      <Close sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              )}
+                              <Tooltip title="Delete Leave Record" arrow>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleDeleteLeave(row._id)}
+                                  sx={{
+                                    color: isDark ? "#94a3b8" : "#64748b",
+                                    "&:hover": { color: "#ef4444", bgcolor: isDark ? "rgba(239, 68, 68, 0.1)" : "#fee2e2" },
+                                  }}
+                                >
+                                  <DeleteOutline sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Paper>
+        </Box>
       )}
 
       {/* ── 7. TAB 3: SALARY STRUCTURE (INTERACTIVE REDESIGN) ──────── */}
@@ -3880,204 +4960,280 @@ const UserDetailsPage = () => {
               boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 1px 3px rgba(0,0,0,0.02)",
             }}
           >
-            {/* Top Header & Year Filter */}
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3.5, px: 0.5 }}>
-              <Typography
-                variant="h6"
-                fontWeight={800}
-                sx={{
-                  color: isDark ? "#f8fafc" : "#0f172a",
-                  fontSize: { xs: "1.15rem", sm: "1.28rem" },
-                  letterSpacing: "-0.015em",
-                }}
-              >
-                Salary Slips
-              </Typography>
+            {/* Top Header & Year Filter + Generate Button */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3.5, px: 0.5, flexWrap: "wrap", gap: 1.5 }}>
+              <Box>
+                <Typography
+                  variant="h6"
+                  fontWeight={800}
+                  sx={{
+                    color: isDark ? "#f8fafc" : "#0f172a",
+                    fontSize: { xs: "1.15rem", sm: "1.28rem" },
+                    letterSpacing: "-0.015em",
+                  }}
+                >
+                  Salary Slips
+                </Typography>
+                <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+                  Official salary slips and payment records from backend
+                </Typography>
+              </Box>
 
-              {/* Year Selector Dropdown */}
-              <Select
-                size="small"
-                value={salarySlipYear}
-                onChange={(e) => setSalarySlipYear(e.target.value)}
-                sx={{
-                  borderRadius: "8px",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
-                  minWidth: 105,
-                  height: 36,
-                  color: isDark ? "#f8fafc" : "#0f172a",
-                  "& .MuiOutlinedInput-notchedOutline": {
-                    borderColor: isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1",
-                  },
-                  "&:hover .MuiOutlinedInput-notchedOutline": {
-                    borderColor: isDark ? "rgba(255,255,255,0.3)" : "#94a3b8",
-                  },
-                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                    borderColor: "#3b82f6",
-                  },
-                }}
-              >
-                <MenuItem value="2026">2026</MenuItem>
-                <MenuItem value="2025">2025</MenuItem>
-                <MenuItem value="2024">2024</MenuItem>
-              </Select>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                {/* Year Selector Dropdown */}
+                <Select
+                  size="small"
+                  value={salarySlipYear}
+                  onChange={(e) => setSalarySlipYear(e.target.value)}
+                  sx={{
+                    borderRadius: "8px",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                    minWidth: 105,
+                    height: 36,
+                    color: isDark ? "#f8fafc" : "#0f172a",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1",
+                    },
+                  }}
+                >
+                  <MenuItem value="2026">2026</MenuItem>
+                  <MenuItem value="2025">2025</MenuItem>
+                  <MenuItem value="2024">2024</MenuItem>
+                </Select>
+
+                {/* Generate Payslip Button */}
+                <Button
+                  variant="contained"
+                  startIcon={<Add sx={{ fontSize: 18 }} />}
+                  onClick={() => {
+                    setNewSlipMonth("October");
+                    setNewSlipYear(salarySlipYear || "2026");
+                    setNewSlipStatus("Paid");
+                    setGenerateSlipModalOpen(true);
+                  }}
+                  sx={{
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    px: 2,
+                    py: 0.8,
+                    bgcolor: "#1d68f0",
+                    backgroundImage: "linear-gradient(135deg, #1d68f0 0%, #2563eb 100%)",
+                  }}
+                >
+                  + Generate Salary Slip
+                </Button>
+              </Stack>
             </Box>
 
-            {/* Salary Slips Table */}
-            <TableContainer sx={{ overflowX: "auto" }}>
-              <Table sx={{ minWidth: 720 }}>
-                <TableHead>
-                  <TableRow
-                    sx={{
-                      bgcolor: isDark ? "rgba(255,255,255,0.025)" : "#f8fafc",
-                      "& th": {
-                        borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f1f5f9",
-                        borderTop: "none",
-                        py: 1.6,
-                        px: 2.2,
-                        fontSize: "0.8rem",
-                        fontWeight: 600,
-                        color: isDark ? "#94a3b8" : "#64748b",
-                        whiteSpace: "nowrap",
-                      },
-                      "& th:first-of-type": {
-                        borderTopLeftRadius: "8px",
-                        borderBottomLeftRadius: "8px",
-                      },
-                      "& th:last-of-type": {
-                        borderTopRightRadius: "8px",
-                        borderBottomRightRadius: "8px",
-                      },
-                    }}
-                  >
-                    <TableCell sx={{ width: "23%" }}>Month</TableCell>
-                    <TableCell sx={{ width: "18%" }}>Net Pay</TableCell>
-                    <TableCell sx={{ width: "17%" }}>Status</TableCell>
-                    <TableCell sx={{ width: "18%" }}>Generated On</TableCell>
-                    <TableCell align="left" sx={{ width: "24%" }}>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {payslipsData
-                    .filter((row) => row.month.includes(salarySlipYear))
-                    .map((row) => (
-                      <TableRow
-                        key={row.id}
-                        sx={{
-                          "& td": {
-                            borderBottom: isDark ? "1px solid rgba(255,255,255,0.04)" : "1px solid #f1f5f9",
-                            py: 2,
-                            px: 2.2,
-                            verticalAlign: "middle",
-                            fontSize: "0.88rem",
-                            whiteSpace: "nowrap",
-                          },
-                          "&:hover": {
-                            bgcolor: isDark ? "rgba(255,255,255,0.012)" : "rgba(248, 250, 252, 0.6)",
-                          },
-                        }}
-                      >
-                        {/* Month Column */}
-                        <TableCell sx={{ fontWeight: 700, color: isDark ? "#f8fafc" : "#0f172a", fontSize: "0.88rem" }}>
-                          {row.month}
-                        </TableCell>
-
-                        {/* Net Pay Column */}
-                        <TableCell
+            {/* Salary Slips Table / Empty State */}
+            {payslipsLoading ? (
+              <Box sx={{ py: 6, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1.5 }}>
+                <CircularProgress size={32} sx={{ color: "#1d68f0" }} />
+                <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.85rem" }}>
+                  Fetching salary slips from database...
+                </Typography>
+              </Box>
+            ) : payslipsData.filter((row) => (row.year === salarySlipYear) || row.month.includes(salarySlipYear)).length === 0 ? (
+              <Paper
+                elevation={0}
+                sx={{
+                  py: 6,
+                  px: 3,
+                  textAlign: "center",
+                  borderRadius: "12px",
+                  bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc",
+                  border: isDark ? "1px dashed rgba(255,255,255,0.08)" : "1px dashed #e2e8f0",
+                }}
+              >
+                <ReceiptLong sx={{ fontSize: 44, color: isDark ? "#475569" : "#94a3b8", mb: 1.5 }} />
+                <Typography variant="subtitle1" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", mb: 0.5 }}>
+                  No Salary Slips for {salarySlipYear}
+                </Typography>
+                <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", maxWidth: 460, mx: "auto", mb: 2.5, fontSize: "0.82rem" }}>
+                  {profileData.joiningDate && profileData.joiningDate !== "—"
+                    ? `Employee joined on ${profileData.joiningDate}. Click below to generate an official salary slip for this period.`
+                    : "There are no generated payslips recorded for this year yet."}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<Add />}
+                  onClick={() => {
+                    setNewSlipMonth("October");
+                    setNewSlipYear(salarySlipYear || "2026");
+                    setNewSlipStatus("Paid");
+                    setGenerateSlipModalOpen(true);
+                  }}
+                  sx={{
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    color: "#1d68f0",
+                    borderColor: isDark ? "rgba(29, 104, 240, 0.4)" : "#bfdbfe",
+                  }}
+                >
+                  Generate Salary Slip Now
+                </Button>
+              </Paper>
+            ) : (
+              <TableContainer sx={{ overflowX: "auto" }}>
+                <Table sx={{ minWidth: 720 }}>
+                  <TableHead>
+                    <TableRow
+                      sx={{
+                        bgcolor: isDark ? "rgba(255,255,255,0.025)" : "#f8fafc",
+                        "& th": {
+                          borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f1f5f9",
+                          borderTop: "none",
+                          py: 1.6,
+                          px: 2.2,
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: isDark ? "#94a3b8" : "#64748b",
+                          whiteSpace: "nowrap",
+                        },
+                        "& th:first-of-type": {
+                          borderTopLeftRadius: "8px",
+                          borderBottomLeftRadius: "8px",
+                        },
+                        "& th:last-of-type": {
+                          borderTopRightRadius: "8px",
+                          borderBottomRightRadius: "8px",
+                        },
+                      }}
+                    >
+                      <TableCell sx={{ width: "23%" }}>Month</TableCell>
+                      <TableCell sx={{ width: "18%" }}>Net Pay</TableCell>
+                      <TableCell sx={{ width: "17%" }}>Status</TableCell>
+                      <TableCell sx={{ width: "18%" }}>Generated On</TableCell>
+                      <TableCell align="left" sx={{ width: "24%" }}>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {payslipsData
+                      .filter((row) => (row.year === salarySlipYear) || row.month.includes(salarySlipYear))
+                      .map((row) => (
+                        <TableRow
+                          key={row.id}
                           sx={{
-                            fontWeight: 700,
-                            color: isDark ? "#f8fafc" : "#0f172a",
-                            fontSize: "0.9rem",
+                            "& td": {
+                              borderBottom: isDark ? "1px solid rgba(255,255,255,0.04)" : "1px solid #f1f5f9",
+                              py: 2,
+                              px: 2.2,
+                              verticalAlign: "middle",
+                              fontSize: "0.88rem",
+                              whiteSpace: "nowrap",
+                            },
+                            "&:hover": {
+                              bgcolor: isDark ? "rgba(255,255,255,0.012)" : "rgba(248, 250, 252, 0.6)",
+                            },
                           }}
                         >
-                          ₹ {row.netPay}
-                        </TableCell>
+                          {/* Month Column */}
+                          <TableCell sx={{ fontWeight: 700, color: isDark ? "#f8fafc" : "#0f172a", fontSize: "0.88rem" }}>
+                            {row.month}
+                          </TableCell>
 
-                        {/* Status Chip */}
-                        <TableCell>
-                          <Chip
-                            label={row.status}
-                            size="small"
+                          {/* Net Pay Column */}
+                          <TableCell
                             sx={{
-                              bgcolor: isDark ? "rgba(16, 185, 129, 0.12)" : "#ecfdf5",
-                              color: "#10b981",
-                              fontWeight: 600,
-                              fontSize: "0.75rem",
-                              height: 26,
-                              borderRadius: "6px",
-                              border: isDark ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid #a7f3d0",
-                              px: 0.8,
+                              fontWeight: 700,
+                              color: isDark ? "#f8fafc" : "#0f172a",
+                              fontSize: "0.9rem",
                             }}
-                          />
-                        </TableCell>
+                          >
+                            ₹ {row.netPay}
+                          </TableCell>
 
-                        {/* Generated On Column */}
-                        <TableCell sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.85rem", fontWeight: 500 }}>
-                          {row.generatedOn}
-                        </TableCell>
-
-                        {/* Actions: View & Download Buttons */}
-                        <TableCell align="left">
-                          <Stack direction="row" spacing={1.5} alignItems="center">
-                            {/* View Button */}
-                            <Button
-                              variant="outlined"
+                          {/* Status Chip */}
+                          <TableCell>
+                            <Chip
+                              label={row.status}
                               size="small"
-                              startIcon={<Visibility sx={{ fontSize: 17 }} />}
-                              onClick={() => setPreviewSlip(row)}
                               sx={{
-                                borderRadius: "7px",
-                                textTransform: "none",
+                                bgcolor: isDark ? "rgba(16, 185, 129, 0.12)" : "#ecfdf5",
+                                color: "#10b981",
                                 fontWeight: 600,
-                                fontSize: "0.82rem",
-                                height: 34,
-                                color: "#2563eb",
-                                borderColor: isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe",
-                                bgcolor: isDark ? "rgba(37, 99, 235, 0.05)" : "#ffffff",
-                                px: 1.8,
-                                py: 0.5,
-                                "&:hover": {
-                                  bgcolor: isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff",
-                                  borderColor: "#3b82f6",
-                                },
+                                fontSize: "0.75rem",
+                                height: 26,
+                                borderRadius: "6px",
+                                border: isDark ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid #a7f3d0",
+                                px: 0.8,
                               }}
-                            >
-                              View
-                            </Button>
+                            />
+                          </TableCell>
 
-                            {/* Download Button */}
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              startIcon={<FileDownload sx={{ fontSize: 17 }} />}
-                              onClick={() => handleDownloadSlip(row)}
-                              sx={{
-                                borderRadius: "7px",
-                                textTransform: "none",
-                                fontWeight: 600,
-                                fontSize: "0.82rem",
-                                height: 34,
-                                color: "#2563eb",
-                                borderColor: isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe",
-                                bgcolor: isDark ? "rgba(37, 99, 235, 0.05)" : "#ffffff",
-                                px: 1.8,
-                                py: 0.5,
-                                "&:hover": {
-                                  bgcolor: isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff",
-                                  borderColor: "#3b82f6",
-                                },
-                              }}
-                            >
-                              Download
-                            </Button>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                          {/* Generated On Column */}
+                          <TableCell sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.85rem", fontWeight: 500 }}>
+                            {row.generatedOn}
+                          </TableCell>
+
+                          {/* Actions: View & Download Buttons */}
+                          <TableCell align="left">
+                            <Stack direction="row" spacing={1.5} alignItems="center">
+                              {/* View Button */}
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<Visibility sx={{ fontSize: 17 }} />}
+                                onClick={() => setPreviewSlip(row)}
+                                sx={{
+                                  borderRadius: "7px",
+                                  textTransform: "none",
+                                  fontWeight: 600,
+                                  fontSize: "0.82rem",
+                                  height: 34,
+                                  color: "#2563eb",
+                                  borderColor: isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe",
+                                  bgcolor: isDark ? "rgba(37, 99, 235, 0.05)" : "#ffffff",
+                                  px: 1.8,
+                                  py: 0.5,
+                                  "&:hover": {
+                                    bgcolor: isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff",
+                                    borderColor: "#3b82f6",
+                                  },
+                                }}
+                              >
+                                View
+                              </Button>
+
+                              {/* Download Button */}
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<FileDownload sx={{ fontSize: 17 }} />}
+                                onClick={() => handleDownloadSlip(row)}
+                                sx={{
+                                  borderRadius: "7px",
+                                  textTransform: "none",
+                                  fontWeight: 600,
+                                  fontSize: "0.82rem",
+                                  height: 34,
+                                  color: "#2563eb",
+                                  borderColor: isDark ? "rgba(59, 130, 246, 0.4)" : "#bfdbfe",
+                                  bgcolor: isDark ? "rgba(37, 99, 235, 0.05)" : "#ffffff",
+                                  px: 1.8,
+                                  py: 0.5,
+                                  "&:hover": {
+                                    bgcolor: isDark ? "rgba(37, 99, 235, 0.15)" : "#eff6ff",
+                                    borderColor: "#3b82f6",
+                                  },
+                                }}
+                              >
+                                Download
+                              </Button>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </Paper>
         </Box>
       )}
@@ -4791,81 +5947,444 @@ const UserDetailsPage = () => {
       </Menu>
 
       {/* Edit Section Modal Dialog */}
-      <Dialog open={Boolean(editModalSection)} onClose={() => setEditModalSection(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, textTransform: "capitalize", pb: 1 }}>
-          Edit {editModalSection} Information
+      <Dialog
+        open={Boolean(editModalSection)}
+        onClose={() => setEditModalSection(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            bgcolor: isDark ? "#0f172a" : "#ffffff",
+            backgroundImage: "none",
+            border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="subtitle1" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.05rem" }}>
+            Edit Employee Profile
+          </Typography>
+          <IconButton size="small" onClick={() => setEditModalSection(null)} sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+            <Close sx={{ fontSize: 20 }} />
+          </IconButton>
         </DialogTitle>
-        <DialogContent dividers>
+        <Box sx={{ px: 3, py: 1, borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #f1f5f9", display: "flex", gap: 1, overflowX: "auto", bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc" }}>
+          {[
+            { id: "personal", label: "Personal" },
+            { id: "contact", label: "Contact" },
+            { id: "employment", label: "Employment" },
+            { id: "family", label: "Family" },
+            { id: "bank", label: "Bank" },
+            { id: "emergency", label: "Emergency" },
+            { id: "additional", label: "Additional" },
+          ].map((sec) => (
+            <Chip
+              key={sec.id}
+              label={sec.label}
+              clickable
+              color={editModalSection === sec.id ? "primary" : "default"}
+              variant={editModalSection === sec.id ? "filled" : "outlined"}
+              onClick={() => setEditModalSection(sec.id)}
+              size="small"
+              sx={{
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                bgcolor: editModalSection === sec.id ? "#1d68f0" : undefined,
+                borderColor: isDark ? "rgba(255,255,255,0.15)" : undefined,
+                color: editModalSection === sec.id ? "#ffffff" : (isDark ? "#cbd5e1" : "#475569"),
+              }}
+            />
+          ))}
+        </Box>
+        <DialogContent dividers sx={{ borderColor: isDark ? "rgba(255,255,255,0.08)" : undefined }}>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {editModalSection === "personal" && (
               <>
-                <TextField label="Full Name" fullWidth size="small" value={tempEditData.fullName || ""} onChange={(e) => setTempEditData({ ...tempEditData, fullName: e.target.value })} />
-                <TextField label="Date of Birth" fullWidth size="small" value={tempEditData.dob || ""} onChange={(e) => setTempEditData({ ...tempEditData, dob: e.target.value })} />
-                <TextField label="Gender" fullWidth size="small" value={tempEditData.gender || ""} onChange={(e) => setTempEditData({ ...tempEditData, gender: e.target.value })} />
-                <TextField label="Blood Group" fullWidth size="small" value={tempEditData.bloodGroup || ""} onChange={(e) => setTempEditData({ ...tempEditData, bloodGroup: e.target.value })} />
-                <TextField label="Marital Status" fullWidth size="small" value={tempEditData.maritalStatus || ""} onChange={(e) => setTempEditData({ ...tempEditData, maritalStatus: e.target.value })} />
-                <TextField label="Nationality" fullWidth size="small" value={tempEditData.nationality || ""} onChange={(e) => setTempEditData({ ...tempEditData, nationality: e.target.value })} />
-                <TextField label="Aadhaar Number" fullWidth size="small" value={tempEditData.aadhaar || ""} onChange={(e) => setTempEditData({ ...tempEditData, aadhaar: e.target.value })} />
-                <TextField label="PAN Number" fullWidth size="small" value={tempEditData.pan || ""} onChange={(e) => setTempEditData({ ...tempEditData, pan: e.target.value })} />
+                <TextField
+                  label="Full Name"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. Silu Reddy"
+                  value={tempEditData.fullName || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, fullName: e.target.value })}
+                />
+                <TextField
+                  label="Date of Birth"
+                  fullWidth
+                  size="small"
+                  type="date"
+                  InputLabelProps={{ shrink: true }}
+                  value={tempEditData.dob || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, dob: e.target.value })}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel id="edit-gender-label">Gender</InputLabel>
+                  <Select
+                    labelId="edit-gender-label"
+                    label="Gender"
+                    value={tempEditData.gender || ""}
+                    onChange={(e) => setTempEditData({ ...tempEditData, gender: e.target.value })}
+                  >
+                    <MenuItem value=""><em>Select Gender</em></MenuItem>
+                    <MenuItem value="Male">Male</MenuItem>
+                    <MenuItem value="Female">Female</MenuItem>
+                    <MenuItem value="Other">Other</MenuItem>
+                    <MenuItem value="Prefer not to say">Prefer not to say</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="edit-blood-group-label">Blood Group</InputLabel>
+                  <Select
+                    labelId="edit-blood-group-label"
+                    label="Blood Group"
+                    value={tempEditData.bloodGroup || ""}
+                    onChange={(e) => setTempEditData({ ...tempEditData, bloodGroup: e.target.value })}
+                  >
+                    <MenuItem value=""><em>Select Blood Group</em></MenuItem>
+                    <MenuItem value="A+">A+</MenuItem>
+                    <MenuItem value="A-">A-</MenuItem>
+                    <MenuItem value="B+">B+</MenuItem>
+                    <MenuItem value="B-">B-</MenuItem>
+                    <MenuItem value="O+">O+</MenuItem>
+                    <MenuItem value="O-">O-</MenuItem>
+                    <MenuItem value="AB+">AB+</MenuItem>
+                    <MenuItem value="AB-">AB-</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="edit-marital-status-label">Marital Status</InputLabel>
+                  <Select
+                    labelId="edit-marital-status-label"
+                    label="Marital Status"
+                    value={tempEditData.maritalStatus || ""}
+                    onChange={(e) => setTempEditData({ ...tempEditData, maritalStatus: e.target.value })}
+                  >
+                    <MenuItem value=""><em>Select Status</em></MenuItem>
+                    <MenuItem value="Single">Single</MenuItem>
+                    <MenuItem value="Married">Married</MenuItem>
+                    <MenuItem value="Divorced">Divorced</MenuItem>
+                    <MenuItem value="Widowed">Widowed</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  label="Nationality"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. Indian"
+                  value={tempEditData.nationality || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, nationality: e.target.value })}
+                />
+                <TextField
+                  label="Aadhaar Number"
+                  fullWidth
+                  size="small"
+                  placeholder="12-digit Aadhaar number"
+                  inputProps={{ maxLength: 14 }}
+                  value={tempEditData.aadhaar || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, aadhaar: e.target.value })}
+                />
+                <TextField
+                  label="PAN Number"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. ABCDE1234F"
+                  inputProps={{ style: { textTransform: "uppercase" }, maxLength: 10 }}
+                  value={tempEditData.pan || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, pan: e.target.value.toUpperCase() })}
+                />
               </>
             )}
 
             {editModalSection === "contact" && (
               <>
-                <TextField label="Email Address" fullWidth size="small" value={tempEditData.email || ""} onChange={(e) => setTempEditData({ ...tempEditData, email: e.target.value })} />
-                <TextField label="Phone Number" fullWidth size="small" value={tempEditData.phone || ""} onChange={(e) => setTempEditData({ ...tempEditData, phone: e.target.value })} />
-                <TextField label="Alternate Number" fullWidth size="small" value={tempEditData.altPhone || ""} onChange={(e) => setTempEditData({ ...tempEditData, altPhone: e.target.value })} />
-                <TextField label="Current Address" fullWidth multiline rows={2} size="small" value={tempEditData.currentAddress || ""} onChange={(e) => setTempEditData({ ...tempEditData, currentAddress: e.target.value })} />
-                <TextField label="Permanent Address" fullWidth multiline rows={2} size="small" value={tempEditData.permanentAddress || ""} onChange={(e) => setTempEditData({ ...tempEditData, permanentAddress: e.target.value })} />
+                <TextField
+                  label="Email Address"
+                  fullWidth
+                  size="small"
+                  type="email"
+                  placeholder="employee@example.com"
+                  value={tempEditData.email || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, email: e.target.value })}
+                />
+                <TextField
+                  label="Phone Number"
+                  fullWidth
+                  size="small"
+                  type="tel"
+                  placeholder="10-digit mobile number"
+                  inputProps={{ maxLength: 10 }}
+                  value={tempEditData.phone || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, phone: e.target.value })}
+                />
+                <TextField
+                  label="Alternate Number"
+                  fullWidth
+                  size="small"
+                  type="tel"
+                  placeholder="Optional alternate number"
+                  inputProps={{ maxLength: 10 }}
+                  value={tempEditData.altPhone || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, altPhone: e.target.value })}
+                />
+                <TextField
+                  label="Current Address"
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                  placeholder="Current residence address..."
+                  value={tempEditData.currentAddress || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, currentAddress: e.target.value })}
+                />
+                <TextField
+                  label="Permanent Address"
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                  placeholder="Permanent native address..."
+                  value={tempEditData.permanentAddress || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, permanentAddress: e.target.value })}
+                />
               </>
             )}
 
             {editModalSection === "employment" && (
               <>
-                <TextField label="Employee ID" fullWidth size="small" value={tempEditData.empId || ""} onChange={(e) => setTempEditData({ ...tempEditData, empId: e.target.value })} />
-                <TextField label="Designation" fullWidth size="small" value={tempEditData.designation || ""} onChange={(e) => setTempEditData({ ...tempEditData, designation: e.target.value })} />
-                <TextField label="Department" fullWidth size="small" value={tempEditData.department || ""} onChange={(e) => setTempEditData({ ...tempEditData, department: e.target.value })} />
-                <TextField label="Date of Joining" fullWidth size="small" value={tempEditData.joiningDate || ""} onChange={(e) => setTempEditData({ ...tempEditData, joiningDate: e.target.value })} />
-                <TextField label="Employment Type" fullWidth size="small" value={tempEditData.employmentType || ""} onChange={(e) => setTempEditData({ ...tempEditData, employmentType: e.target.value })} />
-                <TextField label="Work Location" fullWidth size="small" value={tempEditData.workLocation || ""} onChange={(e) => setTempEditData({ ...tempEditData, workLocation: e.target.value })} />
-                <TextField label="Reporting Manager" fullWidth size="small" value={tempEditData.reportingManager || ""} onChange={(e) => setTempEditData({ ...tempEditData, reportingManager: e.target.value })} />
-                <TextField label="Experience" fullWidth size="small" value={tempEditData.experience || ""} onChange={(e) => setTempEditData({ ...tempEditData, experience: e.target.value })} />
+                <TextField
+                  label="Employee ID"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. EMP-001"
+                  value={tempEditData.empId || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, empId: e.target.value })}
+                />
+                <TextField
+                  label="Designation"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. Technical Incharge"
+                  value={tempEditData.designation || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, designation: e.target.value })}
+                />
+                <TextField
+                  label="Department"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. Solar Technical & Installation"
+                  value={tempEditData.department || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, department: e.target.value })}
+                />
+                <TextField
+                  label="Date of Joining"
+                  fullWidth
+                  size="small"
+                  type="date"
+                  InputLabelProps={{ shrink: true }}
+                  value={tempEditData.joiningDate || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, joiningDate: e.target.value })}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel id="edit-emp-type-label">Employment Type</InputLabel>
+                  <Select
+                    labelId="edit-emp-type-label"
+                    label="Employment Type"
+                    value={tempEditData.employmentType || "Full-time"}
+                    onChange={(e) => setTempEditData({ ...tempEditData, employmentType: e.target.value })}
+                  >
+                    <MenuItem value="Full-time">Full-time</MenuItem>
+                    <MenuItem value="Part-time">Part-time</MenuItem>
+                    <MenuItem value="Contract">Contract</MenuItem>
+                    <MenuItem value="Internship">Internship</MenuItem>
+                    <MenuItem value="Trainee">Trainee</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  label="Work Location"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. Bhubaneswar / Site #4"
+                  value={tempEditData.workLocation || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, workLocation: e.target.value })}
+                />
+                <TextField
+                  label="Reporting Manager"
+                  fullWidth
+                  size="small"
+                  placeholder="Manager / Supervisor name"
+                  value={tempEditData.reportingManager || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, reportingManager: e.target.value })}
+                />
+                <TextField
+                  label="Experience"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. 3 Years, 5+ Years"
+                  value={tempEditData.experience || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, experience: e.target.value })}
+                />
               </>
             )}
 
             {editModalSection === "family" && (
               <>
-                <TextField label="Father's Name" fullWidth size="small" value={tempEditData.fatherName || ""} onChange={(e) => setTempEditData({ ...tempEditData, fatherName: e.target.value })} />
-                <TextField label="Mother's Name" fullWidth size="small" value={tempEditData.motherName || ""} onChange={(e) => setTempEditData({ ...tempEditData, motherName: e.target.value })} />
-                <TextField label="Spouse Name" fullWidth size="small" value={tempEditData.spouseName || ""} onChange={(e) => setTempEditData({ ...tempEditData, spouseName: e.target.value })} />
-                <TextField label="No. of Children" fullWidth size="small" value={tempEditData.childrenCount || ""} onChange={(e) => setTempEditData({ ...tempEditData, childrenCount: e.target.value })} />
+                <TextField
+                  label="Father's Name"
+                  fullWidth
+                  size="small"
+                  placeholder="Father's full name"
+                  value={tempEditData.fatherName || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, fatherName: e.target.value })}
+                />
+                <TextField
+                  label="Mother's Name"
+                  fullWidth
+                  size="small"
+                  placeholder="Mother's full name"
+                  value={tempEditData.motherName || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, motherName: e.target.value })}
+                />
+                <TextField
+                  label="Spouse Name"
+                  fullWidth
+                  size="small"
+                  placeholder="Spouse full name (if applicable)"
+                  value={tempEditData.spouseName || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, spouseName: e.target.value })}
+                />
+                <TextField
+                  label="No. of Children"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. 0, 1, 2"
+                  value={tempEditData.childrenCount || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, childrenCount: e.target.value })}
+                />
               </>
             )}
 
             {editModalSection === "bank" && (
               <>
-                <TextField label="Bank Name" fullWidth size="small" value={tempEditData.bankName || ""} onChange={(e) => setTempEditData({ ...tempEditData, bankName: e.target.value })} />
-                <TextField label="Account Number" fullWidth size="small" value={tempEditData.accountNumber || ""} onChange={(e) => setTempEditData({ ...tempEditData, accountNumber: e.target.value })} />
-                <TextField label="IFSC Code" fullWidth size="small" value={tempEditData.ifsc || ""} onChange={(e) => setTempEditData({ ...tempEditData, ifsc: e.target.value })} />
-                <TextField label="Account Type" fullWidth size="small" value={tempEditData.accountType || ""} onChange={(e) => setTempEditData({ ...tempEditData, accountType: e.target.value })} />
-                <TextField label="PAN Number (for TDS)" fullWidth size="small" value={tempEditData.panTds || ""} onChange={(e) => setTempEditData({ ...tempEditData, panTds: e.target.value })} />
+                <TextField
+                  label="Bank Name"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. HDFC Bank, SBI, ICICI"
+                  value={tempEditData.bankName || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, bankName: e.target.value })}
+                />
+                <TextField
+                  label="Account Number"
+                  fullWidth
+                  size="small"
+                  placeholder="Account number"
+                  value={tempEditData.accountNumber || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, accountNumber: e.target.value })}
+                />
+                <TextField
+                  label="IFSC Code"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. HDFC0001234"
+                  inputProps={{ style: { textTransform: "uppercase" }, maxLength: 11 }}
+                  value={tempEditData.ifsc || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, ifsc: e.target.value.toUpperCase() })}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel id="edit-acc-type-label">Account Type</InputLabel>
+                  <Select
+                    labelId="edit-acc-type-label"
+                    label="Account Type"
+                    value={tempEditData.accountType || "Savings"}
+                    onChange={(e) => setTempEditData({ ...tempEditData, accountType: e.target.value })}
+                  >
+                    <MenuItem value="Savings">Savings</MenuItem>
+                    <MenuItem value="Current">Current</MenuItem>
+                    <MenuItem value="Salary">Salary</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  label="PAN Number (for TDS)"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. ABCDE1234F"
+                  inputProps={{ style: { textTransform: "uppercase" }, maxLength: 10 }}
+                  value={tempEditData.panTds || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, panTds: e.target.value.toUpperCase() })}
+                />
               </>
             )}
 
             {editModalSection === "emergency" && (
               <>
-                <TextField label="Contact Name" fullWidth size="small" value={tempEditData.emergencyName || ""} onChange={(e) => setTempEditData({ ...tempEditData, emergencyName: e.target.value })} />
-                <TextField label="Relationship" fullWidth size="small" value={tempEditData.emergencyRelation || ""} onChange={(e) => setTempEditData({ ...tempEditData, emergencyRelation: e.target.value })} />
-                <TextField label="Phone Number" fullWidth size="small" value={tempEditData.emergencyPhone || ""} onChange={(e) => setTempEditData({ ...tempEditData, emergencyPhone: e.target.value })} />
-                <TextField label="Address" fullWidth multiline rows={2} size="small" value={tempEditData.emergencyAddress || ""} onChange={(e) => setTempEditData({ ...tempEditData, emergencyAddress: e.target.value })} />
+                <TextField
+                  label="Contact Name"
+                  fullWidth
+                  size="small"
+                  placeholder="Emergency contact person"
+                  value={tempEditData.emergencyName || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, emergencyName: e.target.value })}
+                />
+                <TextField
+                  label="Relationship"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. Father, Spouse, Brother, Friend"
+                  value={tempEditData.emergencyRelation || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, emergencyRelation: e.target.value })}
+                />
+                <TextField
+                  label="Phone Number"
+                  fullWidth
+                  size="small"
+                  type="tel"
+                  placeholder="Emergency 10-digit number"
+                  inputProps={{ maxLength: 10 }}
+                  value={tempEditData.emergencyPhone || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, emergencyPhone: e.target.value })}
+                />
+                <TextField
+                  label="Address"
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                  placeholder="Emergency contact address..."
+                  value={tempEditData.emergencyAddress || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, emergencyAddress: e.target.value })}
+                />
               </>
             )}
 
             {editModalSection === "additional" && (
               <>
-                <TextField label="Languages Known" fullWidth size="small" value={tempEditData.languages || ""} onChange={(e) => setTempEditData({ ...tempEditData, languages: e.target.value })} />
-                <TextField label="Hobbies" fullWidth size="small" value={tempEditData.hobbies || ""} onChange={(e) => setTempEditData({ ...tempEditData, hobbies: e.target.value })} />
-                <TextField label="About" fullWidth multiline rows={3} size="small" value={tempEditData.about || ""} onChange={(e) => setTempEditData({ ...tempEditData, about: e.target.value })} />
+                <TextField
+                  label="Languages Known"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. English, Hindi, Odia, Telugu"
+                  value={tempEditData.languages || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, languages: e.target.value })}
+                />
+                <TextField
+                  label="Hobbies & Interests"
+                  fullWidth
+                  size="small"
+                  placeholder="e.g. Cricket, Travelling, Tech"
+                  value={tempEditData.hobbies || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, hobbies: e.target.value })}
+                />
+                <TextField
+                  label="Professional Summary & About"
+                  fullWidth
+                  multiline
+                  rows={3}
+                  size="small"
+                  placeholder="Brief summary or bio..."
+                  value={tempEditData.about || ""}
+                  onChange={(e) => setTempEditData({ ...tempEditData, about: e.target.value })}
+                />
               </>
             )}
           </Stack>
@@ -4895,11 +6414,32 @@ const UserDetailsPage = () => {
         onClose={() => setPreviewSlip(null)}
         slipData={previewSlip ? {
           ...previewSlip,
-          name: userName,
-          empId: userEmpId,
-          designation: displayRole || user?.role || "Employee",
-          joiningDate: joinDate,
-          department: "Solar Operations",
+          name: profileData.fullName || userName,
+          empId: profileData.employeeId || userEmpId,
+          designation: profileData.designation || displayRole || user?.role || "Technical Incharge",
+          joiningDate: profileData.joiningDate || joinDate,
+          department: profileData.department || "Solar Operations",
+          employmentType: profileData.employmentType || "Full-time",
+          bankName: profileData.bankName || "State Bank of India",
+          accountNo: profileData.accountNumber || "XXXX XXXX 7890",
+          ifscCode: profileData.ifscCode || "SBIN0001234",
+          pan: profileData.panNumber || profileData.pan || "ABCPD1234F",
+          basicSalary: previewSlip.raw?.basicSalary || Number(String(previewSlip.basic || "").replace(/,/g, "")) || 40000,
+          allowanceDetails: previewSlip.raw?.allowanceDetails || [],
+          deductionDetails: previewSlip.raw?.deductionDetails || [],
+          earnings: previewSlip.raw?.earnings || (
+            previewSlip.raw?.allowanceDetails && previewSlip.raw.allowanceDetails.length > 0
+              ? [
+                  { component: "Basic Salary", amount: previewSlip.raw?.basicSalary || 40000 },
+                  ...previewSlip.raw.allowanceDetails.map((a) => ({ component: a.name || a.component, amount: a.amount })),
+                ]
+              : undefined
+          ),
+          deductions: previewSlip.raw?.deductions || (
+            previewSlip.raw?.deductionDetails && previewSlip.raw.deductionDetails.length > 0
+              ? previewSlip.raw.deductionDetails.map((d) => ({ component: d.name || d.component, amount: d.amount }))
+              : undefined
+          ),
         } : null}
       />
 
@@ -5020,7 +6560,7 @@ const UserDetailsPage = () => {
                   <Tooltip title="Download File">
                     <IconButton
                       size="small"
-                      onClick={() => toast.success(`Downloading ${file.name}...`)}
+                      onClick={() => handleDownloadEmployeeDocument(file, selectedDocCategory)}
                       sx={{
                         color: "#1d68f0",
                         bgcolor: isDark ? "rgba(29, 104, 240, 0.1)" : "#eff6ff",
@@ -5346,6 +6886,453 @@ const UserDetailsPage = () => {
             }}
           >
             Manage Lead
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Apply Leave Dialog Modal ────────────────────────────────────── */}
+      <Dialog
+        open={leaveModalOpen}
+        onClose={() => !leaveSubmitting && setLeaveModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            bgcolor: isDark ? "#0f172a" : "#ffffff",
+            backgroundImage: "none",
+            border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
+            boxShadow: isDark ? "0 20px 40px rgba(0,0,0,0.6)" : "0 20px 40px rgba(0,0,0,0.08)",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            pb: 1.5,
+            borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f1f5f9",
+          }}
+        >
+          <Box>
+            <Typography variant="h6" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.1rem" }}>
+              Apply Leave
+            </Typography>
+            <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+              For: {profileData.fullName || "Employee"}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setLeaveModalOpen(false)} sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+            <Close sx={{ fontSize: 20 }} />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {/* Leave Type */}
+            <Box>
+              <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75 }}>
+                Leave Type
+              </Typography>
+              <Select
+                fullWidth
+                size="small"
+                value={newLeaveData.leaveType}
+                onChange={(e) => setNewLeaveData({ ...newLeaveData, leaveType: e.target.value })}
+                sx={{
+                  borderRadius: "9px",
+                  fontSize: "0.85rem",
+                  bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1",
+                  },
+                }}
+              >
+                <MenuItem value="Casual Leave">Casual Leave</MenuItem>
+                <MenuItem value="Sick Leave">Sick / Medical Leave</MenuItem>
+                <MenuItem value="Earned Leave">Earned / Privilege Leave</MenuItem>
+                <MenuItem value="Comp Off">Compensatory Off</MenuItem>
+                <MenuItem value="Maternity / Paternity">Maternity / Paternity</MenuItem>
+                <MenuItem value="Unpaid Leave">Unpaid Leave (LWP)</MenuItem>
+                <MenuItem value="Other">Other Leave</MenuItem>
+              </Select>
+            </Box>
+
+            {/* Start Date & End Date in Row */}
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75 }}>
+                  Start Date
+                </Typography>
+                <TextField
+                  type="date"
+                  fullWidth
+                  size="small"
+                  value={newLeaveData.startDate}
+                  onChange={(e) => setNewLeaveData({ ...newLeaveData, startDate: e.target.value })}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "9px",
+                      fontSize: "0.85rem",
+                      bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                    },
+                  }}
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75 }}>
+                  End Date
+                </Typography>
+                <TextField
+                  type="date"
+                  fullWidth
+                  size="small"
+                  value={newLeaveData.endDate}
+                  onChange={(e) => setNewLeaveData({ ...newLeaveData, endDate: e.target.value })}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "9px",
+                      fontSize: "0.85rem",
+                      bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                    },
+                  }}
+                />
+              </Grid>
+            </Grid>
+
+            {/* Total Days Indicator */}
+            {newLeaveData.startDate && newLeaveData.endDate && (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1.25,
+                  borderRadius: "8px",
+                  bgcolor: isDark ? "rgba(59, 130, 246, 0.08)" : "#eff6ff",
+                  border: isDark ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid #dbeafe",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Typography variant="caption" fontWeight={600} sx={{ color: isDark ? "#93c5fd" : "#1e40af" }}>
+                  Calculated Duration:
+                </Typography>
+                <Chip
+                  size="small"
+                  label={
+                    new Date(newLeaveData.endDate) >= new Date(newLeaveData.startDate)
+                      ? `${Math.floor((new Date(newLeaveData.endDate) - new Date(newLeaveData.startDate)) / 86400000) + 1} Day(s)`
+                      : "Invalid Range"
+                  }
+                  sx={{ fontWeight: 800, fontSize: "0.75rem", bgcolor: "#1d68f0", color: "#ffffff" }}
+                />
+              </Paper>
+            )}
+
+            {/* Leave Status (Direct Approval Option) */}
+            <Box>
+              <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75 }}>
+                Approval Status
+              </Typography>
+              <Select
+                fullWidth
+                size="small"
+                value={newLeaveData.status}
+                onChange={(e) => setNewLeaveData({ ...newLeaveData, status: e.target.value })}
+                sx={{
+                  borderRadius: "9px",
+                  fontSize: "0.85rem",
+                  bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1",
+                  },
+                }}
+              >
+                <MenuItem value="approved">Approved (Apply directly to attendance)</MenuItem>
+                <MenuItem value="pending">Pending (Submit for manager review)</MenuItem>
+              </Select>
+            </Box>
+
+            {/* Reason */}
+            <Box>
+              <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75 }}>
+                Reason for Leave
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                placeholder="Enter detailed reason for leave (e.g. Medical emergency, Family function, etc.)"
+                value={newLeaveData.reason}
+                onChange={(e) => setNewLeaveData({ ...newLeaveData, reason: e.target.value })}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "9px",
+                    fontSize: "0.85rem",
+                    bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                  },
+                }}
+              />
+            </Box>
+          </Stack>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, borderTop: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f1f5f9" }}>
+          <Button onClick={() => setLeaveModalOpen(false)} sx={{ color: isDark ? "#94a3b8" : "#64748b", textTransform: "none", fontWeight: 700 }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleApplyLeave}
+            disabled={leaveSubmitting}
+            sx={{
+              borderRadius: "8px",
+              textTransform: "none",
+              fontWeight: 700,
+              fontSize: "0.84rem",
+              px: 3,
+              bgcolor: "#1d68f0",
+              backgroundImage: "linear-gradient(135deg, #1d68f0 0%, #2563eb 100%)",
+            }}
+          >
+            {leaveSubmitting ? "Submitting..." : "Submit Leave"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Leave Review Dialog Modal ────────────────────────────────────── */}
+      <Dialog
+        open={reviewNoteModalOpen}
+        onClose={() => !leaveSubmitting && setReviewNoteModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            bgcolor: isDark ? "#0f172a" : "#ffffff",
+            backgroundImage: "none",
+            border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1.5, borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f1f5f9" }}>
+          <Typography variant="h6" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.05rem" }}>
+            {reviewActionType === "approved" ? "Approve Leave Request" : "Reject Leave Request"}
+          </Typography>
+          <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+            Leave: {selectedLeaveForReview?.leaveType} ({selectedLeaveForReview?.totalDays || 1} Days)
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2.5 }}>
+          <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75, mt: 1 }}>
+            Review Note / Remarks (Optional)
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={2.5}
+            placeholder="Add reviewer comments or note..."
+            value={reviewNoteText}
+            onChange={(e) => setReviewNoteText(e.target.value)}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "9px",
+                fontSize: "0.85rem",
+                bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f1f5f9" }}>
+          <Button onClick={() => setReviewNoteModalOpen(false)} sx={{ color: isDark ? "#94a3b8" : "#64748b", textTransform: "none", fontWeight: 700 }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmitReview}
+            disabled={leaveSubmitting}
+            sx={{
+              borderRadius: "8px",
+              textTransform: "none",
+              fontWeight: 700,
+              fontSize: "0.84rem",
+              px: 2.5,
+              bgcolor: reviewActionType === "approved" ? "#10b981" : "#ef4444",
+              "&:hover": {
+                bgcolor: reviewActionType === "approved" ? "#059669" : "#dc2626",
+              },
+            }}
+          >
+            {leaveSubmitting ? "Processing..." : reviewActionType === "approved" ? "Confirm Approval" : "Confirm Rejection"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Generate Salary Slip Dialog Modal ────────────────────────────────────── */}
+      <Dialog
+        open={generateSlipModalOpen}
+        onClose={() => !slipGenerating && setGenerateSlipModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            bgcolor: isDark ? "#0f172a" : "#ffffff",
+            backgroundImage: "none",
+            border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
+            boxShadow: isDark ? "0 20px 40px rgba(0,0,0,0.6)" : "0 20px 40px rgba(0,0,0,0.08)",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            pb: 1.5,
+            borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f1f5f9",
+          }}
+        >
+          <Box>
+            <Typography variant="h6" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.1rem" }}>
+              Generate Salary Slip
+            </Typography>
+            <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+              For: {profileData.fullName || "Employee"}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setGenerateSlipModalOpen(false)} sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+            <Close sx={{ fontSize: 20 }} />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {/* Month & Year Selection in Row */}
+            <Grid container spacing={2}>
+              <Grid item xs={7}>
+                <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75 }}>
+                  Select Month
+                </Typography>
+                <Select
+                  fullWidth
+                  size="small"
+                  value={newSlipMonth}
+                  onChange={(e) => setNewSlipMonth(e.target.value)}
+                  sx={{
+                    borderRadius: "9px",
+                    fontSize: "0.85rem",
+                    bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1",
+                    },
+                  }}
+                >
+                  {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m) => (
+                    <MenuItem key={m} value={m}>{m}</MenuItem>
+                  ))}
+                </Select>
+              </Grid>
+
+              <Grid item xs={5}>
+                <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75 }}>
+                  Year
+                </Typography>
+                <Select
+                  fullWidth
+                  size="small"
+                  value={newSlipYear}
+                  onChange={(e) => setNewSlipYear(e.target.value)}
+                  sx={{
+                    borderRadius: "9px",
+                    fontSize: "0.85rem",
+                    bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1",
+                    },
+                  }}
+                >
+                  {["2026", "2025", "2024"].map((y) => (
+                    <MenuItem key={y} value={y}>{y}</MenuItem>
+                  ))}
+                </Select>
+              </Grid>
+            </Grid>
+
+            {/* Live Net Pay Breakdown Preview */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                borderRadius: "12px",
+                bgcolor: isDark ? "rgba(59, 130, 246, 0.08)" : "#eff6ff",
+                border: isDark ? "1px solid rgba(59, 130, 246, 0.2)" : "1px solid #dbeafe",
+              }}
+            >
+              <Typography variant="caption" fontWeight={700} sx={{ color: "#1d68f0", display: "block", mb: 1 }}>
+                SALARY STRUCTURE SNAPSHOT
+              </Typography>
+              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>Gross Earnings:</Typography>
+                <Typography variant="caption" fontWeight={800} sx={{ color: "#10b981" }}>₹ {totalEarnings.toLocaleString("en-IN")}</Typography>
+              </Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>Total Deductions:</Typography>
+                <Typography variant="caption" fontWeight={800} sx={{ color: "#ef4444" }}>₹ {totalDeductions.toLocaleString("en-IN")}</Typography>
+              </Box>
+              <Divider sx={{ my: 1, borderColor: isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1" }} />
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Typography variant="body2" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a" }}>Net Payable:</Typography>
+                <Typography variant="subtitle1" fontWeight={900} sx={{ color: "#1d68f0" }}>₹ {netPay.toLocaleString("en-IN")}</Typography>
+              </Box>
+            </Paper>
+
+            {/* Payment Status */}
+            <Box>
+              <Typography variant="caption" fontWeight={700} sx={{ color: isDark ? "#cbd5e1" : "#475569", display: "block", mb: 0.75 }}>
+                Payment Status
+              </Typography>
+              <Select
+                fullWidth
+                size="small"
+                value={newSlipStatus}
+                onChange={(e) => setNewSlipStatus(e.target.value)}
+                sx={{
+                  borderRadius: "9px",
+                  fontSize: "0.85rem",
+                  bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#ffffff",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: isDark ? "rgba(255,255,255,0.12)" : "#cbd5e1",
+                  },
+                }}
+              >
+                <MenuItem value="Paid">Paid (Marked as Disbursed)</MenuItem>
+                <MenuItem value="Pending">Pending (Awaiting Disbursement)</MenuItem>
+              </Select>
+            </Box>
+          </Stack>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, borderTop: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f1f5f9" }}>
+          <Button onClick={() => setGenerateSlipModalOpen(false)} sx={{ color: isDark ? "#94a3b8" : "#64748b", textTransform: "none", fontWeight: 700 }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleGenerateSalarySlip}
+            disabled={slipGenerating}
+            sx={{
+              borderRadius: "8px",
+              textTransform: "none",
+              fontWeight: 700,
+              fontSize: "0.84rem",
+              px: 3,
+              bgcolor: "#1d68f0",
+              backgroundImage: "linear-gradient(135deg, #1d68f0 0%, #2563eb 100%)",
+            }}
+          >
+            {slipGenerating ? "Generating..." : "Generate & Save Slip"}
           </Button>
         </DialogActions>
       </Dialog>

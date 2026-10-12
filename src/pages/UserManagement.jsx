@@ -148,6 +148,27 @@ const ROLE_CONFIG = {
     bg: alpha(PRIMARY_COLOR, 0.08),
     icon: <Group fontSize="small" />,
     label: "Incharge",
+    level: 3,
+  },
+  SUPERVISOR: {
+    color: PRIMARY_COLOR,
+    bg: alpha(PRIMARY_COLOR, 0.08),
+    icon: <SupervisorAccount fontSize="small" />,
+    label: "Supervisor",
+    level: 4,
+  },
+  TEAM: {
+    color: PRIMARY_COLOR,
+    bg: alpha(PRIMARY_COLOR, 0.08),
+    icon: <SupervisorAccount fontSize="small" />,
+    label: "Supervisor",
+    level: 4,
+  },
+  INSTALLER: {
+    color: PRIMARY_COLOR,
+    bg: alpha(PRIMARY_COLOR, 0.08),
+    icon: <SupervisorAccount fontSize="small" />,
+    label: "Supervisor",
     level: 4,
   },
 };
@@ -164,23 +185,23 @@ const normalizeRole = (role) => {
     manager: "ZSM",
     operation_lead: "ZSM",
     operationlead: "ZSM",
-    supervisor: "SUPERVISOR",
     incharge: "Incharge",
-    team: "Incharge",
-    installer: "Incharge",
+    supervisor: "SUPERVISOR",
+    team: "SUPERVISOR",
+    installer: "SUPERVISOR",
   };
   return map[value] || role;
 };
 
-const getRoleConfig = (role) => ROLE_CONFIG[normalizeRole(role)] || ROLE_CONFIG[role] || ROLE_CONFIG.Incharge;
+const getRoleConfig = (role) => ROLE_CONFIG[normalizeRole(role)] || ROLE_CONFIG[role] || ROLE_CONFIG.SUPERVISOR;
 const isAdminRole = (role) => normalizeRole(role) === "Admin_panel" || normalizeRole(role) === "ADMIN";
 const isManagerRole = (role) => normalizeRole(role) === "ZSM" || normalizeRole(role) === "MANAGER";
-const isSupervisorRole = (role) => normalizeRole(role) === "SUPERVISOR";
+const isSupervisorRole = (role) => normalizeRole(role) === "SUPERVISOR" || normalizeRole(role) === "TEAM";
 const isInchargeRole = (role) => normalizeRole(role) === "Incharge";
-const isInstallerRole = (role) => normalizeRole(role) === "Incharge" || normalizeRole(role) === "TEAM" || normalizeRole(role) === "INSTALLER";
+const isInstallerRole = (role) => normalizeRole(role) === "SUPERVISOR" || normalizeRole(role) === "TEAM" || normalizeRole(role) === "INSTALLER";
 
 const MANAGER_ROLE_KEYS = ["Admin_panel", "ZSM", "SUPERVISOR"];
-const EDITABLE_ROLE_KEYS = ["Admin_panel", "ZSM", "SUPERVISOR", "Incharge"];
+const EDITABLE_ROLE_KEYS = ["Admin_panel", "ZSM", "Incharge", "SUPERVISOR"];
 
 const STATUS_CONFIG = {
   active: {
@@ -2786,7 +2807,23 @@ const UserManagement = () => {
     }
 
     if (roleFilter !== "all") {
-      filtered = filtered.filter((user) => user.role === roleFilter);
+      filtered = filtered.filter((user) => {
+        const normUser = normalizeRole(user.role);
+        const normFilter = normalizeRole(roleFilter);
+        if (normFilter === "SUPERVISOR" || roleFilter === "SUPERVISOR" || roleFilter === "TEAM") {
+          return normUser === "SUPERVISOR" || user.role === "SUPERVISOR" || user.role === "TEAM" || user.role === "INSTALLER";
+        }
+        if (normFilter === "Incharge" || roleFilter === "Incharge") {
+          return normUser === "Incharge" || user.role === "Incharge";
+        }
+        if (normFilter === "ZSM" || roleFilter === "ZSM" || roleFilter === "MANAGER") {
+          return normUser === "ZSM" || user.role === "ZSM" || user.role === "MANAGER" || user.role === "PROJECT_HEAD";
+        }
+        if (normFilter === "Admin_panel" || roleFilter === "Admin_panel") {
+          return normUser === "Admin_panel" || user.role === "Admin_panel" || user.role === "ADMIN";
+        }
+        return normUser === normFilter || user.role === roleFilter;
+      });
     }
 
     if (statusFilter !== "all") {
@@ -3467,9 +3504,9 @@ const UserManagement = () => {
                         const displayRoleLabel =
                           user.role === "PROJECT_HEAD" || user.role === "ZSM" || user.role === "MANAGER" || user.role === "operation_lead"
                             ? "Manager"
-                            : user.role === "SUPERVISOR"
+                            : user.role === "SUPERVISOR" || user.role === "TEAM" || user.role === "INSTALLER"
                               ? "Supervisor"
-                              : user.role === "Incharge" || user.role === "INSTALLER" || user.role === "TEAM"
+                              : user.role === "Incharge"
                                 ? "Incharge"
                                 : user.role === "Admin_panel" || user.role === "ADMIN" || user.role === "super_admin" || user.role === "head_office"
                                   ? "Admin panel"

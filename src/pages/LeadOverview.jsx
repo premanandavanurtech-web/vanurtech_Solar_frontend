@@ -111,6 +111,7 @@ import {
   ReceiptLong,
   Build,
   OpenInNew,
+  PhoneMissed,
   CreditCard,
   PictureAsPdf,
   Money,
@@ -768,14 +769,9 @@ const DocumentCard = ({ title, url, icon, filename }) => {
 const LeadActionMenu = ({
   lead,
   permissions,
-  onEdit,
   onQuickView,
   onViewDetails,
-  onCreateQuote,
-  onAssign,
-  onConvertToProject,
-  onViewVisitPipeline,
-  onUnsupportedAction,
+  onConvertToMissedLead,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -850,50 +846,18 @@ const LeadActionMenu = ({
         </MenuItem>
         <MenuItem sx={menuItemSx} onClick={() => runAction(onViewDetails)}>
           <OpenInNew />
-          View Details
+          View open
         </MenuItem>
-        <MenuItem sx={menuItemSx} onClick={() => runAction(onViewVisitPipeline)}>
-          <CalendarToday />
-          Visit Pipeline
+        <MenuItem
+          sx={{
+            ...menuItemSx,
+            "& .MuiSvgIcon-root": { fontSize: 18, color: "#f59e0b" },
+          }}
+          onClick={() => runAction(onConvertToMissedLead)}
+        >
+          <PhoneMissed sx={{ color: "#f59e0b" }} />
+          Convert to Missed lead
         </MenuItem>
-        <MenuItem sx={menuItemSx} onClick={() => runAction(onCreateQuote)}>
-          <Description />
-          Create Quote
-        </MenuItem>
-        <MenuItem sx={menuItemSx} onClick={() => runAction(onConvertToProject)}>
-          <Assignment />
-          {lead?.isProject ? "Open Project" : "Convert to Project"}
-        </MenuItem>
-
-        {permissions.assign && (
-          <Box sx={{ borderTop: "1px solid #eef2f7", mt: 0.75, pt: 0.75 }}>
-            <MenuItem sx={menuItemSx} onClick={() => runAction(onAssign)}>
-              <AssignmentInd />
-              Assign Agent
-            </MenuItem>
-          </Box>
-        )}
-
-        <Box sx={{ borderTop: "1px solid #eef2f7", mt: 0.75, pt: 0.75 }}>
-          <MenuItem sx={menuItemSx} onClick={() => runAction(() => onUnsupportedAction("Mark as Duplicate"))}>
-            <ContentCopy />
-            Mark as Duplicate
-          </MenuItem>
-          <MenuItem
-            sx={{
-              ...menuItemSx,
-              "& .MuiSvgIcon-root": { fontSize: 18, color: "#ef4444" },
-            }}
-            onClick={() => runAction(() => onUnsupportedAction("Mark as Junk"))}
-          >
-            <ErrorOutline />
-            Mark as Junk
-          </MenuItem>
-          <MenuItem sx={menuItemSx} onClick={() => runAction(() => onUnsupportedAction("Not Interested"))}>
-            <PersonRemove />
-            Not Interested
-          </MenuItem>
-        </Box>
       </Menu>
     </>
   );
@@ -1814,7 +1778,7 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
         });
         if (roleToFetch === "Incharge") setInchargeUsers(filteredUsers);
         else if (roleToFetch === "TEAM") setTeamUsers(filteredUsers);
-        if (filteredUsers.length === 0) setError(`No active ${roleToFetch === "Incharge" ? "Incharges" : "team members"} available.`);
+        if (filteredUsers.length === 0) setError(`No active ${roleToFetch === "Incharge" ? "Incharges" : "Supervisors"} available.`);
         else setError(null);
       } else setError(response?.message || `Failed to load ${roleToFetch} users.`);
     } catch (error) { setError(error.message || "Failed to load users. Please try again."); }
@@ -1949,7 +1913,7 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Box sx={{ color: selected ? "#00bcd4" : "text.secondary", display: "flex" }}>{icon}</Box>
                           <Box>
-                            <Typography variant="body2" fontWeight={selected ? 700 : 500} color={isDark ? "#f8fafc" : "inherit"}>{role === "Incharge" ? "Incharge" : "Team"}</Typography>
+                            <Typography variant="body2" fontWeight={selected ? 700 : 500} color={isDark ? "#f8fafc" : "inherit"}>{role === "Incharge" ? "Incharge" : "Supervisor"}</Typography>
                             {users.length > 0 && <Typography variant="caption" color="text.secondary">{users.length} available</Typography>}
                           </Box>
                           {selected && <Box sx={{ ml: "auto", color: "#00bcd4", display: "flex" }}><CheckCircle fontSize="small" /></Box>}
@@ -1964,12 +1928,12 @@ const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, i
             {(assignToRole || !showRoleSelection) && (
               <Box>
                 <Typography variant="subtitle2" fontWeight={700} color={isDark ? "#f8fafc" : "text.primary"} sx={{ mb: 1 }}>
-                  Select {assignToRole === "TEAM" ? "Team Member" : assignToRole || "User"}
+                  Select {assignToRole === "TEAM" || assignToRole === "Supervisor" ? "Supervisor" : assignToRole || "User"}
                 </Typography>
                 {getAvailableUsers().length === 0 && !fetchingUsers && assignToRole ? (
                   <Box sx={{ p: 3, borderRadius: 2, border: `1.5px dashed ${alpha("#00bcd4", 0.3)}`, textAlign: "center", bgcolor: isDark ? "#111c30" : "inherit" }}>
                     <Groups sx={{ color: alpha("#00bcd4", 0.4), fontSize: 36, mb: 1 }} />
-                    <Typography variant="body2" color="text.secondary">No {assignToRole === "TEAM" ? "team members" : "Incharge users"} available</Typography>
+                    <Typography variant="body2" color="text.secondary">No {assignToRole === "TEAM" || assignToRole === "Supervisor" ? "Supervisors" : "Incharge users"} available</Typography>
                   </Box>
                 ) : (
                   <Stack spacing={1} sx={{ maxHeight: 220, overflow: "auto" }}>
@@ -2725,6 +2689,33 @@ const LeadOverview = () => {
     }
   }, [fetchAPI, fetchLeads, navigate, showSnackbar]);
 
+  const handleConvertToMissedLead = useCallback(async (targetLead) => {
+    if (!targetLead?._id) return;
+    try {
+      const response = await fetchAPI(`/lead/updateLead/${targetLead._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "Missed Leads",
+          lastContactedAt: new Date().toISOString(),
+          notes: targetLead.notes
+            ? `${targetLead.notes}\n[${new Date().toLocaleDateString()}] Converted to Missed Lead`
+            : `[${new Date().toLocaleDateString()}] Converted to Missed Lead`,
+        }),
+      });
+
+      if (response?.success) {
+        showSnackbar("Lead converted to Missed Lead successfully", "success");
+        await fetchLeads();
+      } else {
+        throw new Error(response?.message || "Failed to convert lead to missed lead");
+      }
+    } catch (err) {
+      console.error("Error converting lead to missed:", err);
+      showSnackbar(err.message || "Failed to convert lead to missed lead", "error");
+    }
+  }, [fetchAPI, fetchLeads, showSnackbar]);
+
   const handleConvertToProject = useCallback((lead) => {
     if (!lead?._id) {
       showSnackbar("Invalid lead selected", "error");
@@ -2860,19 +2851,14 @@ const LeadOverview = () => {
           <LeadActionMenu
             lead={lead}
             permissions={permissions}
-            onEdit={openEditDialog}
             onQuickView={openViewDialog}
             onViewDetails={openLeadDetailsPage}
-            onViewVisitPipeline={(item) => navigate("/total-visits", { state: { highlightLeadId: item._id } })}
-            onCreateQuote={handleCreateQuote}
-            onAssign={openAssignDialog}
-            onConvertToProject={handleConvertToProject}
-            onUnsupportedAction={handleUnsupportedLeadAction}
+            onConvertToMissedLead={handleConvertToMissedLead}
           />
         </TableCell>
       </TableRow>
     );
-  }, [selectedLeads, permissions, handleSelectLead, openLeadDetailsPage, openViewDialog, openAssignDialog, handleCreateQuote, handleConvertToProject, handleUnsupportedLeadAction, navigate, isDark]);
+  }, [selectedLeads, permissions, handleSelectLead, openLeadDetailsPage, openViewDialog, handleConvertToMissedLead, isDark]);
 
   const renderCardView = useCallback(() => {
     if (loading) return <LoadingSkeleton count={6} isMobile={isMobile} />;

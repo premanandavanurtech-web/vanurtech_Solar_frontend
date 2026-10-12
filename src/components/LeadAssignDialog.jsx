@@ -162,7 +162,7 @@ const LeadAssignDialog = ({
         if (role === "TEAM") setTeamUsers(users);
 
         if (!users.length) {
-          setError(`No active ${role === "Incharge" ? "Incharge users" : "team members"} available.`);
+          setError(`No active ${role === "Incharge" ? "Incharge users" : "Supervisors"} available.`);
         }
       } catch (loadError) {
         const message = loadError?.message || "Failed to load users";
@@ -485,7 +485,7 @@ const LeadAssignDialog = ({
                     },
                   }}
                 >
-                  {role === "Incharge" ? "Incharge" : "Team"}
+                  {role === "Incharge" ? "Incharge" : "Supervisor"}
                   {selected && (
                     <Box sx={{ ml: "auto", display: "flex", color: accent }}>
                       <CheckCircle fontSize="small" />
@@ -499,7 +499,7 @@ const LeadAssignDialog = ({
           {(assignToRole || availableRoles.length === 1) && (
             <Box>
               <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 1 }}>
-                Select {assignToRole === "TEAM" ? "Team Member" : assignToRole || "User"}
+                Select {assignToRole === "TEAM" || assignToRole === "Supervisor" ? "Supervisor" : assignToRole || "User"}
               </Typography>
 
               {loadingUsers ? (

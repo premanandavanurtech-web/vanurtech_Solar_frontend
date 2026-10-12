@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   Box,
   Typography,
@@ -8,6 +8,7 @@ import {
   Dialog,
   DialogContent,
   DialogActions,
+  CircularProgress,
 } from "@mui/material";
 import { Close, Print, Download } from "@mui/icons-material";
 
@@ -161,7 +162,7 @@ export function getMonthPeriodDetails(monthStr) {
 }
 
 // ─── MAIN SALARY SLIP VIEW COMPONENT ──────────────────────────────────────────
-export function SalarySlipView({ slipData = {} }) {
+export const SalarySlipView = React.forwardRef(function SalarySlipView({ slipData = {} }, ref) {
   const monthStr = slipData.month || "August 2026";
   const periodInfo = getMonthPeriodDetails(monthStr);
 
@@ -198,14 +199,34 @@ export function SalarySlipView({ slipData = {} }) {
   };
 
   // Real Earnings Items
-  const earningsList = Array.isArray(slipData.earnings) && slipData.earnings.length > 0
-    ? slipData.earnings
-    : [
-        { component: "Basic Salary", amount: slipData.basic || 25000 },
-        { component: "House Rent Allowance (HRA)", amount: slipData.hra || 10000 },
-        { component: "Special Allowance", amount: slipData.allowances || slipData.special || 5000 },
-        { component: "Other Allowance", amount: slipData.otherAllowance || 2000 },
-      ];
+  let earningsList = [];
+  if (Array.isArray(slipData.earnings) && slipData.earnings.length > 0) {
+    earningsList = slipData.earnings.map((e) => ({
+      component: e.component || e.name || "Earning",
+      amount: Number(e.amount) || 0,
+    }));
+  } else if (Array.isArray(slipData.allowanceDetails) && slipData.allowanceDetails.length > 0) {
+    const basicVal = Number(slipData.basicSalary || slipData.basic || 0);
+    earningsList = [
+      ...(basicVal > 0 ? [{ component: "Basic Salary", amount: basicVal }] : []),
+      ...slipData.allowanceDetails.map((a) => ({
+        component: a.name || a.component || "Allowance",
+        amount: Number(a.amount) || 0,
+      })),
+    ];
+  } else {
+    earningsList = [
+      { component: "Basic Salary", amount: Number(String(slipData.basic || slipData.basicSalary || 25000).replace(/,/g, "")) || 25000 },
+      { component: "House Rent Allowance (HRA)", amount: Number(String(slipData.hra || 10000).replace(/,/g, "")) || 10000 },
+      { component: "Special Allowance", amount: Number(String(slipData.allowances || slipData.special || 5000).replace(/,/g, "")) || 5000 },
+      { component: "Other Allowance", amount: Number(String(slipData.otherAllowance || 2000).replace(/,/g, "")) || 2000 },
+    ];
+  }
+
+  // Ensure Basic Salary is present if specified
+  if (slipData.basicSalary && !earningsList.some((e) => e.component.toLowerCase().includes("basic"))) {
+    earningsList.unshift({ component: "Basic Salary", amount: Number(slipData.basicSalary) || 0 });
+  }
 
   const totalEarnings = earningsList.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
 
@@ -214,14 +235,25 @@ export function SalarySlipView({ slipData = {} }) {
     ? slipData.lopAmount 
     : (attendance.absentDays > 0 ? Number(((totalEarnings / (attendance.totalDays || 31)) * attendance.absentDays).toFixed(2)) : 0);
 
-  const deductionsList = Array.isArray(slipData.deductions) && slipData.deductions.length > 0
-    ? slipData.deductions
-    : [
-        { component: "Provident Fund (PF)", amount: slipData.pf || 1800 },
-        { component: "Professional Tax (PT)", amount: slipData.pt || 200 },
-        { component: "TDS (Income Tax)", amount: slipData.tds || 1000 },
-        ...(attendance.absentDays > 0 ? [{ component: `Loss of Pay (LOP) - ${attendance.absentDays} Day`, amount: lopAmount || 1354.84 }] : []),
-      ];
+  let deductionsList = [];
+  if (Array.isArray(slipData.deductions) && slipData.deductions.length > 0) {
+    deductionsList = slipData.deductions.map((d) => ({
+      component: d.component || d.name || "Deduction",
+      amount: Number(d.amount) || 0,
+    }));
+  } else if (Array.isArray(slipData.deductionDetails) && slipData.deductionDetails.length > 0) {
+    deductionsList = slipData.deductionDetails.map((d) => ({
+      component: d.name || d.component || "Deduction",
+      amount: Number(d.amount) || 0,
+    }));
+  } else {
+    deductionsList = [
+      { component: "Provident Fund (PF)", amount: Number(String(slipData.pf || 1800).replace(/,/g, "")) || 1800 },
+      { component: "Professional Tax (PT)", amount: Number(String(slipData.pt || 200).replace(/,/g, "")) || 200 },
+      { component: "TDS (Income Tax)", amount: Number(String(slipData.tds || 1000).replace(/,/g, "")) || 1000 },
+      ...(attendance.absentDays > 0 ? [{ component: `Loss of Pay (LOP) - ${attendance.absentDays} Day`, amount: lopAmount || 1354.84 }] : []),
+    ];
+  }
 
   const totalDeductions = deductionsList.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
   const netPayable = Math.max(0, totalEarnings - totalDeductions);
@@ -234,6 +266,7 @@ export function SalarySlipView({ slipData = {} }) {
 
   return (
     <Box
+      ref={ref}
       className="salary-slip-printable"
       sx={{
         width: "100%",
@@ -882,7 +915,7 @@ export function SalarySlipView({ slipData = {} }) {
       </Box>
     </Box>
   );
-}
+});
 
 // Sub-component for Key-Value display in employee details
 function DetailRow({ label, value, isBold = false }) {
@@ -905,14 +938,137 @@ function DetailRow({ label, value, isBold = false }) {
   );
 }
 
+// ─── PDF DOWNLOAD HELPER USING HTML2CANVAS & JSPDF ───────────────────────────
+function loadLocalScript(src, globalCheck) {
+  if (globalCheck && globalCheck()) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+}
+
+export async function downloadSlipAsPdf(targetNode, fileName = "Salary-Slip.pdf") {
+  if (!targetNode) throw new Error("Salary slip preview element is not ready.");
+
+  await Promise.all([
+    loadLocalScript("/vendor/jspdf.umd.min.js", () => window.jspdf?.jsPDF),
+    loadLocalScript("/vendor/html2canvas.min.js", () => window.html2canvas),
+  ]);
+
+  const jsPDF = window.jspdf?.jsPDF;
+  const html2canvas = window.html2canvas;
+  if (!jsPDF || !html2canvas) throw new Error("PDF generation libraries failed to load.");
+
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+
+  const canvas = await html2canvas(targetNode, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: "#ffffff",
+    width: targetNode.scrollWidth,
+    height: targetNode.scrollHeight,
+    windowWidth: Math.max(targetNode.scrollWidth, document.documentElement.clientWidth),
+    windowHeight: Math.max(targetNode.scrollHeight, document.documentElement.clientHeight),
+  });
+
+  const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 16;
+  const usableWidth = pageWidth - margin * 2;
+  const usableHeight = pageHeight - margin * 2;
+  const sliceHeight = Math.max(1, Math.floor((usableHeight * canvas.width) / usableWidth));
+
+  if (canvas.height <= sliceHeight) {
+    const imgHeight = (canvas.height * usableWidth) / canvas.width;
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", margin, margin, usableWidth, imgHeight);
+  } else {
+    let offsetY = 0;
+    let pageIndex = 0;
+
+    while (offsetY < canvas.height) {
+      const pageCanvas = document.createElement("canvas");
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = Math.min(sliceHeight, canvas.height - offsetY);
+
+      const pageContext = pageCanvas.getContext("2d");
+      if (!pageContext) break;
+
+      pageContext.fillStyle = "#ffffff";
+      pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      pageContext.drawImage(
+        canvas,
+        0,
+        offsetY,
+        canvas.width,
+        pageCanvas.height,
+        0,
+        0,
+        canvas.width,
+        pageCanvas.height,
+      );
+
+      if (pageIndex > 0) {
+        pdf.addPage();
+      }
+
+      const currentImgHeight = (pageCanvas.height * usableWidth) / pageCanvas.width;
+      pdf.addImage(pageCanvas.toDataURL("image/jpeg", 0.98), "JPEG", margin, margin, usableWidth, currentImgHeight);
+
+      offsetY += pageCanvas.height;
+      pageIndex += 1;
+    }
+  }
+
+  pdf.save(fileName);
+}
+
 // ─── SALARY SLIP MODAL WRAPPER (FOR PREVIEW / PRINT / DOWNLOAD) ─────────────────
 export default function SalarySlipModal({ open, onClose, slipData }) {
-  const printRef = useRef();
+  const slipRef = useRef(null);
+  const [downloading, setDownloading] = useState(false);
 
   if (!open || !slipData) return null;
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!slipRef.current) return;
+    try {
+      setDownloading(true);
+      const empName = (slipData?.name || slipData?.employeeName || "Employee")
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, "_");
+      const monthStr = (slipData?.month || "Salary_Slip")
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, "_");
+      const fileName = `Salary_Slip_${empName}_${monthStr}.pdf`;
+
+      await downloadSlipAsPdf(slipRef.current, fileName);
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+      // Fallback to browser print if script loading or canvas fails
+      window.print();
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -946,14 +1102,14 @@ export default function SalarySlipModal({ open, onClose, slipData }) {
         <Typography variant="subtitle1" fontWeight={800} sx={{ color: "#0f172a" }}>
           Salary Slip Preview — {slipData?.name || "Employee"} ({slipData?.month || "August 2026"})
         </Typography>
-        <IconButton size="small" onClick={onClose}>
+        <IconButton size="small" onClick={onClose} disabled={downloading}>
           <Close sx={{ fontSize: 20 }} />
         </IconButton>
       </Box>
 
       {/* Slip Content View */}
       <DialogContent sx={{ p: { xs: 1.5, sm: 3 }, bgcolor: "#f1f5f9" }}>
-        <SalarySlipView slipData={slipData} />
+        <SalarySlipView ref={slipRef} slipData={slipData} />
       </DialogContent>
 
       {/* Modal Actions Footer */}
@@ -969,6 +1125,7 @@ export default function SalarySlipModal({ open, onClose, slipData }) {
       >
         <Button
           onClick={onClose}
+          disabled={downloading}
           sx={{ textTransform: "none", fontWeight: 700, color: "#64748b" }}
         >
           Close
@@ -978,14 +1135,16 @@ export default function SalarySlipModal({ open, onClose, slipData }) {
             variant="outlined"
             startIcon={<Print />}
             onClick={handlePrint}
+            disabled={downloading}
             sx={{ textTransform: "none", fontWeight: 700, borderColor: "#cbd5e1", color: "#334155" }}
           >
             Print Slip
           </Button>
           <Button
             variant="contained"
-            startIcon={<Download />}
-            onClick={handlePrint}
+            startIcon={downloading ? <CircularProgress size={18} color="inherit" /> : <Download />}
+            onClick={handleDownloadPdf}
+            disabled={downloading}
             sx={{
               textTransform: "none",
               fontWeight: 700,
@@ -993,7 +1152,7 @@ export default function SalarySlipModal({ open, onClose, slipData }) {
               "&:hover": { bgcolor: "#1955c4" },
             }}
           >
-            Download PDF
+            {downloading ? "Generating PDF..." : "Download PDF"}
           </Button>
         </Box>
       </DialogActions>
