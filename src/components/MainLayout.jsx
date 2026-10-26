@@ -10,7 +10,15 @@ const MainLayout = ({ children }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
-  const [drawerOpen, setDrawerOpen] = useState(!isMobile);
+  const [drawerOpen, setDrawerOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const saved = localStorage.getItem("sidebarCollapsed");
+      return saved !== null ? !JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const sidebarWidth = 268;
@@ -18,20 +26,22 @@ const MainLayout = ({ children }) => {
 
   // Handle responsive behavior
   useEffect(() => {
-    if (!isMobile) {
-      setDrawerOpen(true);
-      setMobileOpen(false);
-    } else {
-      setDrawerOpen(false);
+    if (isMobile) {
       setMobileOpen(false);
     }
   }, [isMobile]);
 
   const toggleDrawer = () => {
     if (isMobile) {
-      setMobileOpen(!mobileOpen);
+      setMobileOpen((prev) => !prev);
     } else {
-      setDrawerOpen(!drawerOpen);
+      setDrawerOpen((prev) => {
+        const next = !prev;
+        try {
+          localStorage.setItem("sidebarCollapsed", JSON.stringify(!next));
+        } catch {}
+        return next;
+      });
     }
   };
 

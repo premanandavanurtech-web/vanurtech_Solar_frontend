@@ -695,10 +695,22 @@ const MobileFilterDrawer = ({
   );
 };
 
-const LoadingSkeleton = ({ count = 5, isMobile = false }) => (
-  <Box>{Array.from({ length: count }).map((_, index) => (
-    <Skeleton key={index} variant="rectangular" height={isMobile ? 80 : 70} sx={{ mb: 2, borderRadius: 2 }} />
-  ))}</Box>
+const LoadingSkeleton = ({ count = 6, isMobile = false, isCard = false }) => (
+  isCard ? (
+    <Grid container spacing={2.5}>
+      {Array.from({ length: count }).map((_, index) => (
+        <Grid item xs={12} sm={6} lg={4} key={index}>
+          <Skeleton variant="rectangular" height={260} sx={{ borderRadius: "18px" }} />
+        </Grid>
+      ))}
+    </Grid>
+  ) : (
+    <Box>
+      {Array.from({ length: count }).map((_, index) => (
+        <Skeleton key={index} variant="rectangular" height={isMobile ? 80 : 70} sx={{ mb: 2, borderRadius: 2 }} />
+      ))}
+    </Box>
+  )
 );
 
 const EmptyState = ({ title, description, icon: Icon = Person, action }) => (
@@ -771,6 +783,7 @@ const LeadActionMenu = ({
   permissions,
   onQuickView,
   onViewDetails,
+  onEditLead,
   onConvertToMissedLead,
 }) => {
   const theme = useTheme();
@@ -846,8 +859,14 @@ const LeadActionMenu = ({
         </MenuItem>
         <MenuItem sx={menuItemSx} onClick={() => runAction(onViewDetails)}>
           <OpenInNew />
-          View open
+          View Full Profile
         </MenuItem>
+        {permissions?.edit && (
+          <MenuItem sx={menuItemSx} onClick={() => runAction(onEditLead)}>
+            <Edit />
+            Edit Lead
+          </MenuItem>
+        )}
         <MenuItem
           sx={{
             ...menuItemSx,
@@ -863,117 +882,572 @@ const LeadActionMenu = ({
   );
 };
 
-const MobileLeadCard = ({ lead, onView, onEdit, onAssign, onDelete, onConvertToProject, permissions }) => {
+// ========== REDESIGNED LEAD CARD COMPONENT ==========
+const LeadCard = ({
+  lead,
+  onView,
+  onViewDetails,
+  onEdit,
+  onAssign,
+  onDelete,
+  onConvertToProject,
+  onConvertToMissedLead,
+  permissions,
+}) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
-  const [expanded, setExpanded] = useState(false);
-  const statusColor = getStatusColor(lead.status);
-  const initials = `${lead.firstName?.[0] || ""}${lead.lastName?.[0] || ""}`;
+  const [anchorEl, setAnchorEl] = useState(null);
+  const openMenu = Boolean(anchorEl);
 
-  const handleDeleteClick = () => {
-    if (window.confirm(`Are you sure you want to delete ${lead.firstName} ${lead.lastName}?`)) onDelete(lead._id);
+  const statusColor = getStatusColor(lead.status);
+  const initials = `${lead.firstName?.[0] || ""}${lead.lastName?.[0] || ""}`.toUpperCase() || "L";
+  const assignedPerson = getAssignedPerson(lead);
+
+  const handleMenuClick = (event) => {
+    event.stopPropagation();
+    setAnchorEl(event.currentTarget);
   };
 
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleDeleteClick = () => {
+    handleMenuClose();
+    if (window.confirm(`Are you sure you want to delete ${lead.firstName} ${lead.lastName}?`)) {
+      onDelete?.(lead._id);
+    }
+  };
+
+  const leadName = `${lead.firstName || ""} ${lead.lastName || ""}`.trim() || "Unnamed Lead";
+
   return (
-    <Paper
+    <Card
       elevation={0}
       sx={{
-        mb: 1.5,
-        borderRadius: 3,
-        border: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`,
-        bgcolor: isDark ? "#0e1526" : "#ffffff",
-        color: isDark ? "#f8fafc" : "inherit",
+        borderRadius: "18px",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
         overflow: "hidden",
-        boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.35)" : "0 2px 10px rgba(37,99,235,0.05)",
-        transition: "all 0.2s ease-in-out",
+        bgcolor: isDark ? "#0d1527" : "#ffffff",
+        color: isDark ? "#f8fafc" : "inherit",
+        border: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.12)}`,
+        boxShadow: isDark
+          ? "0 4px 20px rgba(0, 0, 0, 0.45)"
+          : "0 4px 20px rgba(37, 99, 235, 0.06)",
+        transition: "all 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
         "&:hover": {
-          borderColor: isDark ? "rgba(96, 165, 250, 0.35)" : alpha(PRIMARY_COLOR, 0.25),
+          transform: "translateY(-4px)",
+          boxShadow: isDark
+            ? "0 14px 34px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(59, 130, 246, 0.35)"
+            : "0 14px 32px rgba(37, 99, 235, 0.14)",
+          borderColor: isDark ? "rgba(96, 165, 250, 0.45)" : PRIMARY_COLOR,
+        },
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "3.5px",
+          background: statusColor.avatar,
         },
       }}
     >
-      <Box sx={{ p: 2 }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5 }}>
-          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-            <Avatar sx={{ background: statusColor.avatar, color: "#fff", width: 48, height: 48, fontWeight: 700, boxShadow: isDark ? "0 4px 14px rgba(0,0,0,0.4)" : "0 10px 20px rgba(37,99,235,0.18)" }}>{initials}</Avatar>
-            <Box>
-              <Typography variant="subtitle1" fontWeight="700" sx={{ color: isDark ? "#f8fafc" : PRIMARY_COLOR }}>{lead.firstName} {lead.lastName}</Typography>
-              <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>ID: {lead._id?.slice(-8) || "N/A"}</Typography>
+      <CardContent sx={{ p: { xs: 2, sm: 2.5 }, flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* Header: Avatar, Name, ID, More Menu */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.75 }}>
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", minWidth: 0 }}>
+            <Avatar
+              sx={{
+                background: statusColor.avatar,
+                color: "#fff",
+                width: 44,
+                height: 44,
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                boxShadow: isDark
+                  ? "0 4px 14px rgba(0, 0, 0, 0.4)"
+                  : "0 6px 16px rgba(37, 99, 235, 0.2)",
+                flexShrink: 0,
+              }}
+            >
+              {initials}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Tooltip title={leadName}>
+                <Typography
+                  variant="subtitle1"
+                  fontWeight={700}
+                  noWrap
+                  onClick={() => (onViewDetails ? onViewDetails(lead) : onView?.(lead))}
+                  sx={{
+                    color: isDark ? "#f8fafc" : PRIMARY_COLOR,
+                    cursor: "pointer",
+                    fontSize: "0.98rem",
+                    lineHeight: 1.3,
+                    "&:hover": {
+                      color: "#3b82f6",
+                      textDecoration: "underline",
+                    },
+                  }}
+                >
+                  {leadName}
+                </Typography>
+              </Tooltip>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: isDark ? "#94a3b8" : "text.secondary",
+                  fontFamily: "monospace",
+                  fontWeight: 600,
+                  fontSize: "0.72rem",
+                  letterSpacing: "0.03em",
+                }}
+              >
+                ID: #{lead._id?.slice(-8) || "N/A"}
+              </Typography>
             </Box>
           </Box>
-          <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.3s", bgcolor: isDark ? "rgba(59, 130, 246, 0.15)" : alpha(PRIMARY_COLOR, 0.1), color: isDark ? "#60a5fa" : PRIMARY_COLOR }}>
-            {expanded ? <ExpandLess /> : <ExpandMore />}
+
+          <IconButton
+            size="small"
+            onClick={handleMenuClick}
+            sx={{
+              color: isDark ? "#94a3b8" : "text.secondary",
+              bgcolor: isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)",
+              borderRadius: "8px",
+              width: 32,
+              height: 32,
+              "&:hover": {
+                bgcolor: isDark ? "rgba(59, 130, 246, 0.15)" : alpha(PRIMARY_COLOR, 0.1),
+                color: isDark ? "#60a5fa" : PRIMARY_COLOR,
+              },
+            }}
+          >
+            <MoreVert sx={{ fontSize: 18 }} />
           </IconButton>
         </Box>
-        <Grid container spacing={1} sx={{ mb: 1.5 }}>
-          <Grid item xs={6}><Stack direction="row" spacing={0.5} alignItems="center"><Phone sx={{ fontSize: 14, color: isDark ? "#60a5fa" : alpha(PRIMARY_COLOR, 0.6) }} /><Typography variant="caption" sx={{ color: isDark ? "#cbd5e1" : "text.secondary" }} noWrap>{lead.phone || "No phone"}</Typography></Stack></Grid>
-          <Grid item xs={6}><Stack direction="row" spacing={0.5} alignItems="center"><Email sx={{ fontSize: 14, color: isDark ? "#60a5fa" : alpha(PRIMARY_COLOR, 0.6) }} /><Typography variant="caption" sx={{ color: isDark ? "#cbd5e1" : "text.secondary" }} noWrap>{lead.email || "No email"}</Typography></Stack></Grid>
-        </Grid>
-        <Box sx={{ mb: 1.5 }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-            <CalendarToday sx={{ fontSize: 14, color: isDark ? "#60a5fa" : alpha(PRIMARY_COLOR, 0.6) }} />
-            <Typography variant="body2" fontWeight={500} sx={{ color: isDark ? "#e2e8f0" : "inherit" }}>{formatDate(lead.createdAt, "dd MMM yyyy")}</Typography>
+
+        {/* Status Chip & Date Row */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 1,
+            mb: 2,
+            pb: 1.5,
+            borderBottom: isDark
+              ? "1px solid rgba(255, 255, 255, 0.06)"
+              : `1px solid ${alpha(PRIMARY_COLOR, 0.06)}`,
+          }}
+        >
+          <Chip
+            label={lead.status}
+            icon={statusColor.icon}
+            size="small"
+            sx={{
+              background: isDark
+                ? (lead.status === "Missed Leads"
+                    ? "rgba(239, 68, 68, 0.18)"
+                    : "rgba(37, 99, 235, 0.18)")
+                : statusColor.bg,
+              color: isDark
+                ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd")
+                : statusColor.color,
+              fontWeight: 700,
+              height: 25,
+              fontSize: "0.72rem",
+              borderRadius: "8px",
+              border: `1px solid ${
+                isDark
+                  ? (lead.status === "Missed Leads"
+                      ? "rgba(239, 68, 68, 0.35)"
+                      : "rgba(59, 130, 246, 0.35)")
+                  : statusColor.border
+              }`,
+              "& .MuiChip-icon": {
+                fontSize: 14,
+                color: isDark
+                  ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd")
+                  : statusColor.color,
+              },
+            }}
+          />
+
+          <Stack direction="row" spacing={0.6} alignItems="center">
+            <CalendarToday
+              sx={{
+                fontSize: 13,
+                color: isDark ? "#60a5fa" : alpha(PRIMARY_COLOR, 0.6),
+              }}
+            />
+            <Typography
+              variant="caption"
+              fontWeight={500}
+              sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}
+            >
+              {formatDate(lead.createdAt, "dd MMM yyyy")}
+            </Typography>
           </Stack>
         </Box>
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          <Chip label={lead.status} icon={statusColor.icon} size="small" sx={{ background: isDark ? (lead.status === "Missed Leads" ? "rgba(239, 68, 68, 0.2)" : "rgba(37, 99, 235, 0.2)") : statusColor.bg, color: isDark ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color, fontWeight: 700, height: 24, fontSize: "0.7rem", border: `1px solid ${isDark ? (lead.status === "Missed Leads" ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)") : statusColor.border}`, "& .MuiChip-icon": { fontSize: 14, color: isDark ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color } }} />
-        </Box>
-        <Collapse in={expanded}>
-          <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : alpha(PRIMARY_COLOR, 0.1)}` }}>
-            {(() => {
-              const assignedPerson = getAssignedPerson(lead);
-              return assignedPerson ? (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }} display="block">Assigned To</Typography>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Avatar sx={{ width: 24, height: 24, fontSize: 12, background: GRADIENT_BLUE, color: "#fff" }}>{assignedPerson.initial}</Avatar>
-                    <Typography variant="body2" sx={{ color: isDark ? "#f8fafc" : "inherit" }}>{assignedPerson.name}</Typography>
-                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>({assignedPerson.role})</Typography>
-                  </Box>
-                </Box>
-              ) : permissions.assign ? (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }} display="block">Assigned To</Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => onAssign(lead)}
+
+        {/* Contact Info (Phone & Email) */}
+        <Stack spacing={1.25} sx={{ mb: 2 }}>
+          <Box display="flex" alignItems="center" gap={1.2}>
+            <Box
+              sx={{
+                width: 28,
+                height: 28,
+                borderRadius: "8px",
+                bgcolor: isDark ? "rgba(59, 130, 246, 0.12)" : alpha(PRIMARY_COLOR, 0.08),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Phone sx={{ fontSize: 14, color: isDark ? "#60a5fa" : PRIMARY_COLOR }} />
+            </Box>
+            {lead.phone ? (
+              <Typography
+                component="a"
+                href={`tel:${lead.phone}`}
+                variant="body2"
+                noWrap
+                sx={{
+                  color: isDark ? "#cbd5e1" : "text.primary",
+                  fontWeight: 500,
+                  fontSize: "0.84rem",
+                  textDecoration: "none",
+                  "&:hover": { color: "#3b82f6", textDecoration: "underline" },
+                }}
+              >
+                {lead.phone}
+              </Typography>
+            ) : (
+              <Typography
+                variant="body2"
+                sx={{ color: isDark ? "#64748b" : "text.disabled", fontStyle: "italic", fontSize: "0.84rem" }}
+              >
+                No phone provided
+              </Typography>
+            )}
+          </Box>
+
+          <Box display="flex" alignItems="center" gap={1.2}>
+            <Box
+              sx={{
+                width: 28,
+                height: 28,
+                borderRadius: "8px",
+                bgcolor: isDark ? "rgba(139, 92, 246, 0.12)" : alpha("#8b5cf6", 0.08),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Email sx={{ fontSize: 14, color: isDark ? "#a78bfa" : "#7c3aed" }} />
+            </Box>
+            {lead.email ? (
+              <Tooltip title={lead.email}>
+                <Typography
+                  component="a"
+                  href={`mailto:${lead.email}`}
+                  variant="body2"
+                  noWrap
+                  sx={{
+                    color: isDark ? "#cbd5e1" : "text.primary",
+                    fontWeight: 500,
+                    fontSize: "0.84rem",
+                    textDecoration: "none",
+                    "&:hover": { color: "#3b82f6", textDecoration: "underline" },
+                  }}
+                >
+                  {lead.email}
+                </Typography>
+              </Tooltip>
+            ) : (
+              <Typography
+                variant="body2"
+                sx={{ color: isDark ? "#64748b" : "text.disabled", fontStyle: "italic", fontSize: "0.84rem" }}
+              >
+                No email provided
+              </Typography>
+            )}
+          </Box>
+        </Stack>
+
+        {/* Assignment Section */}
+        <Box sx={{ mb: 2, mt: "auto" }}>
+          {assignedPerson ? (
+            <Box
+              sx={{
+                p: 1.25,
+                borderRadius: "10px",
+                bgcolor: isDark ? "rgba(255, 255, 255, 0.03)" : alpha(PRIMARY_COLOR, 0.03),
+                border: isDark
+                  ? "1px solid rgba(255, 255, 255, 0.06)"
+                  : `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={1} sx={{ minWidth: 0 }}>
+                <Avatar
+                  sx={{
+                    width: 26,
+                    height: 26,
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    background: GRADIENT_BLUE,
+                    color: "#fff",
+                    flexShrink: 0,
+                  }}
+                >
+                  {assignedPerson.initial}
+                </Avatar>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    variant="caption"
                     sx={{
-                      mt: 0.75,
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: 2,
-                      borderStyle: "dashed",
-                      borderColor: isDark ? "rgba(96, 165, 250, 0.6)" : alpha(PRIMARY_COLOR, 0.45),
+                      color: isDark ? "#94a3b8" : "text.secondary",
+                      display: "block",
+                      fontSize: "0.68rem",
+                      lineHeight: 1,
+                    }}
+                  >
+                    Assigned to ({assignedPerson.role})
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    fontWeight={600}
+                    noWrap
+                    sx={{ color: isDark ? "#f8fafc" : "text.primary", fontSize: "0.82rem" }}
+                  >
+                    {assignedPerson.name}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {permissions.assign && (
+                <Tooltip title="Reassign">
+                  <IconButton
+                    size="small"
+                    onClick={() => onAssign?.(lead)}
+                    sx={{
                       color: isDark ? "#60a5fa" : PRIMARY_COLOR,
-                      fontWeight: 600,
-                      textTransform: "none",
+                      p: 0.5,
+                      borderRadius: "6px",
                       "&:hover": {
-                        borderStyle: "dashed",
-                        borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR,
-                        bgcolor: isDark ? "rgba(59, 130, 246, 0.1)" : alpha(PRIMARY_COLOR, 0.05),
+                        bgcolor: isDark ? "rgba(59, 130, 246, 0.15)" : alpha(PRIMARY_COLOR, 0.1),
                       },
                     }}
                   >
-                    + Assign
-                  </Button>
-                </Box>
-              ) : null;
-            })()}
-            <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap", gap: 1 }}>
-              <Button fullWidth size="small" variant="contained" startIcon={<Visibility sx={{ ml: 1 }} />} onClick={() => onView(lead)} sx={{ background: isDark ? "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" : GRADIENT_DARK, "&:hover": { background: isDark ? "linear-gradient(135deg, #334155 0%, #1e293b 100%)" : GRADIENT_DARK }, border: isDark ? "1px solid rgba(255,255,255,0.12)" : "none", color: "#fff", flex: 1, minWidth: "90px" }} />
-              {permissions.edit && (<Button fullWidth size="small" variant="contained" startIcon={<Edit sx={{ ml: 1 }} />} onClick={() => onEdit(lead)} sx={{ background: isDark ? "rgba(37, 99, 235, 0.25)" : "linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%)", color: isDark ? "#93c5fd" : "#1d4ed8", border: isDark ? "1px solid rgba(59, 130, 246, 0.35)" : "none", flex: 1, minWidth: "90px" }} />)}
-              <Button fullWidth size="small" variant="outlined" startIcon={<Assignment sx={{ ml: 1 }} />} onClick={() => onConvertToProject(lead)} sx={{ borderColor: isDark ? "rgba(59, 130, 246, 0.5)" : PRIMARY_COLOR, color: isDark ? "#60a5fa" : PRIMARY_COLOR, "&:hover": { borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR, bgcolor: isDark ? "rgba(59, 130, 246, 0.1)" : alpha(PRIMARY_COLOR, 0.05) }, flex: 1, minWidth: "100px" }}>
-                {lead?.isProject ? "Open Project" : "Convert"}
-              </Button>
-              {permissions.assign && (<Button fullWidth size="small" variant="outlined" startIcon={<AssignmentInd sx={{ ml: 1 }} />} onClick={() => onAssign(lead)} sx={{ borderColor: isDark ? "rgba(59, 130, 246, 0.5)" : PRIMARY_COLOR, color: isDark ? "#60a5fa" : PRIMARY_COLOR, "&:hover": { borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR, bgcolor: isDark ? "rgba(59, 130, 246, 0.1)" : alpha(PRIMARY_COLOR, 0.05) }, flex: 1, minWidth: "90px" }} />)}
-              {permissions.delete && (<Button fullWidth size="small" variant="outlined" color="error" startIcon={<Delete sx={{ ml: 1 }} />} onClick={handleDeleteClick} sx={{ borderColor: isDark ? "rgba(239, 68, 68, 0.6)" : "#f44336", color: isDark ? "#f87171" : "#f44336", "&:hover": { borderColor: "#ef4444", bgcolor: isDark ? "rgba(239, 68, 68, 0.1)" : alpha("#ef4444", 0.05) }, flex: 1, minWidth: "90px" }} />)}
-            </Stack>
-          </Box>
-        </Collapse>
-      </Box>
-    </Paper>
+                    <AssignmentInd sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+          ) : permissions.assign ? (
+            <Button
+              fullWidth
+              size="small"
+              variant="outlined"
+              startIcon={<AssignmentInd sx={{ fontSize: 16 }} />}
+              onClick={() => onAssign?.(lead)}
+              sx={{
+                py: 0.75,
+                borderRadius: "10px",
+                borderStyle: "dashed",
+                borderColor: isDark ? "rgba(96, 165, 250, 0.45)" : alpha(PRIMARY_COLOR, 0.4),
+                color: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                bgcolor: isDark ? "rgba(59, 130, 246, 0.05)" : alpha(PRIMARY_COLOR, 0.03),
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                textTransform: "none",
+                "&:hover": {
+                  borderStyle: "dashed",
+                  borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                  bgcolor: isDark ? "rgba(59, 130, 246, 0.12)" : alpha(PRIMARY_COLOR, 0.08),
+                },
+              }}
+            >
+              Assign
+            </Button>
+          ) : (
+            <Typography
+              variant="caption"
+              sx={{ color: isDark ? "#64748b" : "text.disabled", fontStyle: "italic", display: "block" }}
+            >
+              Unassigned
+            </Typography>
+          )}
+        </Box>
+
+        {/* Card Footer Actions */}
+        <Box
+          sx={{
+            pt: 1.5,
+            borderTop: isDark
+              ? "1px solid rgba(255, 255, 255, 0.06)"
+              : `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <Button
+            fullWidth
+            size="small"
+            variant="contained"
+            startIcon={<Visibility sx={{ fontSize: 16 }} />}
+            onClick={() => (onViewDetails ? onViewDetails(lead) : onView?.(lead))}
+            sx={{
+              background: isDark
+                ? "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
+                : GRADIENT_BLUE,
+              color: "#fff",
+              fontWeight: 600,
+              fontSize: "0.82rem",
+              textTransform: "none",
+              borderRadius: "9px",
+              height: 36,
+              boxShadow: "0 2px 8px rgba(37,99,235,0.25)",
+              "&:hover": {
+                background: isDark
+                  ? "linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%)"
+                  : PRIMARY_COLOR,
+                boxShadow: "0 4px 14px rgba(37,99,235,0.4)",
+              },
+            }}
+          >
+            View Details
+          </Button>
+
+          <Tooltip title="Quick Preview">
+            <IconButton
+              size="small"
+              onClick={() => onView?.(lead)}
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: "9px",
+                bgcolor: isDark ? "rgba(255, 255, 255, 0.05)" : alpha("#64748b", 0.08),
+                color: isDark ? "#cbd5e1" : "#475569",
+                border: isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "none",
+                "&:hover": {
+                  bgcolor: isDark ? "rgba(59, 130, 246, 0.2)" : alpha(PRIMARY_COLOR, 0.12),
+                  color: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                },
+              }}
+            >
+              <OpenInNew sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+
+          {permissions.edit && (
+            <Tooltip title="Edit Lead">
+              <IconButton
+                size="small"
+                onClick={() => onEdit?.(lead)}
+                sx={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "9px",
+                  bgcolor: isDark ? "rgba(59, 130, 246, 0.12)" : alpha(PRIMARY_COLOR, 0.08),
+                  color: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                  border: isDark ? "1px solid rgba(59, 130, 246, 0.25)" : "none",
+                  "&:hover": {
+                    bgcolor: isDark ? "rgba(59, 130, 246, 0.25)" : alpha(PRIMARY_COLOR, 0.18),
+                  },
+                }}
+              >
+                <Edit sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      </CardContent>
+
+      {/* Context Menu for Actions */}
+      <Menu
+        anchorEl={anchorEl}
+        open={openMenu}
+        onClose={handleMenuClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        PaperProps={{
+          elevation: 0,
+          sx: {
+            mt: 0.5,
+            minWidth: 195,
+            borderRadius: "12px",
+            border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #eef2f7",
+            bgcolor: isDark ? "#0e1626" : "#ffffff",
+            boxShadow: isDark ? "0 18px 40px rgba(0,0,0,0.5)" : "0 18px 40px rgba(15, 23, 42, 0.12)",
+            py: 0.8,
+          },
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            handleMenuClose();
+            onViewDetails?.(lead);
+          }}
+          sx={{ gap: 1.25, fontSize: "0.85rem", color: isDark ? "#cbd5e1" : "inherit" }}
+        >
+          <OpenInNew sx={{ fontSize: 17, color: "#3b82f6" }} />
+          View Full Profile
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => {
+            handleMenuClose();
+            onView?.(lead);
+          }}
+          sx={{ gap: 1.25, fontSize: "0.85rem", color: isDark ? "#cbd5e1" : "inherit" }}
+        >
+          <Visibility sx={{ fontSize: 17, color: "#3b82f6" }} />
+          Quick Preview
+        </MenuItem>
+
+        {permissions.edit && (
+          <MenuItem
+            onClick={() => {
+              handleMenuClose();
+              onEdit?.(lead);
+            }}
+            sx={{ gap: 1.25, fontSize: "0.85rem", color: isDark ? "#cbd5e1" : "inherit" }}
+          >
+            <Edit sx={{ fontSize: 17, color: "#3b82f6" }} />
+            Edit Lead
+          </MenuItem>
+        )}
+
+        <MenuItem
+          onClick={() => {
+            handleMenuClose();
+            onConvertToMissedLead?.(lead);
+          }}
+          sx={{ gap: 1.25, fontSize: "0.85rem", color: isDark ? "#cbd5e1" : "inherit" }}
+        >
+          <PhoneMissed sx={{ fontSize: 17, color: "#f59e0b" }} />
+          Convert to Missed Lead
+        </MenuItem>
+      </Menu>
+    </Card>
   );
 };
+
+const MobileLeadCard = LeadCard;
 
 // ========== REDESIGNED MODAL COMPONENTS ==========
 
@@ -2853,22 +3327,39 @@ const LeadOverview = () => {
             permissions={permissions}
             onQuickView={openViewDialog}
             onViewDetails={openLeadDetailsPage}
+            onEditLead={openEditDialog}
             onConvertToMissedLead={handleConvertToMissedLead}
           />
         </TableCell>
       </TableRow>
     );
-  }, [selectedLeads, permissions, handleSelectLead, openLeadDetailsPage, openViewDialog, handleConvertToMissedLead, isDark]);
+  }, [selectedLeads, permissions, handleSelectLead, openLeadDetailsPage, openViewDialog, openEditDialog, handleConvertToMissedLead, isDark]);
 
   const renderCardView = useCallback(() => {
-    if (loading) return <LoadingSkeleton count={6} isMobile={isMobile} />;
+    if (loading) return <Box sx={{ p: { xs: 1.5, sm: 2.5 } }}><LoadingSkeleton count={6} isCard={true} /></Box>;
     if (leads.length === 0) return <EmptyState title={hasFilters ? "No matching leads found" : "No leads yet"} description={hasFilters ? "Try adjusting your filters" : "Get started by creating your first lead"} icon={hasFilters ? Search : Person} action={hasFilters && <Button onClick={handleResetFilters} variant="outlined" sx={{ borderColor: PRIMARY_COLOR, color: PRIMARY_COLOR }}>Clear Filters</Button>} />;
     return (
-      <Box sx={{ p: { xs: 1, sm: 2 } }}>
-        {leads.map((lead) => <MobileLeadCard key={lead._id} lead={lead} onView={openViewDialog} onEdit={openEditDialog} onAssign={openAssignDialog} onDelete={handleDeleteSingleLead} onConvertToProject={handleConvertToProject} permissions={permissions} />)}
+      <Box sx={{ p: { xs: 1.5, sm: 2.5 } }}>
+        <Grid container spacing={2.5}>
+          {leads.map((lead) => (
+            <Grid item xs={12} sm={6} lg={4} key={lead._id}>
+              <LeadCard
+                lead={lead}
+                onView={openViewDialog}
+                onViewDetails={openLeadDetailsPage}
+                onEdit={openEditDialog}
+                onAssign={openAssignDialog}
+                onDelete={handleDeleteSingleLead}
+                onConvertToProject={handleConvertToProject}
+                onConvertToMissedLead={handleConvertToMissedLead}
+                permissions={permissions}
+              />
+            </Grid>
+          ))}
+        </Grid>
       </Box>
     );
-  }, [loading, leads, hasFilters, permissions, openViewDialog, openEditDialog, openAssignDialog, handleDeleteSingleLead, handleConvertToProject, isMobile, handleResetFilters]);
+  }, [loading, leads, hasFilters, permissions, openViewDialog, openLeadDetailsPage, openEditDialog, openAssignDialog, handleDeleteSingleLead, handleConvertToProject, handleConvertToMissedLead, handleResetFilters]);
 
   const summaryCards = useMemo(() => ([
     {
@@ -2968,7 +3459,7 @@ const LeadOverview = () => {
                 {activeFilterCount > 0 && <Badge badgeContent={activeFilterCount} color="error" sx={{ position: "absolute", top: -8, right: -8, "& .MuiBadge-badge": { fontSize: "0.6rem", minWidth: 16, height: 16 } }} />}
               </Button>
             )}
-            <Button variant="contained" startIcon={<Add />} onClick={addLeads} size={isMobile ? "small" : "medium"} sx={{ background: "linear-gradient(45deg, #f97316 0%, #ea580c 100%)", color: "#fff", fontWeight: 700, borderRadius: 2.5, "&:hover": { background: "linear-gradient(45deg, #ea580c 0%, #c2410c 100%)" } }}>+ Add Lead</Button>
+            <Button variant="contained" startIcon={<Add />} onClick={addLeads} size={isMobile ? "small" : "medium"} sx={{ background: "linear-gradient(45deg, #f97316 0%, #ea580c 100%)", color: "#fff", fontWeight: 700, borderRadius: 2.5, "&:hover": { background: "linear-gradient(45deg, #ea580c 0%, #c2410c 100%)" } }}>Add Lead</Button>
           </Box>
         </Stack>
       </Paper>
@@ -3446,11 +3937,11 @@ const LeadOverview = () => {
             {viewMode === "table" ? "Lead List" : "Lead Cards"}
             <Chip label={`${totalLeads} total`} size="small" sx={{ ml: 1, background: isDark ? "rgba(37, 99, 235, 0.25)" : "linear-gradient(135deg, rgba(37,99,235,0.14) 0%, rgba(96,165,250,0.24) 100%)", color: isDark ? "#60a5fa" : PRIMARY_COLOR, border: `1px solid ${isDark ? "rgba(59, 130, 246, 0.3)" : alpha(PRIMARY_COLOR, 0.12)}` }} />
           </Typography>
-          {!isMobile && viewMode === "table" && (
+          {!isMobile && (
             <Stack direction="row" spacing={2} alignItems="center">
               <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>Rows per page:</Typography>
               <Select size="small" value={rowsPerPage} onChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} sx={{ minWidth: 80, bgcolor: isDark ? "#0e1628" : "inherit", color: isDark ? "#f8fafc" : "inherit" }}>
-                {[5, 10, 25, 50].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
+                {[6, 12, 24, 48].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
               </Select>
             </Stack>
           )}
@@ -3480,9 +3971,30 @@ const LeadOverview = () => {
                 </TableBody>
               </Table>
             </TableContainer>
-            <TablePagination component="div" count={totalLeads} page={page} onPageChange={handleChangePage} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[5, 10, 25, 50]} sx={{ borderTop: 1, borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "divider", color: isDark ? "#94a3b8" : "inherit" }} />
+            <TablePagination component="div" count={totalLeads} page={page} onPageChange={handleChangePage} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[6, 12, 24, 48]} sx={{ borderTop: 1, borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "divider", color: isDark ? "#94a3b8" : "inherit" }} />
           </>
-        ) : renderCardView()}
+        ) : (
+          <>
+            {renderCardView()}
+            <TablePagination
+              component="div"
+              count={totalLeads}
+              page={page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[6, 12, 24, 48]}
+              sx={{
+                borderTop: 1,
+                borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "divider",
+                color: isDark ? "#94a3b8" : "inherit",
+              }}
+            />
+          </>
+        )}
       </Paper>
 
       {/* Role Info Button */}

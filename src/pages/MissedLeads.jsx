@@ -1412,9 +1412,9 @@ export default function MissedLeadsPage() {
   });
   const [dateFilterError, setDateFilterError] = useState("");
   const [selectedPriorities, setSelectedPriorities] = useState({
-    High: true,
-    Medium: true,
-    Low: true,
+    High: false,
+    Medium: false,
+    Low: false,
   });
 
   // Sorting & Pagination
@@ -1624,26 +1624,12 @@ export default function MissedLeadsPage() {
         );
       }
 
-      // Priority filter
-      if (priorityFilter) {
-        if (priorityFilter === "High") {
-          filtered = filtered.filter((lead) => (lead.daysInactive || 0) >= 30);
-        } else if (priorityFilter === "Medium") {
-          filtered = filtered.filter(
-            (lead) =>
-              (lead.daysInactive || 0) >= 15 && (lead.daysInactive || 0) < 30,
-          );
-        } else if (priorityFilter === "Low") {
-          filtered = filtered.filter((lead) => (lead.daysInactive || 0) < 15);
-        }
-      }
-
-      // Priority checkboxes
+      // Priority filter based on selected priorities
       const activePriorities = Object.keys(selectedPriorities).filter(
         (priority) => selectedPriorities[priority],
       );
 
-      if (activePriorities.length < 3) {
+      if (activePriorities.length > 0) {
         filtered = filtered.filter((lead) => {
           const days = lead.daysInactive || 0;
           if (days >= 30) return activePriorities.includes("High");
@@ -1734,12 +1720,11 @@ export default function MissedLeadsPage() {
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (searchQuery) count++;
-    if (priorityFilter) count++;
     if (dateFilter.startDate) count++;
     if (dateFilter.endDate) count++;
-    if (Object.values(selectedPriorities).some((v) => !v)) count++;
+    if (Object.values(selectedPriorities).some(Boolean)) count++;
     return count;
-  }, [searchQuery, priorityFilter, dateFilter, selectedPriorities]);
+  }, [searchQuery, dateFilter, selectedPriorities]);
 
   // Handle view lead details
   const handleViewClick = useCallback(
@@ -1828,10 +1813,30 @@ export default function MissedLeadsPage() {
 
   // Handle priority checkbox change
   const handlePriorityCheckboxChange = useCallback((priority) => {
-    setSelectedPriorities((prev) => ({
-      ...prev,
-      [priority]: !prev[priority],
-    }));
+    setSelectedPriorities((prev) => {
+      const next = { ...prev, [priority]: !prev[priority] };
+      const active = Object.keys(next).filter((k) => next[k]);
+      if (active.length === 1) {
+        setPriorityFilter(active[0]);
+      } else {
+        setPriorityFilter("");
+      }
+      return next;
+    });
+  }, []);
+
+  // Handle priority select change from top bar
+  const handlePrioritySelectChange = useCallback((newPriority) => {
+    setPriorityFilter(newPriority);
+    if (!newPriority) {
+      setSelectedPriorities({ High: false, Medium: false, Low: false });
+    } else {
+      setSelectedPriorities({
+        High: newPriority === "High",
+        Medium: newPriority === "Medium",
+        Low: newPriority === "Low",
+      });
+    }
   }, []);
 
   // Clear all filters
@@ -1842,9 +1847,9 @@ export default function MissedLeadsPage() {
     setDateFilter({ startDate: null, endDate: null });
     setDateFilterError("");
     setSelectedPriorities({
-      High: true,
-      Medium: true,
-      Low: true,
+      High: false,
+      Medium: false,
+      Low: false,
     });
     setSortConfig({ key: null, direction: "asc" });
     setPage(0);
@@ -2623,13 +2628,16 @@ export default function MissedLeadsPage() {
         {!isMobile && (
           <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: isDark ? "#0b0e1a" : "#fff", color: isDark ? "#f8fafc" : "inherit", border: isDark ? "1px solid rgba(255,255,255,0.08)" : undefined }}>
             <Stack spacing={2.5}>
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={2}
-                alignItems={{ xs: "stretch", md: "center" }}
+              <Box
+                sx={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 1.5,
+                }}
               >
                 <TextField
-                  fullWidth
                   size="small"
                   placeholder="Search by name, email, phone..."
                   value={searchQuery}
@@ -2652,10 +2660,14 @@ export default function MissedLeadsPage() {
                     ),
                   }}
                   sx={{
-                    maxWidth: 400,
+                    flex: { xs: "1 1 100%", md: "1 1 280px" },
+                    maxWidth: { md: 440 },
+                    minWidth: 220,
                     "& .MuiOutlinedInput-root": {
+                      height: 38,
                       bgcolor: isDark ? "#0e1220" : "#fff",
                       color: isDark ? "#f8fafc" : "inherit",
+                      borderRadius: "10px",
                       "& fieldset": { borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : undefined },
                       "&.Mui-focused fieldset": {
                         borderColor: "#3b82f6",
@@ -2665,135 +2677,196 @@ export default function MissedLeadsPage() {
                   }}
                 />
 
-                <Stack direction="row" spacing={0.75}>
-                  {PERIOD_OPTIONS.map((option) => (
-                    <Button
-                      key={option.value}
-                      size="small"
-                      onClick={() => setPeriod(option.value)}
-                      sx={{
-                        borderRadius: "50px",
-                        px: 2,
-                        py: 0.75,
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        background:
-                          period === option.value ? GRADIENT_BLUE : "transparent",
-                        color:
-                          period === option.value ? "#fff" : (isDark ? "#60a5fa" : PRIMARY_COLOR),
-                        border: `1px solid ${
-                          period === option.value
-                            ? "transparent"
-                            : (isDark ? "rgba(255,255,255,0.12)" : alpha(PRIMARY_COLOR, 0.2))
-                        }`,
-                        boxShadow:
-                          period === option.value
-                            ? "0 2px 8px rgba(37,99,235,.3)"
-                            : "none",
-                        "&:hover": {
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.25,
+                    flexWrap: "wrap",
+                    ml: { xs: 0, md: "auto" },
+                  }}
+                >
+                  <Stack direction="row" spacing={0.75} sx={{ flexShrink: 0 }}>
+                    {PERIOD_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value}
+                        size="small"
+                        onClick={() => setPeriod(option.value)}
+                        sx={{
+                          borderRadius: "50px",
+                          px: 1.75,
+                          height: 38,
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
                           background:
+                            period === option.value ? GRADIENT_BLUE : "transparent",
+                          color:
+                            period === option.value ? "#fff" : (isDark ? "#60a5fa" : PRIMARY_COLOR),
+                          border: `1px solid ${
                             period === option.value
-                              ? GRADIENT_BLUE
-                              : alpha(PRIMARY_COLOR, 0.06),
+                              ? "transparent"
+                              : (isDark ? "rgba(255,255,255,0.12)" : alpha(PRIMARY_COLOR, 0.2))
+                          }`,
+                          boxShadow:
+                            period === option.value
+                              ? "0 2px 8px rgba(37,99,235,.3)"
+                              : "none",
+                          "&:hover": {
+                            background:
+                              period === option.value
+                                ? GRADIENT_BLUE
+                                : alpha(PRIMARY_COLOR, 0.06),
+                          },
+                        }}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </Stack>
+
+                  <FormControl size="small" sx={{ minWidth: 155, flexShrink: 0 }}>
+                    <Select
+                      value={priorityFilter}
+                      onChange={(e) => handlePrioritySelectChange(e.target.value)}
+                      displayEmpty
+                      sx={{
+                        bgcolor: isDark ? "#0e1220" : "#fff",
+                        color: isDark ? "#f8fafc" : "inherit",
+                        borderRadius: "10px",
+                        height: 38,
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                        "& .MuiOutlinedInput-notchedOutline": {
+                          borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(30, 64, 175, 0.2)",
+                        },
+                        "&:hover .MuiOutlinedInput-notchedOutline": {
+                          borderColor: isDark ? "rgba(255, 255, 255, 0.25)" : "rgba(30, 64, 175, 0.4)",
+                        },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                          borderColor: "#3b82f6",
+                          boxShadow: "0 0 0 3px rgba(37,99,235,.15)",
+                        },
+                        "& .MuiSelect-icon": {
+                          color: isDark ? "#94a3b8" : "inherit",
                         },
                       }}
                     >
-                      {option.label}
-                    </Button>
-                  ))}
-                </Stack>
-
-                <FormControl size="small" sx={{ minWidth: 150 }}>
-                  <InputLabel>Priority</InputLabel>
-                  <Select
-                    value={priorityFilter}
-                    label="Priority"
-                    onChange={(e) => setPriorityFilter(e.target.value)}
-                  >
-                    <MenuItem value="">All Priorities</MenuItem>
-                    {Object.keys(PRIORITY_CONFIG).map((priority) => (
-                      <MenuItem key={priority} value={priority}>
-                        <Stack direction="row" alignItems="center" spacing={1}>
-                          {PRIORITY_CONFIG[priority].icon}
-                          <span>{priority}</span>
-                        </Stack>
+                      <MenuItem value="">
+                        <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "text.secondary", fontWeight: 500 }}>
+                          All Priorities
+                        </Typography>
                       </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                      {Object.keys(PRIORITY_CONFIG).map((priority) => (
+                        <MenuItem key={priority} value={priority}>
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            {PRIORITY_CONFIG[priority].icon}
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{priority}</Typography>
+                          </Stack>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-                <Button
-                  variant="outlined"
-                  startIcon={<Tune />}
-                  onClick={() => setShowFilterPanel(!showFilterPanel)}
-                  sx={{
-                    borderColor: PRIMARY_COLOR,
-                    color: PRIMARY_COLOR,
-                    "&:hover": { bgcolor: alpha(PRIMARY_COLOR, 0.05) },
-                  }}
-                >
-                  {showFilterPanel ? "Hide Filters" : "More Filters"}
-                </Button>
-
-                {activeFilterCount > 0 && (
                   <Button
-                    variant="text"
-                    startIcon={<Clear />}
-                    onClick={handleClearFilters}
-                    sx={{ color: "error.main" }}
+                    variant="outlined"
+                    startIcon={<Tune sx={{ fontSize: 18 }} />}
+                    onClick={() => setShowFilterPanel(!showFilterPanel)}
+                    sx={{
+                      borderRadius: "10px",
+                      height: 38,
+                      px: 2,
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      textTransform: "none",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      borderColor: showFilterPanel
+                        ? (isDark ? "#3b82f6" : PRIMARY_COLOR)
+                        : (isDark ? "rgba(255, 255, 255, 0.15)" : alpha(PRIMARY_COLOR, 0.25)),
+                      color: showFilterPanel
+                        ? (isDark ? "#93c5fd" : PRIMARY_COLOR)
+                        : (isDark ? "#e2e8f0" : PRIMARY_COLOR),
+                      bgcolor: showFilterPanel
+                        ? (isDark ? "rgba(37, 99, 235, 0.18)" : alpha(PRIMARY_COLOR, 0.08))
+                        : (isDark ? "rgba(255, 255, 255, 0.04)" : "transparent"),
+                      "&:hover": {
+                        bgcolor: isDark ? "rgba(37, 99, 235, 0.25)" : alpha(PRIMARY_COLOR, 0.12),
+                        borderColor: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                      },
+                    }}
                   >
-                    Clear All
+                    <span>{showFilterPanel ? "Hide Filters" : "More Filters"}</span>
+                    {Boolean(dateFilter.startDate || dateFilter.endDate || Object.values(selectedPriorities).some(Boolean)) && (
+                      <Box
+                        component="span"
+                        sx={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          bgcolor: "#3b82f6",
+                          ml: 1,
+                          display: "inline-block",
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
                   </Button>
-                )}
-              </Stack>
+
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="text"
+                      size="small"
+                      startIcon={<Clear sx={{ fontSize: 16 }} />}
+                      onClick={handleClearFilters}
+                      sx={{
+                        color: isDark ? "#f87171" : "error.main",
+                        fontWeight: 600,
+                        fontSize: "0.82rem",
+                        textTransform: "none",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                        px: 1.5,
+                        height: 38,
+                        borderRadius: "8px",
+                        "&:hover": {
+                          bgcolor: isDark ? "rgba(239, 68, 68, 0.12)" : "rgba(239, 68, 68, 0.06)",
+                        },
+                      }}
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </Box>
+              </Box>
 
               <Collapse in={showFilterPanel}>
                 <Paper
                   variant="outlined"
                   sx={{
-                    p: 3,
-                    borderRadius: 2,
-                    borderColor: alpha(PRIMARY_COLOR, 0.2),
-                    background: isDark ? "#0e1220" : GRADIENT_CARD, borderColor: isDark ? "rgba(255,255,255,0.08)" : alpha(PRIMARY_COLOR, 0.2),
+                    p: 2.5,
+                    borderRadius: 2.5,
+                    background: isDark ? "#0d111d" : "#f8fafc",
+                    borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : alpha(PRIMARY_COLOR, 0.18),
+                    boxShadow: isDark ? "0 8px 32px rgba(0,0,0,0.4)" : "0 4px 20px rgba(30,64,175,0.06)",
                   }}
                 >
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={4}>
+                  <Grid container spacing={2.5}>
+                    <Grid item xs={12} sm={6}>
                       <Typography
-                        variant="subtitle2"
-                        fontWeight={600}
-                        gutterBottom
-                      >
-                        Priority
-                      </Typography>
-                      <FormControl fullWidth size="small">
-                        <Select
-                          value={priorityFilter}
-                          onChange={(e) => setPriorityFilter(e.target.value)}
-                          displayEmpty
-                        >
-                          <MenuItem value="">All Priorities</MenuItem>
-                          {Object.keys(PRIORITY_CONFIG).map((priority) => (
-                            <MenuItem key={priority} value={priority}>
-                              <Stack
-                                direction="row"
-                                alignItems="center"
-                                spacing={1}
-                              >
-                                {PRIORITY_CONFIG[priority].icon}
-                                <span>{priority}</span>
-                              </Stack>
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-
-                    <Grid item xs={12} md={4}>
-                      <Typography
-                        variant="subtitle2"
-                        fontWeight={600}
-                        gutterBottom
+                        variant="caption"
+                        sx={{
+                          color: isDark ? "#94a3b8" : "text.secondary",
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          display: "block",
+                          mb: 0.8,
+                        }}
                       >
                         Start Date
                       </Typography>
@@ -2809,17 +2882,43 @@ export default function MissedLeadsPage() {
                           textField: {
                             fullWidth: true,
                             size: "small",
+                            placeholder: "Select start date",
                             error: !!dateFilterError,
+                            sx: {
+                              "& .MuiOutlinedInput-root": {
+                                bgcolor: isDark ? "#080c14" : "#fff",
+                                color: isDark ? "#f8fafc" : "inherit",
+                                borderRadius: "10px",
+                                "& fieldset": {
+                                  borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(30, 64, 175, 0.2)",
+                                },
+                                "&:hover fieldset": {
+                                  borderColor: isDark ? "rgba(255, 255, 255, 0.25)" : "rgba(30, 64, 175, 0.4)",
+                                },
+                                "&.Mui-focused fieldset": {
+                                  borderColor: "#3b82f6",
+                                },
+                              },
+                              "& .MuiIconButton-root": {
+                                color: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                              },
+                            },
                           },
                         }}
                       />
                     </Grid>
 
-                    <Grid item xs={12} md={4}>
+                    <Grid item xs={12} sm={6}>
                       <Typography
-                        variant="subtitle2"
-                        fontWeight={600}
-                        gutterBottom
+                        variant="caption"
+                        sx={{
+                          color: isDark ? "#94a3b8" : "text.secondary",
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          display: "block",
+                          mb: 0.8,
+                        }}
                       >
                         End Date
                       </Typography>
@@ -2835,54 +2934,120 @@ export default function MissedLeadsPage() {
                           textField: {
                             fullWidth: true,
                             size: "small",
+                            placeholder: "Select end date",
                             error: !!dateFilterError,
+                            sx: {
+                              "& .MuiOutlinedInput-root": {
+                                bgcolor: isDark ? "#080c14" : "#fff",
+                                color: isDark ? "#f8fafc" : "inherit",
+                                borderRadius: "10px",
+                                "& fieldset": {
+                                  borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(30, 64, 175, 0.2)",
+                                },
+                                "&:hover fieldset": {
+                                  borderColor: isDark ? "rgba(255, 255, 255, 0.25)" : "rgba(30, 64, 175, 0.4)",
+                                },
+                                "&.Mui-focused fieldset": {
+                                  borderColor: "#3b82f6",
+                                },
+                              },
+                              "& .MuiIconButton-root": {
+                                color: isDark ? "#60a5fa" : PRIMARY_COLOR,
+                              },
+                            },
                           },
                         }}
                       />
                     </Grid>
 
                     <Grid item xs={12}>
-                      <Typography
-                        variant="subtitle2"
-                        fontWeight={600}
-                        gutterBottom
-                      >
-                        Multiple Priority Selection
-                      </Typography>
-                      <Stack direction="row" spacing={2} flexWrap="wrap">
-                        {Object.keys(PRIORITY_CONFIG).map((priority) => (
-                          <FormControlLabel
-                            key={priority}
-                            control={
-                              <Checkbox
-                                checked={selectedPriorities[priority]}
-                                onChange={() =>
-                                  handlePriorityCheckboxChange(priority)
-                                }
+                      <Box sx={{ pt: 1.5, borderTop: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,0,0,0.06)" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: isDark ? "#94a3b8" : "text.secondary",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            display: "block",
+                            mb: 1.2,
+                          }}
+                        >
+                          Filter By Priority
+                        </Typography>
+                        <Stack direction="row" spacing={1.5} flexWrap="wrap">
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setSelectedPriorities({ High: false, Medium: false, Low: false });
+                              setPriorityFilter("");
+                            }}
+                            sx={{
+                              borderRadius: "10px",
+                              px: 2,
+                              py: 0.85,
+                              fontSize: "0.82rem",
+                              fontWeight: 600,
+                              textTransform: "none",
+                              bgcolor: Object.values(selectedPriorities).every((v) => !v)
+                                ? (isDark ? "rgba(59,130,246,0.2)" : alpha(PRIMARY_COLOR, 0.12))
+                                : (isDark ? "rgba(255,255,255,0.03)" : "#fff"),
+                              color: Object.values(selectedPriorities).every((v) => !v)
+                                ? (isDark ? "#60a5fa" : PRIMARY_COLOR)
+                                : (isDark ? "#94a3b8" : "text.secondary"),
+                              border: `1.5px solid ${
+                                Object.values(selectedPriorities).every((v) => !v)
+                                  ? (isDark ? "#3b82f6" : PRIMARY_COLOR)
+                                  : (isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0")
+                              }`,
+                              boxShadow: Object.values(selectedPriorities).every((v) => !v)
+                                ? "0 2px 10px rgba(59,130,246,0.25)"
+                                : "none",
+                              transition: "all 0.2s ease",
+                            }}
+                          >
+                            All
+                          </Button>
+                          {Object.keys(PRIORITY_CONFIG).map((priority) => {
+                            const isSelected = !!selectedPriorities[priority];
+                            const config = PRIORITY_CONFIG[priority];
+                            return (
+                              <Button
+                                key={priority}
                                 size="small"
+                                onClick={() => handlePriorityCheckboxChange(priority)}
+                                startIcon={config.icon}
                                 sx={{
-                                  color: PRIORITY_CONFIG[priority].color,
-                                  "&.Mui-checked": {
-                                    color: PRIORITY_CONFIG[priority].color,
+                                  borderRadius: "10px",
+                                  px: 2,
+                                  py: 0.85,
+                                  fontSize: "0.82rem",
+                                  fontWeight: 600,
+                                  textTransform: "none",
+                                  bgcolor: isSelected
+                                    ? (isDark ? alpha(config.color, 0.22) : alpha(config.color, 0.14))
+                                    : (isDark ? "rgba(255,255,255,0.03)" : "#fff"),
+                                  color: isSelected ? config.color : (isDark ? "#94a3b8" : "text.secondary"),
+                                  border: `1.5px solid ${
+                                    isSelected
+                                      ? config.color
+                                      : (isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0")
+                                  }`,
+                                  boxShadow: isSelected ? `0 2px 12px ${alpha(config.color, 0.35)}` : "none",
+                                  transition: "all 0.2s ease",
+                                  "&:hover": {
+                                    bgcolor: isDark ? alpha(config.color, 0.28) : alpha(config.color, 0.18),
+                                    borderColor: config.color,
+                                    color: config.color,
                                   },
                                 }}
-                              />
-                            }
-                            label={
-                              <Stack
-                                direction="row"
-                                alignItems="center"
-                                spacing={0.5}
                               >
-                                {PRIORITY_CONFIG[priority].icon}
-                                <Typography variant="body2">
-                                  {priority}
-                                </Typography>
-                              </Stack>
-                            }
-                          />
-                        ))}
-                      </Stack>
+                                {priority} {priority === "High" ? "(30+ days)" : priority === "Medium" ? "(15-29 days)" : "(<15 days)"}
+                              </Button>
+                            );
+                          })}
+                        </Stack>
+                      </Box>
                     </Grid>
                   </Grid>
 
@@ -2899,7 +3064,7 @@ export default function MissedLeadsPage() {
                   <Typography
                     variant="caption"
                     color="text.secondary"
-                    sx={{ mb: 1, display: "block" }}
+                    sx={{ mb: 1, display: "block", fontWeight: 600 }}
                   >
                     Active Filters:
                   </Typography>
@@ -2910,28 +3075,39 @@ export default function MissedLeadsPage() {
                         size="small"
                         onDelete={() => setSearchQuery("")}
                         sx={{
-                          bgcolor: alpha(PRIMARY_COLOR, 0.1),
-                          color: PRIMARY_COLOR,
+                          bgcolor: isDark ? "rgba(59,130,246,0.15)" : alpha(PRIMARY_COLOR, 0.1),
+                          color: isDark ? "#93c5fd" : PRIMARY_COLOR,
+                          fontWeight: 600,
+                          borderRadius: "8px",
                         }}
                       />
                     )}
-                    {priorityFilter && (
-                      <Chip
-                        label={`Priority: ${priorityFilter}`}
-                        size="small"
-                        onDelete={() => setPriorityFilter("")}
-                        sx={{
-                          bgcolor: alpha(
-                            PRIORITY_CONFIG[priorityFilter]?.color ||
-                              PRIMARY_COLOR,
-                            0.1,
-                          ),
-                          color:
-                            PRIORITY_CONFIG[priorityFilter]?.color ||
-                            PRIMARY_COLOR,
-                        }}
-                      />
-                    )}
+                    {Object.keys(selectedPriorities)
+                      .filter((priority) => selectedPriorities[priority])
+                      .map((priority) => {
+                        const config = PRIORITY_CONFIG[priority];
+                        return (
+                          <Chip
+                            key={priority}
+                            label={`Priority: ${priority}`}
+                            size="small"
+                            onDelete={() => handlePriorityCheckboxChange(priority)}
+                            sx={{
+                              bgcolor: alpha(config?.color || PRIMARY_COLOR, 0.18),
+                              color: config?.color || PRIMARY_COLOR,
+                              fontWeight: 700,
+                              borderRadius: "8px",
+                              border: `1px solid ${alpha(config?.color || PRIMARY_COLOR, 0.35)}`,
+                              "& .MuiChip-deleteIcon": {
+                                color: config?.color || PRIMARY_COLOR,
+                                "&:hover": {
+                                  color: isDark ? "#fff" : "#000",
+                                },
+                              },
+                            }}
+                          />
+                        );
+                      })}
                     {dateFilter.startDate && (
                       <Chip
                         label={`From: ${format(dateFilter.startDate, "dd MMM yyyy")}`}
@@ -2943,8 +3119,10 @@ export default function MissedLeadsPage() {
                           }))
                         }
                         sx={{
-                          bgcolor: alpha(PRIMARY_COLOR, 0.1),
-                          color: PRIMARY_COLOR,
+                          bgcolor: isDark ? "rgba(59,130,246,0.15)" : alpha(PRIMARY_COLOR, 0.1),
+                          color: isDark ? "#93c5fd" : PRIMARY_COLOR,
+                          fontWeight: 600,
+                          borderRadius: "8px",
                         }}
                       />
                     )}
@@ -2959,27 +3137,10 @@ export default function MissedLeadsPage() {
                           }))
                         }
                         sx={{
-                          bgcolor: alpha(PRIMARY_COLOR, 0.1),
-                          color: PRIMARY_COLOR,
-                        }}
-                      />
-                    )}
-                    {Object.keys(selectedPriorities).some(
-                      (priority) => !selectedPriorities[priority],
-                    ) && (
-                      <Chip
-                        label="Custom Priority"
-                        size="small"
-                        onDelete={() =>
-                          setSelectedPriorities({
-                            High: true,
-                            Medium: true,
-                            Low: true,
-                          })
-                        }
-                        sx={{
-                          bgcolor: alpha(PRIMARY_COLOR, 0.1),
-                          color: PRIMARY_COLOR,
+                          bgcolor: isDark ? "rgba(59,130,246,0.15)" : alpha(PRIMARY_COLOR, 0.1),
+                          color: isDark ? "#93c5fd" : PRIMARY_COLOR,
+                          fontWeight: 600,
+                          borderRadius: "8px",
                         }}
                       />
                     )}

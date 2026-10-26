@@ -69,8 +69,8 @@ const Topbar = ({
   isMobile, 
   isTablet, 
   drawerOpen, 
-  sidebarWidth = 280,
-  collapsedWidth = 70 
+  sidebarWidth = 268,
+  collapsedWidth = 68 
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -430,9 +430,10 @@ const Topbar = ({
           bgcolor: isDark ? '#080c14' : '#ffffff',
           borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e0e0e0',
           width: getAppBarWidth,
-          ml: isMobile ? 0 : (drawerOpen ? `${sidebarWidth}px` : `${collapsedWidth}px`),
+          left: isMobile ? 0 : (drawerOpen ? `${sidebarWidth}px` : `${collapsedWidth}px`),
+          right: 0,
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          transition: 'all 0.3s ease',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}
       >
         <Toolbar sx={{

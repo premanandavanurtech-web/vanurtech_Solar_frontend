@@ -26,10 +26,13 @@ import {
   Close,
   CloudUploadOutlined,
   Email,
+  FlashOn,
   HomeWorkOutlined,
   LocationOn,
   MyLocation,
   Phone,
+  RestartAlt,
+  Save,
   Search,
   Tag,
   WhatsApp,
@@ -86,6 +89,7 @@ const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || "AIzaSyDQYr
 const GOOGLE_MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
 const GOOGLE_MAP_LIBRARIES = ["places"];
 const SITE_SURVEY_DRAFT_STORAGE_KEY = "site-survey-active-draft";
+const SITE_SURVEY_CUSTOM_DEFAULTS_KEY = "site-survey-custom-defaults";
 
 const ROOF_TYPES = ["Flat Roof", "Sloped Roof", "Metal Roof", "Tile Roof", "Concrete Roof"];
 const ROOF_MATERIALS = ["Concrete", "Metal Sheet", "Tile", "Asphalt", "Wood"];
@@ -97,6 +101,59 @@ const PHASE_OPTIONS = ["Single Phase", "Three Phase"];
 const PANEL_BRANDS = ["Waaree", "Adani", "Tata Power", "Vikram Solar", "Renewsys"];
 const INVERTER_BRANDS = ["Growatt", "SMA", "Fronius", "Sungrow", "Huawei"];
 const INVERTER_TYPES = ["String Inverter", "Microinverter", "Hybrid Inverter"];
+
+// Standard solar site survey defaults
+const getStandardSurveyDefaults = (lead = null) => {
+  let custom = null;
+  try {
+    if (typeof window !== "undefined") {
+      const raw = window.localStorage.getItem(SITE_SURVEY_CUSTOM_DEFAULTS_KEY);
+      if (raw) custom = JSON.parse(raw);
+    }
+  } catch {}
+
+  const leadCap =
+    Number(lead?.plantCapacity) ||
+    Number(lead?.capacityKw) ||
+    Number(lead?.capacity) ||
+    Number(lead?.systemCapacity) ||
+    5;
+
+  const defaultAvail = Math.max(800, Math.round(leadCap * 120));
+  const defaultUsable = Math.max(600, Math.round(defaultAvail * 0.75));
+
+  const standard = {
+    roofType: "Flat Roof",
+    roofMaterial: "Concrete",
+    roofCondition: "Good",
+    shadingIssues: ["None"],
+    siteAccess: "Easy",
+    existingElectricalLoad: String(leadCap || 5),
+    mainDistributionBoardLocation: "Ground floor utility room",
+    distanceFromRoofToDb: "15",
+    earthingAvailable: "Yes",
+    phaseType: leadCap > 5 ? "Three Phase" : "Single Phase",
+    recommendedPanelBrand: "Waaree",
+    recommendedInverterBrand: "Growatt",
+    inverterType: "String Inverter",
+    availableRoofArea: String(defaultAvail),
+    usableRoofArea: String(defaultUsable),
+    customerExpectations:
+      "Rooftop solar installation for power generation and electricity bill reduction.",
+  };
+
+  if (!custom || typeof custom !== "object") {
+    return standard;
+  }
+
+  return {
+    ...standard,
+    ...custom,
+    availableRoofArea: custom.availableRoofArea || String(defaultAvail),
+    usableRoofArea: custom.usableRoofArea || String(defaultUsable),
+    existingElectricalLoad: custom.existingElectricalLoad || String(leadCap || 5),
+  };
+};
 
 const getToken = () =>
   localStorage.getItem("token") ||
@@ -183,23 +240,52 @@ const buildLeadDraftSnapshot = (lead) => {
 
 const makeInitialSurveyData = (lead, siteSurvey = null) => {
   const general = siteSurvey?.general || {};
+  const defaults = getStandardSurveyDefaults(lead);
+
   return {
-    roofType: general.roofType || "",
-    roofMaterial: general.roofMaterial || "",
-    roofCondition: general.roofCondition || "",
-    shadingIssues: Array.isArray(general.shadingIssues) ? general.shadingIssues : [],
-    siteAccess: general.siteAccess || "",
-    existingElectricalLoad: general.existingElectricalLoad || "",
-    mainDistributionBoardLocation: general.mainDistributionBoardLocation || "",
-    earthingAvailable: general.earthingAvailable || "",
-    phaseType: general.phaseType || "",
-    recommendedPanelBrand: general.recommendedPanelBrand || "",
-    recommendedInverterBrand: general.recommendedInverterBrand || "",
-    inverterType: general.inverterType || "",
-    availableRoofArea: general.availableRoofArea || "",
-    usableRoofArea: general.usableRoofArea || "",
-    distanceFromRoofToDb: general.distanceFromRoofToDb || "",
-    customerExpectations: general.customerExpectations || "",
+    roofType: general.roofType || defaults.roofType,
+    roofMaterial: general.roofMaterial || defaults.roofMaterial,
+    roofCondition: general.roofCondition || defaults.roofCondition,
+    shadingIssues:
+      Array.isArray(general.shadingIssues) && general.shadingIssues.length
+        ? general.shadingIssues
+        : defaults.shadingIssues,
+    siteAccess: general.siteAccess || defaults.siteAccess,
+    existingElectricalLoad:
+      general.existingElectricalLoad !== undefined &&
+      general.existingElectricalLoad !== "" &&
+      general.existingElectricalLoad !== null
+        ? String(general.existingElectricalLoad)
+        : defaults.existingElectricalLoad,
+    mainDistributionBoardLocation:
+      general.mainDistributionBoardLocation || defaults.mainDistributionBoardLocation,
+    earthingAvailable: general.earthingAvailable || defaults.earthingAvailable,
+    phaseType: general.phaseType || defaults.phaseType,
+    recommendedPanelBrand:
+      general.recommendedPanelBrand || defaults.recommendedPanelBrand,
+    recommendedInverterBrand:
+      general.recommendedInverterBrand || defaults.recommendedInverterBrand,
+    inverterType: general.inverterType || defaults.inverterType,
+    availableRoofArea:
+      general.availableRoofArea !== undefined &&
+      general.availableRoofArea !== "" &&
+      general.availableRoofArea !== null
+        ? String(general.availableRoofArea)
+        : defaults.availableRoofArea,
+    usableRoofArea:
+      general.usableRoofArea !== undefined &&
+      general.usableRoofArea !== "" &&
+      general.usableRoofArea !== null
+        ? String(general.usableRoofArea)
+        : defaults.usableRoofArea,
+    distanceFromRoofToDb:
+      general.distanceFromRoofToDb !== undefined &&
+      general.distanceFromRoofToDb !== "" &&
+      general.distanceFromRoofToDb !== null
+        ? String(general.distanceFromRoofToDb)
+        : defaults.distanceFromRoofToDb,
+    customerExpectations:
+      general.customerExpectations || defaults.customerExpectations,
     specialRequirements: general.specialRequirements || "",
     challengesConcerns: general.challengesConcerns || "",
     locationName: getPreferredLocationLabel(lead, siteSurvey),
@@ -248,24 +334,17 @@ const buildDraftPhotos = (draftPhotos = [], siteSurvey = null) => {
 
 const mergeSurveyDraftData = (baseData, draftData) => {
   if (!draftData || typeof draftData !== "object") return baseData;
-  return {
-    ...baseData,
-    ...draftData,
-    shadingIssues: Array.isArray(draftData.shadingIssues)
-      ? draftData.shadingIssues.filter(Boolean)
-      : baseData.shadingIssues,
-    locationName:
-      typeof draftData.locationName === "string" ? draftData.locationName : baseData.locationName,
-    latitude:
-      draftData.latitude !== undefined && draftData.latitude !== null
-        ? String(draftData.latitude)
-        : baseData.latitude,
-    longitude:
-      draftData.longitude !== undefined && draftData.longitude !== null
-        ? String(draftData.longitude)
-        : baseData.longitude,
-    remarks: typeof draftData.remarks === "string" ? draftData.remarks : baseData.remarks,
-  };
+  const merged = { ...baseData };
+  for (const [key, val] of Object.entries(draftData)) {
+    if (val !== undefined && val !== null && val !== "") {
+      if (Array.isArray(val)) {
+        if (val.length > 0) merged[key] = val.filter(Boolean);
+      } else {
+        merged[key] = val;
+      }
+    }
+  }
+  return merged;
 };
 
 const getPersistedPhotoRefs = (photos = []) =>
@@ -719,26 +798,175 @@ export default function VisitDetails({ onClose, onSave }) {
     if (incomingLead) setLead(incomingLead);
   }, [incomingLead]);
 
+  const standardDefaults = useMemo(() => getStandardSurveyDefaults(lead), [lead]);
+
+  // Guaranteed active survey data: falls back to defaults for any blank field
+  const activeSurveyData = useMemo(() => {
+    const merged = { ...standardDefaults, ...surveyData };
+    Object.keys(standardDefaults).forEach((k) => {
+      const val = surveyData[k];
+      if (
+        val !== undefined &&
+        val !== null &&
+        val !== "" &&
+        !(Array.isArray(val) && val.length === 0)
+      ) {
+        merged[k] = val;
+      } else {
+        merged[k] = standardDefaults[k];
+      }
+    });
+    return merged;
+  }, [standardDefaults, surveyData]);
+
+  // Self-heal and clear any required errors on mount or when defaults change
+  useEffect(() => {
+    setSurveyData((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      Object.entries(standardDefaults).forEach(([key, defVal]) => {
+        const val = next[key];
+        const isBlank =
+          val === "" ||
+          val === null ||
+          val === undefined ||
+          (Array.isArray(val) && val.length === 0);
+        if (isBlank) {
+          next[key] = defVal;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+
+    setValidationErrors((prev) => {
+      const step1Fields = [
+        "roofType",
+        "roofMaterial",
+        "roofCondition",
+        "siteAccess",
+        "existingElectricalLoad",
+        "mainDistributionBoardLocation",
+        "earthingAvailable",
+        "phaseType",
+        "recommendedPanelBrand",
+        "recommendedInverterBrand",
+        "availableRoofArea",
+        "usableRoofArea",
+      ];
+      const nextErrors = { ...prev };
+      let hadError = false;
+      step1Fields.forEach((field) => {
+        if (nextErrors[field]) {
+          delete nextErrors[field];
+          hadError = true;
+        }
+      });
+      return hadError ? nextErrors : prev;
+    });
+  }, [standardDefaults]);
+
   const updateField = useCallback((field, value) => {
-    setSurveyData((prev) => ({ ...prev, [field]: value }));
+    setSurveyData((prev) => ({ ...activeSurveyData, [field]: value }));
     setValidationErrors((prev) => ({ ...prev, [field]: "" }));
     setError("");
-  }, []);
+  }, [activeSurveyData]);
 
   const toggleCheckboxValue = useCallback((field, value) => {
     setSurveyData((prev) => {
-      const current = prev[field] || [];
+      const current = activeSurveyData[field] || [];
       const next =
         current.includes(value)
           ? current.filter((i) => i !== value)
           : value === "None"
           ? ["None"]
           : [...current.filter((i) => i !== "None"), value];
-      return { ...prev, [field]: next };
+      return { ...activeSurveyData, [field]: next };
     });
     setValidationErrors((prev) => ({ ...prev, [field]: "" }));
     setError("");
-  }, []);
+  }, [activeSurveyData]);
+
+  const [infoMessage, setInfoMessage] = useState("");
+
+  const hasCustomDefaults = useMemo(() => {
+    try {
+      if (typeof window === "undefined") return false;
+      return Boolean(window.localStorage.getItem(SITE_SURVEY_CUSTOM_DEFAULTS_KEY));
+    } catch {
+      return false;
+    }
+  }, [infoMessage]);
+
+  const handleApplyDefaults = useCallback(() => {
+    const defaults = getStandardSurveyDefaults(lead);
+    setSurveyData((prev) => ({
+      ...prev,
+      ...defaults,
+    }));
+    setValidationErrors((prev) => {
+      const next = { ...prev };
+      Object.keys(defaults).forEach((k) => delete next[k]);
+      return next;
+    });
+    setError("");
+    setInfoMessage("Default survey values applied successfully!");
+    setTimeout(() => setInfoMessage(""), 4500);
+  }, [lead]);
+
+  const handleSaveAsCustomDefaults = useCallback(() => {
+    try {
+      const keysToSave = [
+        "roofType",
+        "roofMaterial",
+        "roofCondition",
+        "shadingIssues",
+        "siteAccess",
+        "existingElectricalLoad",
+        "mainDistributionBoardLocation",
+        "distanceFromRoofToDb",
+        "earthingAvailable",
+        "phaseType",
+        "recommendedPanelBrand",
+        "recommendedInverterBrand",
+        "inverterType",
+        "availableRoofArea",
+        "usableRoofArea",
+        "customerExpectations",
+      ];
+      const custom = {};
+      keysToSave.forEach((k) => {
+        if (activeSurveyData[k] !== undefined && activeSurveyData[k] !== "") {
+          custom[k] = activeSurveyData[k];
+        }
+      });
+      window.localStorage.setItem(SITE_SURVEY_CUSTOM_DEFAULTS_KEY, JSON.stringify(custom));
+      setError("");
+      setInfoMessage("Saved! These values will now automatically be your defaults for future surveys.");
+      setTimeout(() => setInfoMessage(""), 4500);
+    } catch {
+      setError("Failed to save custom defaults to local storage.");
+    }
+  }, [activeSurveyData]);
+
+  const handleResetToStandardDefaults = useCallback(() => {
+    try {
+      window.localStorage.removeItem(SITE_SURVEY_CUSTOM_DEFAULTS_KEY);
+      const standard = getStandardSurveyDefaults(lead);
+      setSurveyData((prev) => ({
+        ...prev,
+        ...standard,
+      }));
+      setValidationErrors((prev) => {
+        const next = { ...prev };
+        Object.keys(standard).forEach((k) => delete next[k]);
+        return next;
+      });
+      setError("");
+      setInfoMessage("Reset to standard solar defaults!");
+      setTimeout(() => setInfoMessage(""), 4500);
+    } catch {}
+  }, [lead]);
 
   const reverseGeocode = useCallback(async (lat, lng) => {
     try {
@@ -827,20 +1055,20 @@ export default function VisitDetails({ onClose, onSave }) {
     if (!lead) return;
     if (restoredDraftRef.current) {
       restoredDraftRef.current = false;
-      return;
     }
-    setSurveyData(makeInitialSurveyData(lead, existingSiteSurvey));
-    setPhotos(buildInitialPhotos(existingSiteSurvey));
-    setLocationSearch(getPreferredLocationLabel(lead, existingSiteSurvey));
+    const initialWithDefaults = makeInitialSurveyData(lead, existingSiteSurvey);
+    setSurveyData((prev) => ({ ...initialWithDefaults, ...prev }));
+    setPhotos((prev) => (prev.length ? prev : buildInitialPhotos(existingSiteSurvey)));
+    setLocationSearch((prev) => prev || getPreferredLocationLabel(lead, existingSiteSurvey));
   }, [existingSiteSurvey, lead]);
 
   useEffect(() => {
     const hasDraftableData =
       Boolean(lead?._id) ||
       Boolean(locationSearch.trim()) ||
-      Boolean(surveyData.locationName.trim()) ||
-      Boolean(surveyData.latitude) ||
-      Boolean(surveyData.longitude) ||
+      Boolean(activeSurveyData.locationName?.trim()) ||
+      Boolean(activeSurveyData.latitude) ||
+      Boolean(activeSurveyData.longitude) ||
       photos.length > 0;
 
     if (!hasDraftableData) return;
@@ -852,7 +1080,7 @@ export default function VisitDetails({ onClose, onSave }) {
           lead: buildLeadDraftSnapshot(lead),
           currentStep,
           locationSearch,
-          surveyData,
+          surveyData: activeSurveyData,
           photos: getPersistedPhotoRefs(photos),
           savedAt: new Date().toISOString(),
         })
@@ -973,24 +1201,24 @@ export default function VisitDetails({ onClose, onSave }) {
     (step) => {
       const errs = {};
       if (step === 1) {
-        if (!surveyData.roofType) errs.roofType = "Required";
-        if (!surveyData.roofMaterial) errs.roofMaterial = "Required";
-        if (!surveyData.roofCondition) errs.roofCondition = "Required";
-        if (!surveyData.siteAccess) errs.siteAccess = "Required";
-        if (!surveyData.existingElectricalLoad) errs.existingElectricalLoad = "Required";
-        if (!surveyData.mainDistributionBoardLocation.trim())
+        if (!activeSurveyData.roofType) errs.roofType = "Required";
+        if (!activeSurveyData.roofMaterial) errs.roofMaterial = "Required";
+        if (!activeSurveyData.roofCondition) errs.roofCondition = "Required";
+        if (!activeSurveyData.siteAccess) errs.siteAccess = "Required";
+        if (!activeSurveyData.existingElectricalLoad) errs.existingElectricalLoad = "Required";
+        if (!activeSurveyData.mainDistributionBoardLocation?.trim())
           errs.mainDistributionBoardLocation = "Required";
-        if (!surveyData.earthingAvailable) errs.earthingAvailable = "Required";
-        if (!surveyData.phaseType) errs.phaseType = "Required";
-        if (!surveyData.recommendedPanelBrand) errs.recommendedPanelBrand = "Required";
-        if (!surveyData.recommendedInverterBrand) errs.recommendedInverterBrand = "Required";
-        if (!surveyData.availableRoofArea) errs.availableRoofArea = "Required";
-        if (!surveyData.usableRoofArea) errs.usableRoofArea = "Required";
+        if (!activeSurveyData.earthingAvailable) errs.earthingAvailable = "Required";
+        if (!activeSurveyData.phaseType) errs.phaseType = "Required";
+        if (!activeSurveyData.recommendedPanelBrand) errs.recommendedPanelBrand = "Required";
+        if (!activeSurveyData.recommendedInverterBrand) errs.recommendedInverterBrand = "Required";
+        if (!activeSurveyData.availableRoofArea) errs.availableRoofArea = "Required";
+        if (!activeSurveyData.usableRoofArea) errs.usableRoofArea = "Required";
       }
       if (step === 2) {
-        if (!surveyData.latitude || !surveyData.longitude)
+        if (!activeSurveyData.latitude || !activeSurveyData.longitude)
           errs.coordinates = "GPS coordinates are required.";
-        if (!surveyData.locationName.trim()) errs.locationName = "Required";
+        if (!activeSurveyData.locationName?.trim()) errs.locationName = "Required";
       }
       if (step === 3) {
         if (!photos.length) errs.photos = "At least one site photo is required.";
@@ -998,11 +1226,18 @@ export default function VisitDetails({ onClose, onSave }) {
       setValidationErrors((prev) => ({ ...prev, ...errs }));
       return Object.keys(errs).length === 0;
     },
-    [photos.length, surveyData]
+    [activeSurveyData, photos.length]
   );
 
   const goStep = useCallback(
     (dir) => {
+      if (dir > 0 && currentStep === 1) {
+        setValidationErrors({});
+        setError("");
+        setCurrentStep((prev) => Math.max(1, Math.min(3, prev + dir)));
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
       if (dir > 0 && !validateStep(currentStep)) {
         setError("Please fill in all required fields before continuing.");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1018,29 +1253,29 @@ export default function VisitDetails({ onClose, onSave }) {
   const surveySummary = useMemo(() => {
     const lines = [
       "Site Survey Summary",
-      `Roof Type: ${surveyData.roofType || "-"}`,
-      `Roof Material: ${surveyData.roofMaterial || "-"}`,
-      `Roof Condition: ${surveyData.roofCondition || "-"}`,
-      `Shading Issues: ${surveyData.shadingIssues.length ? surveyData.shadingIssues.join(", ") : "-"}`,
-      `Site Access: ${surveyData.siteAccess || "-"}`,
-      `Existing Electrical Load (kW): ${surveyData.existingElectricalLoad || "-"}`,
-      `Main Distribution Board Location: ${surveyData.mainDistributionBoardLocation || "-"}`,
-      `Earthing Available: ${surveyData.earthingAvailable || "-"}`,
-      `Phase Type: ${surveyData.phaseType || "-"}`,
-      `Recommended Panel Brand: ${surveyData.recommendedPanelBrand || "-"}`,
-      `Recommended Inverter Brand: ${surveyData.recommendedInverterBrand || "-"}`,
-      `Inverter Type: ${surveyData.inverterType || "-"}`,
-      `Available Roof Area (sq ft): ${surveyData.availableRoofArea || "-"}`,
-      `Usable Roof Area (sq ft): ${surveyData.usableRoofArea || "-"}`,
-      `Distance from Roof to DB (meters): ${surveyData.distanceFromRoofToDb || "-"}`,
-      `Customer Expectations: ${surveyData.customerExpectations || "-"}`,
-      `Special Requirements: ${surveyData.specialRequirements || "-"}`,
-      `Challenges/Concerns: ${surveyData.challengesConcerns || "-"}`,
-      `Coordinates: ${surveyData.latitude || "-"}, ${surveyData.longitude || "-"}`,
+      `Roof Type: ${activeSurveyData.roofType || "-"}`,
+      `Roof Material: ${activeSurveyData.roofMaterial || "-"}`,
+      `Roof Condition: ${activeSurveyData.roofCondition || "-"}`,
+      `Shading Issues: ${activeSurveyData.shadingIssues?.length ? activeSurveyData.shadingIssues.join(", ") : "-"}`,
+      `Site Access: ${activeSurveyData.siteAccess || "-"}`,
+      `Existing Electrical Load (kW): ${activeSurveyData.existingElectricalLoad || "-"}`,
+      `Main Distribution Board Location: ${activeSurveyData.mainDistributionBoardLocation || "-"}`,
+      `Earthing Available: ${activeSurveyData.earthingAvailable || "-"}`,
+      `Phase Type: ${activeSurveyData.phaseType || "-"}`,
+      `Recommended Panel Brand: ${activeSurveyData.recommendedPanelBrand || "-"}`,
+      `Recommended Inverter Brand: ${activeSurveyData.recommendedInverterBrand || "-"}`,
+      `Inverter Type: ${activeSurveyData.inverterType || "-"}`,
+      `Available Roof Area (sq ft): ${activeSurveyData.availableRoofArea || "-"}`,
+      `Usable Roof Area (sq ft): ${activeSurveyData.usableRoofArea || "-"}`,
+      `Distance from Roof to DB (meters): ${activeSurveyData.distanceFromRoofToDb || "-"}`,
+      `Customer Expectations: ${activeSurveyData.customerExpectations || "-"}`,
+      `Special Requirements: ${activeSurveyData.specialRequirements || "-"}`,
+      `Challenges/Concerns: ${activeSurveyData.challengesConcerns || "-"}`,
+      `Coordinates: ${activeSurveyData.latitude || "-"}, ${activeSurveyData.longitude || "-"}`,
     ];
-    if (surveyData.remarks.trim()) lines.push(`Additional Notes: ${surveyData.remarks.trim()}`);
+    if (activeSurveyData.remarks?.trim?.()) lines.push(`Additional Notes: ${activeSurveyData.remarks.trim()}`);
     return lines.join("\n");
-  }, [surveyData]);
+  }, [activeSurveyData]);
 
   const ensurePunchInReady = useCallback(async () => {
     if (["ADMIN", "Admin_panel"].includes(currentUserRole)) return;
@@ -1072,11 +1307,11 @@ export default function VisitDetails({ onClose, onSave }) {
       await ensurePunchInReady();
       const now = new Date();
       const formData = new FormData();
-      const displayName = leadName || surveyData.locationName.trim() || "Site Survey";
+      const displayName = leadName || activeSurveyData.locationName?.trim() || "Site Survey";
       const persistedPhotos = getPersistedPhotoRefs(photos);
-      formData.append("latitude", surveyData.latitude);
-      formData.append("longitude", surveyData.longitude);
-      formData.append("locationName", surveyData.locationName.trim() || displayName);
+      formData.append("latitude", activeSurveyData.latitude);
+      formData.append("longitude", activeSurveyData.longitude);
+      formData.append("locationName", activeSurveyData.locationName?.trim() || displayName);
       formData.append("isLeadCreated", "other");
       formData.append("visitDate", now.toISOString().split("T")[0]);
       formData.append("visitTime", now.toTimeString().slice(0, 5));
@@ -1087,7 +1322,7 @@ export default function VisitDetails({ onClose, onSave }) {
         formData.append(
           "siteSurveyData",
           JSON.stringify({
-            ...surveyData,
+            ...activeSurveyData,
             photos: persistedPhotos,
           })
         );
@@ -1380,10 +1615,145 @@ export default function VisitDetails({ onClose, onSave }) {
             {error}
           </Alert>
         )}
+        {infoMessage && (
+          <Alert
+            severity="success"
+            onClose={() => setInfoMessage("")}
+            sx={{ mb: 2, borderRadius: 2, fontSize: "0.83rem" }}
+          >
+            {infoMessage}
+          </Alert>
+        )}
 
         {/* ════ STEP 1: General Info ════ */}
         {currentStep === 1 && (
           <>
+            {/* Quick Autofill Helper Bar */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 1.5, sm: 2 },
+                mb: 2.5,
+                borderRadius: 3,
+                border: `1px solid ${isDark ? "rgba(232, 112, 58, 0.28)" : "#fed7aa"}`,
+                bgcolor: isDark ? "rgba(232, 112, 58, 0.08)" : "#fff8f3",
+                display: "flex",
+                flexDirection: { xs: "column", md: "row" },
+                alignItems: { xs: "flex-start", md: "center" },
+                justifyContent: "space-between",
+                gap: 1.5,
+              }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Box
+                  sx={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 2,
+                    bgcolor: isDark ? "rgba(232, 112, 58, 0.2)" : "#ffedd5",
+                    color: PRIMARY,
+                    display: "grid",
+                    placeItems: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <FlashOn sx={{ fontSize: 20 }} />
+                </Box>
+                <Box>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography sx={{ fontSize: "0.88rem", fontWeight: 700, color: THEME.TEXT }}>
+                      Default Values Applied
+                    </Typography>
+                    <Chip
+                      label={hasCustomDefaults ? "Custom Defaults" : "Standard Defaults"}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        bgcolor: isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7",
+                        color: "#16a34a",
+                      }}
+                    />
+                  </Stack>
+                  <Typography sx={{ fontSize: "0.75rem", color: THEME.TEXT_MUTED, mt: 0.25 }}>
+                    Standard solar survey details are pre-filled so you don't have to fill this form from scratch every time.
+                  </Typography>
+                </Box>
+              </Stack>
+
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                flexWrap="wrap"
+                sx={{ width: { xs: "100%", md: "auto" }, justifyContent: { xs: "flex-start", md: "flex-end" } }}
+              >
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleApplyDefaults}
+                  startIcon={<FlashOn sx={{ fontSize: 16 }} />}
+                  sx={{
+                    bgcolor: PRIMARY,
+                    "&:hover": { bgcolor: PRIMARY_DARK },
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "0.78rem",
+                    borderRadius: 2,
+                    px: 1.5,
+                    py: 0.6,
+                    flexShrink: 0,
+                  }}
+                >
+                  Fill Defaults
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleSaveAsCustomDefaults}
+                  startIcon={<Save sx={{ fontSize: 15 }} />}
+                  title="Save current values as your personal default template"
+                  sx={{
+                    borderColor: isDark ? "rgba(255, 255, 255, 0.15)" : "#cbd5e1",
+                    color: THEME.TEXT,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: "0.78rem",
+                    borderRadius: 2,
+                    px: 1.5,
+                    py: 0.6,
+                    flexShrink: 0,
+                    "&:hover": {
+                      borderColor: PRIMARY,
+                      color: PRIMARY,
+                      bgcolor: isDark ? "rgba(232, 112, 58, 0.08)" : "#fff4ef",
+                    },
+                  }}
+                >
+                  Save as My Defaults
+                </Button>
+                {hasCustomDefaults && (
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={handleResetToStandardDefaults}
+                    startIcon={<RestartAlt sx={{ fontSize: 15 }} />}
+                    sx={{
+                      color: THEME.TEXT_MUTED,
+                      fontSize: "0.74rem",
+                      textTransform: "none",
+                      px: 1,
+                      py: 0.6,
+                      "&:hover": { color: THEME.TEXT },
+                    }}
+                  >
+                    Reset Factory
+                  </Button>
+                )}
+              </Stack>
+            </Paper>
+
             {/* Roof Details */}
             <SectionCard
               icon={<HomeWorkOutlined sx={{ fontSize: 16 }} />}
@@ -1395,7 +1765,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <TextField
                     select
                     SelectProps={{ native: true }}
-                    value={surveyData.roofType}
+                    value={activeSurveyData.roofType}
                     onChange={(e) => updateField("roofType", e.target.value)}
                     fullWidth
                     size="small"
@@ -1411,7 +1781,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <TextField
                     select
                     SelectProps={{ native: true }}
-                    value={surveyData.roofMaterial}
+                    value={activeSurveyData.roofMaterial}
                     onChange={(e) => updateField("roofMaterial", e.target.value)}
                     fullWidth
                     size="small"
@@ -1427,7 +1797,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel required>Roof Condition</FieldLabel>
                   <PillGroup
                     options={ROOF_CONDITIONS}
-                    value={surveyData.roofCondition}
+                    value={activeSurveyData.roofCondition}
                     onChange={(v) => updateField("roofCondition", v)}
                   />
                   {validationErrors.roofCondition && (
@@ -1440,7 +1810,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel>Shading Issues</FieldLabel>
                   <CheckPillGroup
                     options={SHADING_OPTIONS}
-                    value={surveyData.shadingIssues}
+                    value={activeSurveyData.shadingIssues}
                     onChange={(v) => toggleCheckboxValue("shadingIssues", v)}
                   />
                 </Grid>
@@ -1449,7 +1819,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel required>Available Roof Area (sq ft)</FieldLabel>
                   <TextField
                     type="number"
-                    value={surveyData.availableRoofArea}
+                    value={activeSurveyData.availableRoofArea}
                     onChange={(e) => updateField("availableRoofArea", e.target.value)}
                     fullWidth
                     size="small"
@@ -1462,7 +1832,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel required>Usable Roof Area (sq ft)</FieldLabel>
                   <TextField
                     type="number"
-                    value={surveyData.usableRoofArea}
+                    value={activeSurveyData.usableRoofArea}
                     onChange={(e) => updateField("usableRoofArea", e.target.value)}
                     fullWidth
                     size="small"
@@ -1486,7 +1856,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel required>Site Access</FieldLabel>
                   <PillGroup
                     options={SITE_ACCESS_OPTIONS}
-                    value={surveyData.siteAccess}
+                    value={activeSurveyData.siteAccess}
                     onChange={(v) => updateField("siteAccess", v)}
                   />
                   {validationErrors.siteAccess && (
@@ -1499,7 +1869,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel required>Existing Electrical Load (kW)</FieldLabel>
                   <TextField
                     type="number"
-                    value={surveyData.existingElectricalLoad}
+                    value={activeSurveyData.existingElectricalLoad}
                     onChange={(e) => updateField("existingElectricalLoad", e.target.value)}
                     fullWidth
                     size="small"
@@ -1512,7 +1882,7 @@ export default function VisitDetails({ onClose, onSave }) {
                 <Grid item xs={12} sm={6}>
                   <FieldLabel required>Main Distribution Board Location</FieldLabel>
                   <TextField
-                    value={surveyData.mainDistributionBoardLocation}
+                    value={activeSurveyData.mainDistributionBoardLocation}
                     onChange={(e) => updateField("mainDistributionBoardLocation", e.target.value)}
                     fullWidth
                     size="small"
@@ -1525,7 +1895,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel>Distance from Roof to DB (meters)</FieldLabel>
                   <TextField
                     type="number"
-                    value={surveyData.distanceFromRoofToDb}
+                    value={activeSurveyData.distanceFromRoofToDb}
                     onChange={(e) => updateField("distanceFromRoofToDb", e.target.value)}
                     fullWidth
                     size="small"
@@ -1537,7 +1907,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel required>Earthing Available</FieldLabel>
                   <PillGroup
                     options={EARTHING_OPTIONS}
-                    value={surveyData.earthingAvailable}
+                    value={activeSurveyData.earthingAvailable}
                     onChange={(v) => updateField("earthingAvailable", v)}
                   />
                   {validationErrors.earthingAvailable && (
@@ -1550,7 +1920,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel required>Phase Type</FieldLabel>
                   <PillGroup
                     options={PHASE_OPTIONS}
-                    value={surveyData.phaseType}
+                    value={activeSurveyData.phaseType}
                     onChange={(v) => updateField("phaseType", v)}
                   />
                   {validationErrors.phaseType && (
@@ -1573,7 +1943,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <TextField
                     select
                     SelectProps={{ native: true }}
-                    value={surveyData.recommendedPanelBrand}
+                    value={activeSurveyData.recommendedPanelBrand}
                     onChange={(e) => updateField("recommendedPanelBrand", e.target.value)}
                     fullWidth
                     size="small"
@@ -1589,7 +1959,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <TextField
                     select
                     SelectProps={{ native: true }}
-                    value={surveyData.recommendedInverterBrand}
+                    value={activeSurveyData.recommendedInverterBrand}
                     onChange={(e) => updateField("recommendedInverterBrand", e.target.value)}
                     fullWidth
                     size="small"
@@ -1604,7 +1974,7 @@ export default function VisitDetails({ onClose, onSave }) {
                   <FieldLabel>Inverter Type</FieldLabel>
                   <PillGroup
                     options={INVERTER_TYPES}
-                    value={surveyData.inverterType}
+                    value={activeSurveyData.inverterType}
                     onChange={(v) => updateField("inverterType", v)}
                   />
                 </Grid>
@@ -1620,7 +1990,7 @@ export default function VisitDetails({ onClose, onSave }) {
                 <Grid item xs={12}>
                   <FieldLabel>Customer Expectations</FieldLabel>
                   <TextField
-                    value={surveyData.customerExpectations}
+                    value={activeSurveyData.customerExpectations}
                     onChange={(e) => updateField("customerExpectations", e.target.value)}
                     multiline
                     minRows={3}

@@ -467,6 +467,51 @@ const mapWorksheetProjects = (worksheets = []) =>
 
 const stageIndex = (key) => PROJECT_STAGES.findIndex((s) => s.key === key);
 
+const getProjectSortTime = (p) => {
+  if (!p) return 0;
+  const dates = [
+    p.projectConvertedAt,
+    p.createdAt,
+    p.updatedAt,
+    p.installationDate,
+    p.workDate,
+  ]
+    .filter(Boolean)
+    .map((d) => {
+      const t = new Date(d).getTime();
+      return isNaN(t) ? 0 : t;
+    })
+    .filter((t) => t > 0);
+
+  if (dates.length > 0) {
+    const primary = p.projectConvertedAt ? new Date(p.projectConvertedAt).getTime() : 0;
+    const created = p.createdAt ? new Date(p.createdAt).getTime() : 0;
+    const best = Math.max(isNaN(primary) ? 0 : primary, isNaN(created) ? 0 : created);
+    if (best > 0) return best;
+    return Math.max(...dates);
+  }
+
+  if (p.projectCode && typeof p.projectCode === "string") {
+    const prjMatch = p.projectCode.match(/PRJ-(\d{4})(\d{2})-(\d+)/i);
+    if (prjMatch) {
+      const year = parseInt(prjMatch[1], 10);
+      const month = parseInt(prjMatch[2], 10) - 1;
+      const seq = parseInt(prjMatch[3], 10) || 0;
+      return new Date(year, month, 1).getTime() + seq * 1000;
+    }
+    const appMatch = p.projectCode.match(/APP-(\d{2})(\d{2})(\d{2})-(\d+)/i);
+    if (appMatch) {
+      const day = parseInt(appMatch[1], 10);
+      const month = parseInt(appMatch[2], 10) - 1;
+      const year = 2000 + parseInt(appMatch[3], 10);
+      const seq = parseInt(appMatch[4], 10) || 0;
+      return new Date(year, month, day).getTime() + seq * 1000;
+    }
+  }
+
+  return 0;
+};
+
 // ── Compact metric card ────────────────────────────────────────
 const MetricCard = ({ icon, label, value, note, color, onClick }) => {
   const theme = useTheme();
@@ -1025,7 +1070,10 @@ function Projects() {
         ? mapWorksheetProjects(worksheetResult.value?.result || worksheetResult.value?.data || [])
         : [];
 
-      setProjects([...worksheetProjects, ...leadProjects]);
+      const combined = [...leadProjects, ...worksheetProjects].sort((a, b) => {
+        return getProjectSortTime(b) - getProjectSortTime(a);
+      });
+      setProjects(combined);
     } catch (err) {
       setSnackbar({ open: true, message: err.message || "Failed to load projects", severity: "error" });
     } finally {
@@ -1084,7 +1132,7 @@ function Projects() {
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     const rangeTest = AMOUNT_RANGES.find((r) => r.key === amountRange)?.test || (() => true);
-    return enriched.filter((p) => {
+    const list = enriched.filter((p) => {
       if (selectedStage === "ready_handover" && p.pipelineStage !== "ready_handover") return false;
       if (selectedStage !== "all" && selectedStage !== "ready_handover" && p.currentStage !== selectedStage) return false;
       if (selectedProjectType !== "all" && p.projectTypeKey !== selectedProjectType) return false;
@@ -1096,7 +1144,17 @@ function Projects() {
       return [p.projectCode, getProjectName(p), p.projectType, p.firstName, p.lastName, p.consumerName, p.consumerAccountNo, p.phone, p.email, p.city, p.section, p.address, p.siteLocation]
         .filter(Boolean).join(" ").toLowerCase().includes(q);
     });
-  }, [enriched, searchTerm, selectedStage, selectedProjectType, selectedSection, amountRange, activityFilter]);
+
+    return list.sort((a, b) => {
+      if (highlightId) {
+        const aIsHL = a._id === highlightId || a.worksheetProjectId === highlightId;
+        const bIsHL = b._id === highlightId || b.worksheetProjectId === highlightId;
+        if (aIsHL && !bIsHL) return -1;
+        if (!aIsHL && bIsHL) return 1;
+      }
+      return getProjectSortTime(b) - getProjectSortTime(a);
+    });
+  }, [enriched, searchTerm, selectedStage, selectedProjectType, selectedSection, amountRange, activityFilter, highlightId]);
 
   const paged = useMemo(() => filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage), [filtered, page, rowsPerPage]);
   const showRegistrationRows = false;

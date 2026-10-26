@@ -150,3 +150,32 @@ div[style*="background-color: rgba(0, 0, 0, 0.6)"] {
   opacity: 1 !important;
   filter: none !important;
 }
+
+/* Global sleek scrollbar styles */
+* {
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.55);
+}
+
+/* Ensure permanent/temporary navigation drawers don't show unintended outer scrollbars */
+.MuiDrawer-paper {
+  overflow-x: hidden !important;
+}
+
