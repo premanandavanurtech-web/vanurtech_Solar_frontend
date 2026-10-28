@@ -761,6 +761,7 @@ export default function VisitDetails({ onClose, onSave }) {
   const [searchingAddress, setSearchingAddress] = useState(false);
   const fileInputRef = useRef(null);
   const autocompleteRef = useRef(null);
+  const autoGpsAttemptedRef = useRef(false);
 
   const leadName = useMemo(
     () => getLeadFullName(lead) || lead?.companyName || "Site Survey",
@@ -867,25 +868,31 @@ export default function VisitDetails({ onClose, onSave }) {
   }, [standardDefaults]);
 
   const updateField = useCallback((field, value) => {
-    setSurveyData((prev) => ({ ...activeSurveyData, [field]: value }));
-    setValidationErrors((prev) => ({ ...prev, [field]: "" }));
+    setSurveyData((prev) => ({ ...prev, [field]: value }));
+    setValidationErrors((prev) => {
+      const next = { ...prev, [field]: "" };
+      if (field === "latitude" || field === "longitude") {
+        next.coordinates = "";
+      }
+      return next;
+    });
     setError("");
-  }, [activeSurveyData]);
+  }, []);
 
   const toggleCheckboxValue = useCallback((field, value) => {
     setSurveyData((prev) => {
-      const current = activeSurveyData[field] || [];
+      const current = prev[field] || [];
       const next =
         current.includes(value)
           ? current.filter((i) => i !== value)
           : value === "None"
           ? ["None"]
           : [...current.filter((i) => i !== "None"), value];
-      return { ...activeSurveyData, [field]: next };
+      return { ...prev, [field]: next };
     });
     setValidationErrors((prev) => ({ ...prev, [field]: "" }));
     setError("");
-  }, [activeSurveyData]);
+  }, []);
 
   const [infoMessage, setInfoMessage] = useState("");
 
@@ -970,10 +977,16 @@ export default function VisitDetails({ onClose, onSave }) {
 
   const reverseGeocode = useCallback(async (lat, lng) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
-        { headers: { Accept: "application/json" } }
+        {
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        }
       );
+      clearTimeout(timeoutId);
       if (!res.ok) return "";
       const data = await res.json();
       return data?.display_name || "";
@@ -984,64 +997,111 @@ export default function VisitDetails({ onClose, onSave }) {
 
   const applyCoordinates = useCallback(
     async (lat, lng, options = {}) => {
+      if (lat === null || lat === undefined || lng === null || lng === undefined) return;
+      const numLat = Number(lat);
+      const numLng = Number(lng);
+      if (isNaN(numLat) || isNaN(numLng)) return;
+
       const { shouldPrefillLocation = true, forcedLocationName = "" } = options;
-      updateField("latitude", Number(lat).toFixed(6));
-      updateField("longitude", Number(lng).toFixed(6));
+      const latStr = numLat.toFixed(6);
+      const lngStr = numLng.toFixed(6);
+
+      // Atomically update both coordinates to prevent one from overwriting the other
+      setSurveyData((prev) => {
+        const next = {
+          ...prev,
+          latitude: latStr,
+          longitude: lngStr,
+        };
+        if (forcedLocationName) {
+          next.locationName = forcedLocationName;
+        }
+        return next;
+      });
+
+      setValidationErrors((prev) => {
+        const next = { ...prev, latitude: "", longitude: "", coordinates: "" };
+        if (forcedLocationName) {
+          next.locationName = "";
+        }
+        return next;
+      });
+      setError("");
+
       if (forcedLocationName) {
-        updateField("locationName", forcedLocationName);
         setLocationSearch(forcedLocationName);
         return;
       }
-      if (shouldPrefillLocation && !surveyData.locationName.trim()) {
-        const label = await reverseGeocode(lat, lng);
-        if (label) {
-          updateField("locationName", label);
-          setLocationSearch(label);
-        }
+
+      if (shouldPrefillLocation) {
+        reverseGeocode(numLat, numLng)
+          .then((label) => {
+            if (label) {
+              setSurveyData((prev) => ({
+                ...prev,
+                locationName: prev.locationName?.trim() ? prev.locationName : label,
+              }));
+              setLocationSearch((prev) => (prev?.trim() ? prev : label));
+              setValidationErrors((prev) => ({ ...prev, locationName: "" }));
+            }
+          })
+          .catch(() => {});
       }
     },
-    [reverseGeocode, surveyData.locationName, updateField]
+    [reverseGeocode]
   );
 
-  const getCurrentLocation = useCallback(
-    (attempt = 0) => {
-      if (!navigator.geolocation) {
-        setError("Geolocation is not supported by this browser.");
+  const getCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by this browser.");
+      return;
+    }
+    setLocationLoading(true);
+    setError("");
+
+    const handleSuccess = (pos) => {
+      setLocationAttempts(0);
+      setLocationLoading(false);
+      applyCoordinates(pos.coords.latitude, pos.coords.longitude, {
+        shouldPrefillLocation: true,
+      });
+    };
+
+    const handleHighAccuracyError = (geoError) => {
+      if (geoError.code === 1) {
+        // Permission denied by user
+        setLocationLoading(false);
+        setError("Location permission denied. Please allow location access in your browser or search your address above.");
         return;
       }
-      setLocationLoading(true);
-      setError("");
+
+      // If high accuracy times out or is unavailable, quickly fallback to standard accuracy
       navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          await applyCoordinates(pos.coords.latitude, pos.coords.longitude, {
-            shouldPrefillLocation: true,
-          });
-          setLocationAttempts(0);
-          setLocationLoading(false);
-        },
-        (geoError) => {
-          if ((geoError.code === 3 || geoError.code === geoError.TIMEOUT) && attempt < 2) {
-            const next = attempt + 1;
-            setLocationAttempts(next);
-            setTimeout(() => getCurrentLocation(next), 1200);
-            return;
-          }
+        handleSuccess,
+        (fallbackError) => {
           setLocationLoading(false);
           setError(
-            geoError.code === 1
-              ? "Location permission denied."
-              : "Unable to capture current location."
+            fallbackError.code === 1
+              ? "Location permission denied. Please allow location access in your browser or search your address above."
+              : "Unable to retrieve exact GPS location. You can search your address or click on the map."
           );
         },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
       );
-    },
-    [applyCoordinates]
-  );
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      handleSuccess,
+      handleHighAccuracyError,
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 30000 }
+    );
+  }, [applyCoordinates]);
 
   useEffect(() => {
+    if (autoGpsAttemptedRef.current) return;
     if (surveyData.latitude && surveyData.longitude) return;
     if (existingSiteSurvey?.latitude && existingSiteSurvey?.longitude) return;
+    autoGpsAttemptedRef.current = true;
     getCurrentLocation();
   }, [
     existingSiteSurvey?.latitude,
@@ -2062,8 +2122,15 @@ export default function VisitDetails({ onClose, onSave }) {
                     label="Search address or location"
                     value={locationSearch}
                     onChange={(e) => setLocationSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        searchLocationOnMap();
+                      }
+                    }}
                     fullWidth
                     size="small"
+                    placeholder="Search by house name, street, or area"
                   />
                 )}
               </Grid>
@@ -2079,7 +2146,7 @@ export default function VisitDetails({ onClose, onSave }) {
                     )
                   }
                   onClick={searchLocationOnMap}
-                  disabled={!locationSearch.trim() || searchingAddress || !isGoogleMapLoaded}
+                  disabled={!locationSearch.trim() || searchingAddress}
                   sx={{
                     height: 40,
                     minWidth: { xs: "100%", sm: 120 },

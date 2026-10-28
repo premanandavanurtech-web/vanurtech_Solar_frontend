@@ -1,10 +1,9 @@
 // pages/MemberVisitHistory.jsx
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box, Typography, Button, Chip, IconButton, Tooltip, alpha,
   useTheme, useMediaQuery, CircularProgress, Alert, Skeleton,
   SwipeableDrawer, Badge, Checkbox, FormControlLabel,
-  Dialog, DialogContent, DialogTitle,
 } from "@mui/material";
 import {
   LocationOn, Refresh, MyLocation, FilterList,
@@ -13,14 +12,15 @@ import {
   Store, PhotoCamera,
   CalendarToday, GpsFixed,
   ArrowDownward, DirectionsCar, Schedule,
-  ArrowBack, OpenInNew, ReceiptLong,
+  ArrowBack, OpenInNew, ReceiptLong, DeleteOutline,
   Wifi, WifiOff, SignalCellularAlt, SignalCellularOff, Lan, LocationOff,
-  Speed,
+  ReportProblem, StopCircle, Flag, Navigation, Speed,
 } from "@mui/icons-material";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { stopTracking, isCurrentlyTracking } from "../utils/Locationtracker.js";
 import LiveTrackingMap from "../utils/Livetrackmap.jsx";
+import { useSocket } from "../utils/Usesocket.js";
 import { API_BASE_URL, API_ORIGIN, KNOWN_API_HOSTS, LEGACY_API_ORIGINS } from "../utils/apiConfig";
 
 const BASE_URL = API_BASE_URL;
@@ -28,20 +28,18 @@ const BACKEND_ORIGIN = API_ORIGIN;
 const PHOTO_BACKEND_ORIGINS = [
   BACKEND_ORIGIN,
   ...LEGACY_API_ORIGINS,
-  "https://vanurtech-solar-backend-1.onrender.com",
 ].filter((origin, index, list) => origin && list.indexOf(origin) === index);
 const KNOWN_BACKEND_HOSTS = new Set([
   "localhost",
   "127.0.0.1",
   "::1",
-  "vanurtech-solar-backend-1.onrender.com",
   ...KNOWN_API_HOSTS,
 ]);
 
 const PRIMARY = "#0f1f3d";
 const SUCCESS = "#22c55e";
 const WARNING = "#f59e0b";
-const ERROR = "#ef4444";
+const ERROR   = "#ef4444";
 const MONGO_OBJECT_ID_RE = /^[a-f\d]{24}$/i;
 
 const toIdString = (value) => {
@@ -66,11 +64,11 @@ const readStoredUserId = () => {
 const getMemberStateUserId = (state = {}) =>
   toIdString(
     state.memberId ||
-    state.userId ||
-    state._id ||
-    state.id ||
-    state.user ||
-    state.member
+      state.userId ||
+      state._id ||
+      state.id ||
+      state.user ||
+      state.member
   );
 
 const getBatteryChipStyle = (percentage) => {
@@ -88,11 +86,11 @@ const getBatteryChipStyle = (percentage) => {
 
 const apiFetch = async (path, params = {}, options = {}) => {
   const token = localStorage.getItem("token") || localStorage.getItem("authToken") || localStorage.getItem("accessToken");
-  const url = new URL(`${BASE_URL}${path}`);
+  const url   = new URL(`${BASE_URL}${path}`);
   if (options.method !== "POST")
     Object.entries(params).forEach(([k, v]) => v != null && v !== "" && url.searchParams.set(k, v));
   const res = await fetch(url.toString(), {
-    method: options.method || "GET",
+    method:  options.method || "GET",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     ...(options.method === "POST" ? { body: JSON.stringify(params) } : {}),
   });
@@ -112,7 +110,43 @@ const apiFetch = async (path, params = {}, options = {}) => {
   return res.json();
 };
 
-const fmt = (d) => d ? new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+const fmt = (d, fallback = null) => {
+  const val = d || fallback;
+  if (!val) return null;
+
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (
+      trimmed === "--:--" ||
+      trimmed === "Invalid Date" ||
+      trimmed === "null" ||
+      trimmed === "undefined" ||
+      !trimmed
+    ) {
+      if (fallback && fallback !== d) return fmt(fallback);
+      return null;
+    }
+    // Already formatted time like "05:42 pm" or "10:30 AM" or "5:42 PM"
+    if (/^\d{1,2}:\d{2}(\s*[ap]m)?$/i.test(trimmed)) {
+      return trimmed.toUpperCase();
+    }
+    if (/^\d{1,2}:\d{2}:\d{2}(\s*[ap]m)?$/i.test(trimmed)) {
+      return trimmed.replace(/:\d{2}(\s*[ap]m)/i, "$1").toUpperCase();
+    }
+  }
+
+  const num = Number(val);
+  const dateObj = !isNaN(num) && num > 10000000000 ? new Date(num) : new Date(val);
+  if (!isNaN(dateObj.getTime())) {
+    return dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  if (fallback && fallback !== d) {
+    return fmt(fallback);
+  }
+
+  return null;
+};
 const formatCurrency = (amount) =>
   `\u20B9${Number(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -289,7 +323,7 @@ const getVisitPhotoUrls = (visit) => {
 
 const getDateRange = (r) => {
   const now = new Date();
-
+  
   // ✅ Build local midnight using local date parts (avoids UTC shift)
   const localMidnight = new Date(
     now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0
@@ -300,12 +334,12 @@ const getDateRange = (r) => {
 
   if (r === "today") return {
     startDate: localMidnight.toISOString(),
-    endDate: localEndOfDay.toISOString(),   // ✅ end at 23:59 not "now"
+    endDate:   localEndOfDay.toISOString(),   // ✅ end at 23:59 not "now"
   };
 
   if (r === "yesterday") {
     const yStart = new Date(localMidnight); yStart.setDate(yStart.getDate() - 1);
-    const yEnd = new Date(yStart); yEnd.setHours(23, 59, 59, 999);
+    const yEnd   = new Date(yStart); yEnd.setHours(23, 59, 59, 999);
     return { startDate: yStart.toISOString(), endDate: yEnd.toISOString() };
   }
 
@@ -323,7 +357,7 @@ const getDateRange = (r) => {
   if (r && r.match(/^\d{4}-\d{2}-\d{2}$/)) {
     const [yyyy, mm, dd] = r.split("-").map(Number);
     const start = new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
-    const end = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+    const end   = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   }
 
@@ -353,12 +387,12 @@ const getRecentDays = () => {
     d.setDate(d.getDate() - i);
     // ✅ Use local date parts instead of toISOString() which gives UTC date
     const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
+    const mm   = String(d.getMonth() + 1).padStart(2, "0");
+    const dd   = String(d.getDate()).padStart(2, "0");
     const value = i === 0 ? "today" : `${yyyy}-${mm}-${dd}`; // "today" for today, "2025-04-08" for others
     const label = i === 0 ? "Today"
       : i === 1 ? "Yesterday"
-        : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+      : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
     days.push({ value, label });
   }
   return days;
@@ -398,9 +432,9 @@ const formatStayDuration = (minutes) => {
 // ─── Route Connector ──────────────────────────────────────────────────────────
 // Shows the travel segment between two visits: distance + travel time
 const RouteConnector = ({ visit }) => {
-  const distKm = visit?.distanceFromPreviousKm ?? visit?.distance ?? 0;
-  const travelInfo = visit?.travelInfo;
-  const travelMins = travelInfo?.durationMinutes ?? visit?.travelTimeMinutes ?? 0;
+  const distKm      = visit?.distanceFromPreviousKm ?? visit?.distance ?? 0;
+  const travelInfo  = visit?.travelInfo;
+  const travelMins  = travelInfo?.durationMinutes ?? visit?.travelTimeMinutes ?? 0;
   const isEstimated = travelInfo?.isEstimated ?? true;
 
   // Only render if there was a previous visit (i.e., this is not the first stop)
@@ -454,9 +488,9 @@ const RouteConnector = ({ visit }) => {
             bgcolor: PRIMARY,
             animation: "travelDot 2s ease-in-out infinite",
             "@keyframes travelDot": {
-              "0%": { top: "0%", opacity: 1 },
-              "80%": { top: "85%", opacity: 1 },
-              "100%": { top: "85%", opacity: 0 },
+              "0%":   { top: "0%",   opacity: 1 },
+              "80%":  { top: "85%",  opacity: 1 },
+              "100%": { top: "85%",  opacity: 0 },
             },
           }} />
         </Box>
@@ -531,66 +565,6 @@ const RouteConnector = ({ visit }) => {
   );
 };
 
-// ─── Odometer Photo Thumbnail ────────────────────────────────────────────────
-const OdometerThumb = ({ rawUrl, alt, onClick }) => {
-  const [candidateIdx, setCandidateIdx] = useState(0);
-  const candidates = useMemo(() => getPhotoUrlCandidates(rawUrl), [rawUrl]);
-  const currentSrc = candidates[candidateIdx] || rawUrl;
-
-  useEffect(() => {
-    setCandidateIdx(0);
-  }, [rawUrl]);
-
-  return (
-    <Box
-      onClick={onClick}
-      sx={{
-        width: "100%",
-        height: { xs: 150, sm: 180 },
-        borderRadius: "14px",
-        overflow: "hidden",
-        position: "relative",
-        cursor: "pointer",
-        bgcolor: "#000",
-        border: "1px solid rgba(255,255,255,0.1)",
-        "&:hover img": { transform: "scale(1.05)" },
-        "&:hover .zoom-overlay": { opacity: 1 },
-      }}
-    >
-      <Box
-        component="img"
-        src={currentSrc}
-        alt={alt}
-        onError={() => setCandidateIdx((i) => i + 1 < candidates.length ? i + 1 : i)}
-        sx={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          transition: "transform 0.3s ease",
-        }}
-      />
-      <Box
-        className="zoom-overlay"
-        sx={{
-          position: "absolute",
-          inset: 0,
-          bgcolor: "rgba(0,0,0,0.45)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 0.75,
-          color: "#fff",
-          opacity: 0,
-          transition: "opacity 0.2s ease",
-        }}
-      >
-        <PhotoCamera sx={{ fontSize: 20 }} />
-        <Typography sx={{ fontSize: "0.8rem", fontWeight: 700 }}>Click to Enlarge</Typography>
-      </Box>
-    </Box>
-  );
-};
-
 // ─── Visit Card ───────────────────────────────────────────────────────────────
 const VisitCard = ({ visit: v, index, isLast, fixedBatteryInfo, fixedBatteryChip }) => {
   const cur = v.status === "InProgress";
@@ -628,8 +602,8 @@ const VisitCard = ({ visit: v, index, isLast, fixedBatteryInfo, fixedBatteryChip
   const displayTime = v.checkInTime
     ? fmt(v.checkInTime)
     : v.createdAt
-      ? fmt(v.createdAt)
-      : v.visitTime || null;
+    ? fmt(v.createdAt)
+    : v.visitTime || null;
 
   const displayDate = v.visitDate
     ? new Date(v.visitDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
@@ -804,7 +778,401 @@ const VisitCard = ({ visit: v, index, isLast, fixedBatteryInfo, fixedBatteryChip
   );
 };
 
+// ─── Trip Timeline Card ────────────────────────────────────────────────────────
+const TripTimelineCard = ({ trip, index, onDeleteTrip, onPreviewImage }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+
+  const isStopped = trip.status === "stopped" || Boolean(trip.stopReason);
+  const isCompleted = trip.status === "completed";
+  const isOngoing = trip.status === "on_going" || trip.status === "in_progress";
+
+  const startLoc = trip.start?.locationName || trip.startLocationName || "Start Location";
+  const startAddr = trip.start?.address || "";
+  const startTime = trip.start?.time || trip.start?.timestamp || trip.startTime || trip.createdAt;
+  const startFallback = trip.start?.timestamp || trip.createdAt || trip.updatedAt;
+  const formattedStartTime = fmt(startTime, startFallback);
+
+  const startOdo = trip.start?.odometer ?? trip.startOdometer ?? null;
+  const startPhoto = normalizePhotoUrl(trip.start?.photoUri || trip.startPhoto || trip.photoUrl);
+  const startAutoOdo = trip.start?.autoDetectedOdometer ?? trip.autoDetectedReading ?? null;
+  const isStartManual = startAutoOdo !== null && startOdo !== null && Math.round(Number(startOdo)) !== Math.round(Number(startAutoOdo));
+
+  const destLoc = trip.destination?.name || trip.destination?.address || trip.destinationName || "";
+  const endLoc = trip.end?.locationName || trip.endLocationName || (isOngoing ? (destLoc || "Destination") : (isStopped ? "Stopped Location" : "Completed Location"));
+  const endAddr = trip.end?.address || trip.destination?.address || "";
+  const endTime = trip.end?.time || trip.end?.timestamp || trip.endTime || trip.tripCompletedAt || trip.tripStoppedAt || (isOngoing ? null : trip.updatedAt);
+  const endFallback = trip.end?.timestamp || trip.tripCompletedAt || trip.tripStoppedAt || (isOngoing ? null : trip.updatedAt);
+  const formattedEndTime = fmt(endTime, endFallback);
+  const endOdo = trip.end?.odometer ?? trip.endOdometer ?? null;
+  const endPhoto = normalizePhotoUrl(trip.end?.photoUri || trip.endPhoto);
+  const endAutoOdo = trip.end?.autoDetectedOdometer ?? null;
+  const isEndManual = endAutoOdo !== null && endOdo !== null && Math.round(Number(endOdo)) !== Math.round(Number(endAutoOdo));
+
+  const kmTravelled = Number(trip.kmTravelled ?? (startOdo !== null && endOdo !== null ? Math.max(0, endOdo - startOdo) : 0)) || 0;
+  const durationMins = Number(trip.durationMinutes) || (startTime && endTime ? Math.max(0, Math.round((new Date(endTime) - new Date(startTime)) / 60000)) : 0);
+
+  const formatDuration = (mins) => {
+    if (!mins || mins <= 0) return null;
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return h > 0 ? `${h}h ${m}m` : `${m} mins`;
+  };
+
+  const statusColor = isCompleted ? SUCCESS : isStopped ? WARNING : (isDark ? "#38bdf8" : PRIMARY);
+  const statusLabel = isCompleted ? "Completed" : isStopped ? "Stopped Early" : "In Progress";
+  const statusIcon = isCompleted ? <CheckCircle sx={{ fontSize: 13 }} /> : isStopped ? <StopCircle sx={{ fontSize: 13 }} /> : <Navigation sx={{ fontSize: 13 }} />;
+
+  return (
+    <Box sx={{
+      p: 2, mb: 2,
+      bgcolor: isDark ? "#0e1424" : "#ffffff",
+      borderRadius: "14px",
+      border: `1px solid ${isDark ? (isStopped ? alpha(WARNING, 0.45) : isCompleted ? alpha(SUCCESS, 0.35) : "rgba(255,255,255,0.12)") : (isStopped ? alpha(WARNING, 0.4) : isCompleted ? alpha(SUCCESS, 0.3) : alpha(PRIMARY, 0.2))}`,
+      boxShadow: isDark ? "0 4px 16px rgba(0,0,0,0.35)" : "0 2px 10px rgba(0,0,0,0.04)",
+      position: "relative",
+      transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+      "&:hover": {
+        boxShadow: isDark ? "0 6px 24px rgba(0,0,0,0.5)" : "0 6px 20px rgba(0,0,0,0.08)",
+        borderColor: statusColor,
+      }
+    }}>
+      {/* Header: Trip #, Purpose & Status */}
+      <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 1.5, gap: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{
+            width: 32, height: 32, borderRadius: "8px",
+            bgcolor: alpha(statusColor, 0.12),
+            color: statusColor,
+            display: "flex", alignItems: "center", justifyContent: "center"
+          }}>
+            <DirectionsCar sx={{ fontSize: 18 }} />
+          </Box>
+          <Box>
+            <Typography sx={{ fontWeight: 800, color: isDark ? "#ffffff" : "#0f172a", fontSize: "0.88rem", lineHeight: 1.2 }}>
+              Trip #{trip.tripNumber || index + 1}
+            </Typography>
+            {trip.purpose && (
+              <Typography sx={{ fontSize: "0.72rem", color: isDark ? "#94a3b8" : "#64748b", fontWeight: 600 }}>
+                {trip.purpose}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Chip
+            icon={statusIcon}
+            label={statusLabel}
+            size="small"
+            sx={{
+              height: 22,
+              fontWeight: 800,
+              fontSize: "0.68rem",
+              bgcolor: alpha(statusColor, 0.12),
+              color: statusColor,
+              border: `1px solid ${alpha(statusColor, 0.3)}`,
+              "& .MuiChip-icon": { color: statusColor }
+            }}
+          />
+          {onDeleteTrip && (
+            <Tooltip title="Delete Trip Record">
+              <IconButton
+                size="small"
+                onClick={() => {
+                  if (window.confirm("Are you sure you want to delete this trip record?")) {
+                    onDeleteTrip(trip._id || trip.id);
+                  }
+                }}
+                sx={{ color: isDark ? "#64748b" : "#94a3b8", "&:hover": { color: ERROR, bgcolor: alpha(ERROR, 0.08) }, p: 0.5 }}
+              >
+                <DeleteOutline sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      </Box>
+
+      {/* Start Location Node */}
+      <Box sx={{ display: "flex", gap: 1.2, position: "relative", mb: 1.5 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", width: 20, flexShrink: 0 }}>
+          <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: SUCCESS, border: `2px solid ${isDark ? "#0e1424" : "#fff"}`, boxShadow: "0 0 0 2px #22c55e", mt: "4px" }} />
+          <Box sx={{ width: 2, flex: 1, bgcolor: isDark ? "rgba(255,255,255,0.15)" : "#e2e8f0", my: 0.5 }} />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, color: isDark ? "#f1f5f9" : "#1e293b" }}>
+              Start: {startLoc}
+            </Typography>
+            {formattedStartTime && (
+              <Typography sx={{ fontSize: "0.72rem", color: isDark ? "#94a3b8" : "#64748b", fontWeight: 700 }}>
+                {formattedStartTime}
+              </Typography>
+            )}
+          </Box>
+          {startAddr && startAddr !== startLoc && (
+            <Typography sx={{ fontSize: "0.7rem", color: isDark ? "#94a3b8" : "#64748b", mt: 0.2 }}>
+              {startAddr}
+            </Typography>
+          )}
+
+          {/* Start Odometer & Photo Card */}
+          {(startOdo !== null || startPhoto) && (
+            <Box sx={{
+              mt: 0.75, p: 0.85, borderRadius: "8px",
+              bgcolor: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}`,
+              display: "flex", alignItems: "center", gap: 1.2
+            }}>
+              {startPhoto && (
+                <Tooltip title="Click to view odometer photo" arrow>
+                  <Box
+                    onClick={() => onPreviewImage && onPreviewImage(startPhoto, `Trip #${trip.tripNumber || index + 1} Start Odometer`)}
+                    sx={{
+                      width: 44, height: 44, borderRadius: "8px", overflow: "hidden",
+                      border: `2px solid ${isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"}`, cursor: "pointer", flexShrink: 0,
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                      transition: "transform 0.15s, border-color 0.15s",
+                      "&:hover": { transform: "scale(1.05)", borderColor: "#2563eb" }
+                    }}
+                  >
+                    <Box component="img" src={startPhoto} alt="Start Odometer" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </Box>
+                </Tooltip>
+              )}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                {startAutoOdo !== null && (
+                  <Typography sx={{ fontSize: "0.68rem", color: isDark ? "#60a5fa" : "#2563eb", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.4 }}>
+                    🤖 AI Scanned: {Number(startAutoOdo).toLocaleString()} km
+                  </Typography>
+                )}
+                {isStartManual ? (
+                  <Typography sx={{ fontSize: "0.72rem", color: isDark ? "#fbbf24" : "#b45309", fontWeight: 800 }}>
+                    ✏️ Manual: {Number(startOdo).toLocaleString()} km (Override)
+                  </Typography>
+                ) : (
+                  <Typography sx={{ fontSize: "0.72rem", color: isDark ? "#f1f5f9" : "#1e293b", fontWeight: 700 }}>
+                    ✓ Odometer: {Number(startOdo).toLocaleString()} km
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </Box>
+
+      {/* End / Destination Node */}
+      <Box sx={{ display: "flex", gap: 1.2, position: "relative", mb: 1.5 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", width: 20, flexShrink: 0 }}>
+          <Box sx={{
+            width: 12, height: 12, borderRadius: "50%",
+            bgcolor: isStopped ? WARNING : isCompleted ? (isDark ? "#38bdf8" : PRIMARY) : "#94a3b8",
+            border: `2px solid ${isDark ? "#0e1424" : "#fff"}`,
+            boxShadow: `0 0 0 2px ${isStopped ? WARNING : isCompleted ? (isDark ? "#38bdf8" : PRIMARY) : "#94a3b8"}`,
+            mt: "4px"
+          }} />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, color: isStopped ? (isDark ? "#fbbf24" : "#b45309") : (isDark ? "#f1f5f9" : "#1e293b") }}>
+              {isOngoing ? "Heading To: " : isStopped ? "Stopped At: " : "End: "}
+              {endLoc}
+            </Typography>
+            {formattedEndTime && (
+              <Typography sx={{ fontSize: "0.72rem", color: isDark ? "#94a3b8" : "#64748b", fontWeight: 700 }}>
+                {formattedEndTime}
+              </Typography>
+            )}
+          </Box>
+          {endAddr && endAddr !== endLoc && (
+            <Typography sx={{ fontSize: "0.7rem", color: isDark ? "#94a3b8" : "#64748b", mt: 0.2 }}>
+              {endAddr}
+            </Typography>
+          )}
+
+          {/* End Odometer & Photo Card */}
+          {(endOdo !== null || endPhoto) && (
+            <Box sx={{
+              mt: 0.75, p: 0.85, borderRadius: "8px",
+              bgcolor: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}`,
+              display: "flex", alignItems: "center", gap: 1.2
+            }}>
+              {endPhoto && (
+                <Tooltip title="Click to view odometer photo" arrow>
+                  <Box
+                    onClick={() => onPreviewImage && onPreviewImage(endPhoto, `Trip #${trip.tripNumber || index + 1} End Odometer`)}
+                    sx={{
+                      width: 44, height: 44, borderRadius: "8px", overflow: "hidden",
+                      border: `2px solid ${isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1"}`, cursor: "pointer", flexShrink: 0,
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                      transition: "transform 0.15s, border-color 0.15s",
+                      "&:hover": { transform: "scale(1.05)", borderColor: "#2563eb" }
+                    }}
+                  >
+                    <Box component="img" src={endPhoto} alt="End Odometer" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </Box>
+                </Tooltip>
+              )}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                {endAutoOdo !== null && (
+                  <Typography sx={{ fontSize: "0.68rem", color: isDark ? "#60a5fa" : "#2563eb", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.4 }}>
+                    🤖 AI Scanned: {Number(endAutoOdo).toLocaleString()} km
+                  </Typography>
+                )}
+                {isEndManual ? (
+                  <Typography sx={{ fontSize: "0.72rem", color: isDark ? "#fbbf24" : "#b45309", fontWeight: 800 }}>
+                    ✏️ Manual: {Number(endOdo).toLocaleString()} km (Override)
+                  </Typography>
+                ) : (
+                  <Typography sx={{ fontSize: "0.72rem", color: isDark ? "#f1f5f9" : "#1e293b", fontWeight: 700 }}>
+                    ✓ Odometer: {Number(endOdo).toLocaleString()} km
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </Box>
+
+      {/* STOPPED REASON CALLOUT BOX (Prominently displayed if user stopped the trip) */}
+      {isStopped && (
+        <Box sx={{
+          p: 1.25, mb: 1.5,
+          bgcolor: alpha(WARNING, isDark ? 0.15 : 0.08),
+          borderRadius: "8px",
+          borderLeft: `4px solid ${WARNING}`,
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 1
+        }}>
+          <ReportProblem sx={{ fontSize: 18, color: WARNING, mt: "2px", flexShrink: 0 }} />
+          <Box sx={{ flex: 1 }}>
+            <Typography sx={{ fontSize: "0.74rem", fontWeight: 800, color: isDark ? "#fcd34d" : "#92400e", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+              Trip Stopped Early
+            </Typography>
+            <Typography sx={{ fontSize: "0.76rem", color: isDark ? "#fef3c7" : "#78350f", fontWeight: 600, mt: 0.25 }}>
+              Reason: &ldquo;{trip.stopReason || "User manually stopped the trip before reaching destination."}&rdquo;
+            </Typography>
+            <Typography sx={{ fontSize: "0.7rem", color: isDark ? "#fde68a" : "#92400e", mt: 0.25 }}>
+              Travelled <b>{kmTravelled > 0 ? kmTravelled.toFixed(2) : "0.00"} km</b> before stopping
+              {endTime ? ` at ${fmt(endTime)}` : ""}.
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
+      {/* Stats row: KM travelled, Duration */}
+      <Box sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        pt: 1,
+        borderTop: `1px dashed ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"}`,
+        flexWrap: "wrap",
+        gap: 1
+      }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
+          <Speed sx={{ fontSize: 15, color: isDark ? "#38bdf8" : PRIMARY }} />
+          <Typography sx={{ fontSize: "0.78rem", fontWeight: 800, color: isDark ? "#38bdf8" : PRIMARY }}>
+            {kmTravelled > 0 ? `${kmTravelled.toFixed(2)} km` : "0.00 km"} travelled
+          </Typography>
+        </Box>
+
+        {formatDuration(durationMins) && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
+            <AccessTime sx={{ fontSize: 13, color: isDark ? "#94a3b8" : "#64748b" }} />
+            <Typography sx={{ fontSize: "0.72rem", color: isDark ? "#94a3b8" : "#64748b", fontWeight: 600 }}>
+              {formatDuration(durationMins)}
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    </Box>
+  );
+};
+
+const clientGeocodeCache = new Map();
+
+const isCoordinateText = (text) => {
+  if (!text || typeof text !== "string") return false;
+  const clean = text.trim();
+  return /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(clean) || /^\d+\.\d+$/.test(clean);
+};
+
+const resolveCoordinateAddress = async (lat, lng) => {
+  if (!lat || !lng || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
+  const key = `${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}`;
+  if (clientGeocodeCache.has(key)) return clientGeocodeCache.get(key);
+
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`,
+      { headers: { "Accept-Language": "en" } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.display_name) {
+        const addr = data.address || {};
+        const road = addr.road || addr.pedestrian || addr.street || "";
+        const neighbourhood = addr.suburb || addr.neighbourhood || addr.residential || addr.subdistrict || "";
+        const city = addr.city || addr.town || addr.village || addr.municipality || "";
+        const short = [neighbourhood || road, city].filter(Boolean).join(", ") || data.display_name.split(",").slice(0, 2).join(", ");
+        const result = { full: data.display_name, short: short || data.display_name };
+        clientGeocodeCache.set(key, result);
+        return result;
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const res = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const informative = (data.localityInfo?.informative || []).map((i) => i.name).filter((n) => n && !/india/i.test(n));
+      const admin = (data.localityInfo?.administrative || []).filter((a) => a.order >= 4).map((a) => a.name);
+      const locality = data.locality || data.city;
+      const district = data.principalSubdivision;
+      const postcode = data.postcode;
+      const uniqueParts = Array.from(new Set([...informative, ...admin, locality, district, postcode])).filter(Boolean);
+      if (uniqueParts.length > 0) {
+        const full = uniqueParts.join(", ");
+        const short = uniqueParts.slice(0, 2).join(", ");
+        const result = { full, short };
+        clientGeocodeCache.set(key, result);
+        return result;
+      }
+    }
+  } catch (e) {}
+
+  return null;
+};
+
 const StayedLocationCard = ({ stay }) => {
+  const [geoAddress, setGeoAddress] = useState(null);
+
+  const rawLat = stay?.lat ?? (isCoordinateText(stay?.locationName) ? Number(stay.locationName.split(",")[0]) : null);
+  const rawLng = stay?.lng ?? (isCoordinateText(stay?.locationName) ? Number(stay.locationName.split(",")[1]) : null);
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
+
+  useEffect(() => {
+    let active = true;
+    const isCoordName = isCoordinateText(stay?.locationName);
+    const isCoordAddr = isCoordinateText(stay?.address);
+
+    if ((!stay?.address || isCoordAddr || !stay?.locationName || isCoordName) && Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
+      resolveCoordinateAddress(lat, lng).then((resolved) => {
+        if (active && resolved) {
+          setGeoAddress(resolved);
+        }
+      });
+    }
+    return () => { active = false; };
+  }, [stay, lat, lng]);
+
   const latestEvent = Array.isArray(stay?.events) && stay.events.length
     ? [...stay.events].sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())[0]
     : null;
@@ -812,6 +1180,18 @@ const StayedLocationCard = ({ stay }) => {
   const endTime = latestEvent?.endTime || stay?.lastEndTime || null;
   const totalMinutes = Number(stay?.totalDurationMinutes) || 0;
   const visitCount = Number(stay?.visitCount) || 0;
+
+  const displayName =
+    (!isCoordinateText(stay?.locationName) && stay?.locationName) ||
+    geoAddress?.short ||
+    (!isCoordinateText(stay?.address) && stay?.address?.split(",")?.slice(0, 2)?.join(", ")) ||
+    (Number.isFinite(lat) && Number.isFinite(lng) ? `Stayed Location (${lat.toFixed(4)}, ${lng.toFixed(4)})` : "Stayed location");
+
+  const displayAddress =
+    (!isCoordinateText(stay?.address) && stay?.address) ||
+    geoAddress?.full ||
+    (!isCoordinateText(stay?.locationName) && stay?.locationName) ||
+    (geoAddress?.short ? geoAddress.short : "");
 
   return (
     <Box sx={{ display: "flex", gap: 2, position: "relative", mb: 2 }}>
@@ -829,7 +1209,7 @@ const StayedLocationCard = ({ stay }) => {
       <Box sx={{ flex: 1, minWidth: 0, pt: 0.25 }}>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.4 }}>
           <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem", lineHeight: 1.3 }}>
-            {stay?.locationName || "Stayed location"}
+            {displayName}
           </Typography>
           {endTime && (
             <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8", flexShrink: 0 }}>
@@ -838,7 +1218,7 @@ const StayedLocationCard = ({ stay }) => {
           )}
         </Box>
 
-        {stay?.address && (
+        {displayAddress ? (
           <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4, mb: 0.5 }}>
             <LocationOn sx={{ fontSize: 12, color: WARNING, mt: "2px", flexShrink: 0 }} />
             <Typography sx={{
@@ -846,10 +1226,10 @@ const StayedLocationCard = ({ stay }) => {
               display: "-webkit-box", WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical", overflow: "hidden",
             }}>
-              {stay.address}
+              {displayAddress}
             </Typography>
           </Box>
-        )}
+        ) : null}
 
         <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 0.5 }}>
           <Chip
@@ -892,7 +1272,7 @@ const FilterDrawer = ({ open, onClose, filters, onApply }) => {
   }, [filters, open]);
 
   return (
-    <SwipeableDrawer anchor="bottom" open={open} onClose={onClose} onOpen={() => { }}
+    <SwipeableDrawer anchor="bottom" open={open} onClose={onClose} onOpen={() => {}}
       PaperProps={{ sx: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "80vh", bgcolor: cardBg, color: textTitle, borderTop: `1px solid ${cardBorder}` } }}>
       <Box sx={{ p: 3 }}>
         <Box sx={{ width: 36, height: 4, bgcolor: "#e2e8f0", borderRadius: 2, mx: "auto", mb: 2.5 }} />
@@ -900,53 +1280,53 @@ const FilterDrawer = ({ open, onClose, filters, onApply }) => {
           <Typography variant="h6" fontWeight={700} sx={{ color: PRIMARY }}>Filter Visits</Typography>
           <IconButton onClick={onClose} size="small"><Close /></IconButton>
         </Box>
-
+        
 
         {/* Date Range */}
-        <Typography sx={{ fontWeight: 600, fontSize: "0.82rem", color: "#0f172a", mb: 1 }}>Date Range</Typography>
+<Typography sx={{ fontWeight: 600, fontSize: "0.82rem", color: "#0f172a", mb: 1 }}>Date Range</Typography>
 
-        {/* Recent day chips */}
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
-          {getRecentDays().map(o => (
-            <Chip key={o.value} label={o.label}
-              onClick={() => setLocal(p => ({ ...p, dateRange: o.value }))}
-              sx={{
-                fontWeight: 600, fontSize: "0.78rem", cursor: "pointer",
-                bgcolor: local.dateRange === o.value ? PRIMARY : "#f1f5f9",
-                color: local.dateRange === o.value ? "#fff" : "#374151",
-              }} />
-          ))}
-          {/* This Week & This Month */}
-          {[{ value: "week", label: "This Week" }, { value: "month", label: "This Month" }].map(o => (
-            <Chip key={o.value} label={o.label}
-              onClick={() => setLocal(p => ({ ...p, dateRange: o.value }))}
-              sx={{
-                fontWeight: 600, fontSize: "0.78rem", cursor: "pointer",
-                bgcolor: local.dateRange === o.value ? PRIMARY : "#f1f5f9",
-                color: local.dateRange === o.value ? "#fff" : "#374151",
-              }} />
-          ))}
-        </Box>
+{/* Recent day chips */}
+<Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
+  {getRecentDays().map(o => (
+    <Chip key={o.value} label={o.label}
+      onClick={() => setLocal(p => ({ ...p, dateRange: o.value }))}
+      sx={{
+        fontWeight: 600, fontSize: "0.78rem", cursor: "pointer",
+        bgcolor: local.dateRange === o.value ? PRIMARY : "#f1f5f9",
+        color:   local.dateRange === o.value ? "#fff"  : "#374151",
+      }} />
+  ))}
+  {/* This Week & This Month */}
+  {[{ value: "week", label: "This Week" }, { value: "month", label: "This Month" }].map(o => (
+    <Chip key={o.value} label={o.label}
+      onClick={() => setLocal(p => ({ ...p, dateRange: o.value }))}
+      sx={{
+        fontWeight: 600, fontSize: "0.78rem", cursor: "pointer",
+        bgcolor: local.dateRange === o.value ? PRIMARY : "#f1f5f9",
+        color:   local.dateRange === o.value ? "#fff"  : "#374151",
+      }} />
+  ))}
+</Box>
 
-        {/* Custom date picker */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
-          <CalendarToday sx={{ fontSize: 15, color: PRIMARY }} />
-          <Typography sx={{ fontSize: "0.78rem", color: "#374151", fontWeight: 500 }}>Pick a date:</Typography>
-          <Box
-            component="input"
-            type="date"
-            max={new Date().toISOString().split("T")[0]}
-            value={local.dateRange?.match(/^\d{4}-\d{2}-\d{2}$/) ? local.dateRange : ""}
-            onChange={e => e.target.value && setLocal(p => ({ ...p, dateRange: e.target.value }))}
-            sx={{
-              border: `1px solid ${alpha(PRIMARY, 0.3)}`,
-              borderRadius: "8px", px: 1.25, py: 0.6,
-              fontSize: "0.78rem", color: "#374151",
-              outline: "none", cursor: "pointer",
-              "&:focus": { borderColor: PRIMARY },
-            }}
-          />
-        </Box>
+{/* Custom date picker */}
+<Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5 }}>
+  <CalendarToday sx={{ fontSize: 15, color: PRIMARY }} />
+  <Typography sx={{ fontSize: "0.78rem", color: "#374151", fontWeight: 500 }}>Pick a date:</Typography>
+  <Box
+    component="input"
+    type="date"
+    max={new Date().toISOString().split("T")[0]}
+    value={local.dateRange?.match(/^\d{4}-\d{2}-\d{2}$/) ? local.dateRange : ""}
+    onChange={e => e.target.value && setLocal(p => ({ ...p, dateRange: e.target.value }))}
+    sx={{
+      border: `1px solid ${alpha(PRIMARY, 0.3)}`,
+      borderRadius: "8px", px: 1.25, py: 0.6,
+      fontSize: "0.78rem", color: "#374151",
+      outline: "none", cursor: "pointer",
+      "&:focus": { borderColor: PRIMARY },
+    }}
+  />
+</Box>
 
 
 
@@ -985,8 +1365,8 @@ const FilterDrawer = ({ open, onClose, filters, onApply }) => {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function MemberVisitHistory({ userId: propUserId }) {
-  const theme = useTheme();
-  const isDark = theme.palette.mode === "dark";
+  const theme    = useTheme();
+  const isDark   = theme.palette.mode === "dark";
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const pageBg = isDark ? "#060a12" : "#f4f6fb";
@@ -1010,33 +1390,32 @@ export default function MemberVisitHistory({ userId: propUserId }) {
   const hasValidTargetUserId = isValidMongoObjectId(targetUserId);
   const isAdminView = !!paramUserId;
 
-  const [visits, setVisits] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [hInchargeore, setHInchargeore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [isPunchedIn, setIsPunchedIn] = useState(false);
-  const [hasPunchedOut, setHasPunchedOut] = useState(false);
+  const [visits,           setVisits]           = useState([]);
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState(null);
+  const [page,             setPage]             = useState(1);
+  const [hInchargeore,          setHInchargeore]          = useState(false);
+  const [loadingMore,      setLoadingMore]      = useState(false);
+  const [isPunchedIn,      setIsPunchedIn]      = useState(false);
+  const [hasPunchedOut,    setHasPunchedOut]    = useState(false);
   const [attendanceRecord, setAttendanceRecord] = useState(null);
-  const [odometerPreview, setOdometerPreview] = useState(null);
-  const [punchInLocation, setPunchInLocation] = useState(null);
+  const [punchInLocation,  setPunchInLocation]  = useState(null);
   const [punchOutLocation, setPunchOutLocation] = useState(null);
-  const [expenses, setExpenses] = useState([]);
-  const [filters, setFilters] = useState(() => {
+  const [expenses,         setExpenses]         = useState([]);
+  const [filters,          setFilters]          = useState(() => {
     const defaultDate = location.state?.selectedDate || "today";
     return { dateRange: defaultDate, statuses: [] };
   });
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [locateTrigger, setLocateTrigger] = useState(0);
-  const [locating, setLocating] = useState(false);
+  const [filterOpen,       setFilterOpen]       = useState(false);
+  const [fullscreen,       setFullscreen]       = useState(false);
+  const [lastUpdated,      setLastUpdated]      = useState(null);
+  const [locateTrigger,    setLocateTrigger]    = useState(0);
+  const [locating,         setLocating]         = useState(false);
   const [punchInPopupTrigger, setPunchInPopupTrigger] = useState(0);
-  const [gpsDistance, setGpsDistance] = useState(null);
-  const [mapDistance, setMapDistance] = useState(null);
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [resolvedAddress, setResolvedAddress] = useState("");
+  const [gpsDistance,      setGpsDistance]      = useState(null);
+  const [mapDistance,      setMapDistance]      = useState(null);
+  const [currentLocation,  setCurrentLocation]  = useState(null);
+  const [resolvedAddress,  setResolvedAddress]  = useState("");
   const [networkStatus, setNetworkStatus] = useState(() => {
     if (typeof navigator === "undefined" || !navigator.onLine) {
       return { isOnline: false, type: "offline", label: "Signal Off", color: "#ef4444", bg: "rgba(239, 68, 68, 0.12)" };
@@ -1134,7 +1513,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
             return;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       // 2. Fallback to BigDataCloud with full detailed area + street components
       try {
@@ -1170,25 +1549,35 @@ export default function MemberVisitHistory({ userId: propUserId }) {
             return;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
     };
 
     resolveLocation();
 
     return () => { active = false; };
   }, [currentLocation?.lat, currentLocation?.lng, punchInLocation?.lat, punchInLocation?.lng, visits]);
-  const [autoVisitToast, setAutoVisitToast] = useState(null);
-  const [dwellInfo, setDwellInfo] = useState(null);
-  const [stayedLocations, setStayedLocations] = useState([]);
-  const [liveBatteryInfo, setLiveBatteryInfo] = useState({ percentage: null, isCharging: false, recordedAt: null });
+  const [autoVisitToast,   setAutoVisitToast]   = useState(null);
+  const [dwellInfo,        setDwellInfo]        = useState(null);
+  const [stayedLocations,  setStayedLocations]  = useState([]);
+  const [trips,            setTrips]            = useState([]);
+  const [tripsLoading,     setTripsLoading]     = useState(false);
+  const [odometerData,     setOdometerData]     = useState(null);
+  const [previewOdoImg,    setPreviewOdoImg]    = useState(null);
+  const [activeRightTab,   setActiveRightTab]   = useState("timeline"); // "timeline" | "trips"
+  const [liveBatteryInfo,  setLiveBatteryInfo]  = useState({ percentage: null, isCharging: false, recordedAt: null });
   const [punchBatteryInfo, setPunchBatteryInfo] = useState({ percentage: null, isCharging: false, recordedAt: null });
-  const [targetUserReady, setTargetUserReady] = useState(false);
+  const [targetUserReady,  setTargetUserReady]  = useState(false);
   const [targetLookupRetry, setTargetLookupRetry] = useState(0);
   const canLoadTargetUser = hasValidTargetUserId && targetUserReady;
 
   const handleLocateMe = () => {
     setLocating(true);
     setLocateTrigger(t => t + 1);
+
+    if (isAdminView) {
+      setTimeout(() => setLocating(false), 600);
+      return;
+    }
 
     if (!navigator.geolocation) {
       setLocating(false);
@@ -1237,7 +1626,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
   useEffect(() => {
     if (!isPunchedIn || hasPunchedOut) { setDwellInfo(null); return; }
     const interval = setInterval(() => window.dispatchEvent(new CustomEvent("requestDwellInfo")), 60_000);
-    const onDwell = (e) => setDwellInfo(e.detail);
+    const onDwell  = (e) => setDwellInfo(e.detail);
     window.addEventListener("dwellInfoResponse", onDwell);
     return () => { clearInterval(interval); window.removeEventListener("dwellInfoResponse", onDwell); };
   }, [isPunchedIn, hasPunchedOut]);
@@ -1309,12 +1698,12 @@ export default function MemberVisitHistory({ userId: propUserId }) {
       }
 
       const selectedDay = getSelectedDayKey(filters.dateRange);
-      const res = await apiFetch("/attendance", {
+      const res   = await apiFetch("/attendance", {
         startDate: selectedDay, endDate: selectedDay, limit: 1,
-        ...(targetUserId ? { userId: targetUserId } : {}),
+        ...(isAdminView ? { userId: targetUserId } : {}),
       });
       const list = res?.data?.attendances || res?.result?.attendances || res?.data || [];
-      const att = Array.isArray(list) ? list[0] : list;
+      const att  = Array.isArray(list) ? list[0] : list;
       setAttendanceRecord(att || null);
 
       if (att?.punchIn?.time) {
@@ -1326,10 +1715,10 @@ export default function MemberVisitHistory({ userId: propUserId }) {
         setIsPunchedIn(!out);
         setHasPunchedOut(out);
         setPunchInLocation({
-          lat: att.punchIn?.location?.lat || att.punchIn?.location?.latitude || null,
-          lng: att.punchIn?.location?.lng || att.punchIn?.location?.longitude || null,
+          lat:     att.punchIn?.location?.lat  || att.punchIn?.location?.latitude  || null,
+          lng:     att.punchIn?.location?.lng  || att.punchIn?.location?.longitude || null,
           address: att.punchIn?.address || null,
-          time: att.punchIn?.time || null,
+          time:    att.punchIn?.time    || null,
         });
         const normalizedPercentage =
           batterySnapshot?.percentage !== undefined && batterySnapshot?.percentage !== null
@@ -1348,10 +1737,10 @@ export default function MemberVisitHistory({ userId: propUserId }) {
         });
         if (out && att.punchOut?.time) {
           setPunchOutLocation({
-            lat: att.punchOut?.location?.lat || att.punchOut?.location?.latitude || null,
-            lng: att.punchOut?.location?.lng || att.punchOut?.location?.longitude || null,
+            lat:     att.punchOut?.location?.lat  || att.punchOut?.location?.latitude  || null,
+            lng:     att.punchOut?.location?.lng  || att.punchOut?.location?.longitude || null,
             address: att.punchOut?.address || null,
-            time: att.punchOut?.time || null,
+            time:    att.punchOut?.time    || null,
           });
         } else {
           setPunchOutLocation(null);
@@ -1404,10 +1793,10 @@ export default function MemberVisitHistory({ userId: propUserId }) {
       });
 
       const fetchedVisits =
-        res?.data?.visits ||
-        res?.result?.visits ||
-        res?.visits ||
-        (Array.isArray(res?.data) ? res.data : null) ||
+        res?.data?.visits    ||
+        res?.result?.visits  ||
+        res?.visits          ||
+        (Array.isArray(res?.data)   ? res.data   : null) ||
         (Array.isArray(res?.result) ? res.result : null) ||
         [];
 
@@ -1427,7 +1816,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
         ...getDateRange(filters.dateRange),
         ...(isAdminView ? { userId: targetUserId } : {}),
       });
-    } catch { }
+    } catch {}
   }, [filters, targetUserId, canLoadTargetUser, isAdminView]);
 
   const fetchGpsDistance = useCallback(async () => {
@@ -1439,7 +1828,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     try {
       const selectedDate = getSelectedDayKey(filters.dateRange);
       const res = await apiFetch("/location/distance", { date: selectedDate, salesmanId: targetUserId });
-      const data = res?.data || res?.result || res;
+      const data  = res?.data || res?.result || res;
       setGpsDistance({ totalKm: data?.totalKm ?? 0, totalPoints: data?.totalPoints ?? 0 });
     } catch (e) { console.warn("GPS distance fetch failed:", e.message); }
   }, [filters.dateRange, targetUserId, canLoadTargetUser]);
@@ -1466,6 +1855,100 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     }
   }, [filters.dateRange, targetUserId, canLoadTargetUser]);
 
+  const fetchTrips = useCallback(async () => {
+    if (!targetUserId || !canLoadTargetUser) {
+      setTrips([]);
+      setOdometerData(null);
+      return;
+    }
+    try {
+      setTripsLoading(true);
+      const selectedDate = getSelectedDayKey(filters.dateRange);
+      const [tripsRes, odoRes] = await Promise.all([
+        apiFetch("/trips", {
+          salesmanId: targetUserId,
+          userId: targetUserId,
+          dateKey: selectedDate,
+        }, { ignoreNotFound: true }).catch(() => null),
+        apiFetch("/trip/status/today", {
+          salesmanId: targetUserId,
+          userId: targetUserId,
+          dateKey: selectedDate,
+        }, { ignoreNotFound: true }).catch(() => null),
+      ]);
+
+      const rawList = tripsRes?.result ?? tripsRes?.data;
+      const list = Array.isArray(rawList)
+        ? rawList
+        : Array.isArray(rawList?.trips)
+        ? rawList.trips
+        : [];
+      setTrips(list);
+
+      const odoInfo = odoRes?.data || odoRes?.result || null;
+      setOdometerData(odoInfo);
+    } catch (e) {
+      console.warn("Trips fetch failed:", e.message);
+      setTrips([]);
+      setOdometerData(null);
+    } finally {
+      setTripsLoading(false);
+    }
+  }, [filters.dateRange, targetUserId, canLoadTargetUser]);
+
+  const activeOdometerInfo = (() => {
+    const startOdoObj = odometerData?.startOdometer;
+    const firstTripWithOdo = trips.find(
+      (t) => t.start?.photoUri || (t.start?.odometer != null && Number(t.start.odometer) > 0)
+    );
+
+    const rawPhoto = startOdoObj?.photoUrl || firstTripWithOdo?.start?.photoUri || "";
+    const photoUrl = normalizePhotoUrl(rawPhoto);
+
+    const effectiveKm =
+      startOdoObj?.reading != null
+        ? Number(startOdoObj.reading)
+        : firstTripWithOdo?.start?.odometer != null
+        ? Number(firstTripWithOdo.start.odometer)
+        : null;
+
+    const aiKm =
+      startOdoObj?.autoDetectedReading != null
+        ? Number(startOdoObj.autoDetectedReading)
+        : firstTripWithOdo?.start?.autoDetectedOdometer != null
+        ? Number(firstTripWithOdo.start.autoDetectedOdometer)
+        : null;
+
+    const recordedAt =
+      startOdoObj?.recordedAt ||
+      firstTripWithOdo?.start?.time ||
+      firstTripWithOdo?.createdAt;
+
+    const hasManual =
+      aiKm != null && effectiveKm != null && Math.round(effectiveKm) !== Math.round(aiKm);
+
+    if (!photoUrl && effectiveKm == null && aiKm == null) return null;
+
+    return {
+      photoUrl,
+      effectiveKm,
+      aiKm,
+      hasManual,
+      manualKm: hasManual ? effectiveKm : null,
+      recordedAt,
+    };
+  })();
+
+  const handleDeleteTrip = async (tripId) => {
+    if (!tripId) return;
+    try {
+      await apiFetch(`/trips/${tripId}`, {}, { method: "DELETE" });
+      fetchTrips();
+    } catch (e) {
+      console.warn("Delete trip error:", e);
+    }
+  };
+
   const fetchLatestBattery = useCallback(async () => {
     if (!targetUserId || !canLoadTargetUser) return;
     try {
@@ -1483,7 +1966,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
           recordedAt: data.createdAt || data.recordedAt || null,
         });
       }
-    } catch { }
+    } catch {}
   }, [targetUserId, canLoadTargetUser]);
 
   const memberName =
@@ -1520,8 +2003,9 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     fetchExpenses();
     fetchGpsDistance();
     fetchStayedLocations();
+    fetchTrips();
     fetchLatestBattery();
-  }, [filters, userId, authUserId, targetUserId, hasValidTargetUserId, fetchVisits, fetchStats, fetchPunchInStatus, fetchExpenses, fetchGpsDistance, fetchStayedLocations, fetchLatestBattery]);
+  }, [filters, userId, authUserId, targetUserId, hasValidTargetUserId, fetchVisits, fetchStats, fetchPunchInStatus, fetchExpenses, fetchGpsDistance, fetchStayedLocations, fetchTrips, fetchLatestBattery]);
 
   const handleRefresh = () => {
     if (!hasValidTargetUserId) return;
@@ -1532,14 +2016,15 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     fetchExpenses();
     fetchGpsDistance();
     fetchStayedLocations();
+    fetchTrips();
     fetchLatestBattery();
   };
 
   useEffect(() => {
     if (!hasPunchedOut || !hasValidTargetUserId) return;
-    const timer = setTimeout(() => { fetchVisits(1, false); fetchExpenses(); fetchGpsDistance(); fetchStayedLocations(); }, 2000);
+    const timer = setTimeout(() => { fetchVisits(1, false); fetchExpenses(); fetchGpsDistance(); fetchStayedLocations(); fetchTrips(); }, 2000);
     return () => clearTimeout(timer);
-  }, [hasPunchedOut, hasValidTargetUserId, fetchVisits, fetchExpenses, fetchGpsDistance, fetchStayedLocations]);
+  }, [hasPunchedOut, hasValidTargetUserId, fetchVisits, fetchExpenses, fetchGpsDistance, fetchStayedLocations, fetchTrips]);
 
   useEffect(() => {
     if (!targetUserId || !hasValidTargetUserId) return;
@@ -1549,11 +2034,12 @@ export default function MemberVisitHistory({ userId: propUserId }) {
       fetchExpenses();
       fetchGpsDistance();
       fetchStayedLocations();
+      fetchTrips();
       fetchPunchInStatus();
       fetchLatestBattery();
     }, 12_000);
     return () => clearInterval(interval);
-  }, [targetUserId, hasValidTargetUserId, filters.dateRange, fetchVisits, fetchExpenses, fetchGpsDistance, fetchStayedLocations, fetchPunchInStatus, fetchLatestBattery]);
+  }, [targetUserId, hasValidTargetUserId, filters.dateRange, fetchVisits, fetchExpenses, fetchGpsDistance, fetchStayedLocations, fetchTrips, fetchPunchInStatus, fetchLatestBattery]);
 
   // ── Derived stats ──────────────────────────────────────────────────────────
   const selectedMapDate = isSingleDayFilter(filters.dateRange)
@@ -1561,14 +2047,14 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     : null;
   const useVisitTrailOnly = !isSingleDayFilter(filters.dateRange);
 
-  const visibleVisits = visits.filter(
+  const visibleVisits   = visits.filter(
     (visit) =>
       !isSystemStartLocationVisit(visit) &&
       isVisitInDateRange(visit, filters.dateRange),
   );
-  const totalDist = visibleVisits.reduce((s, v) => s + (v.distanceFromPreviousKm ?? v.distance ?? 0), 0);
-  const mapDistanceKm = Number(mapDistance?.totalKm || 0);
-  const gpsDistanceKm = Number(gpsDistance?.totalKm || 0);
+  const totalDist       = visibleVisits.reduce((s, v) => s + (v.distanceFromPreviousKm ?? v.distance ?? 0), 0);
+  const mapDistanceKm   = Number(mapDistance?.totalKm || 0);
+  const gpsDistanceKm   = Number(gpsDistance?.totalKm || 0);
   const displayDistanceKm = gpsDistanceKm > 0 ? gpsDistanceKm : mapDistanceKm > 0 ? mapDistanceKm : totalDist;
   const stayedStopCount = stayedLocations.reduce(
     (sum, stay) => sum + Math.max(1, Number(stay.visitCount) || 0),
@@ -1583,10 +2069,10 @@ export default function MemberVisitHistory({ userId: propUserId }) {
   const avgTime = totalStopCount
     ? Math.round((totalVisitMinutes + totalStayedMinutes) / totalStopCount)
     : 0;
-  const completedCount = visibleVisits.filter(v => v.status === "Completed").length;
+  const completedCount  = visibleVisits.filter(v => v.status === "Completed").length;
   const inProgressCount = visibleVisits.filter(v => v.status === "InProgress").length;
-  const cancelledCount = visibleVisits.filter(v => v.status === "Cancelled").length;
-  const updatedLabel = lastUpdated
+  const cancelledCount  = visibleVisits.filter(v => v.status === "Cancelled").length;
+  const updatedLabel    = lastUpdated
     ? (() => { const m = Math.floor((Date.now() - lastUpdated) / 60000); return m < 1 ? "just now" : `${m}m ago`; })()
     : null;
 
@@ -1601,86 +2087,6 @@ export default function MemberVisitHistory({ userId: propUserId }) {
   const batteryChip = currentBatteryChip;
   const expenseTotal = expenses.reduce((sum, item) => sum + (Number(item?.amount) || 0), 0);
   const expenseCount = expenses.length;
-
-  // ── Multi-Trip Data for Map Navigation (Requirements 1 - 9) ────────────────
-  const memberTrips = useMemo(() => {
-    const meta = attendanceRecord?.metadata || {};
-    const backendTrips = meta.vehicleTrips || meta.trips || [];
-    if (Array.isArray(backendTrips) && backendTrips.length > 0) {
-      return backendTrips.map((t, idx) => ({
-        tripNumber: t.tripNumber || idx + 1,
-        title: t.destination?.name || t.title || `Trip ${t.tripNumber || idx + 1}`,
-        subtitle: t.destination?.address || t.subtitle || "",
-        destination: {
-          latitude: t.destination?.latitude ?? t.destination?.lat,
-          longitude: t.destination?.longitude ?? t.destination?.lng,
-          name: t.destination?.name || t.title,
-          address: t.destination?.address || t.subtitle,
-        },
-        start: t.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
-        selectedRoute: t.selectedRoute || null,
-        availableRoutes: t.availableRoutes || (t.selectedRoute ? [t.selectedRoute] : []),
-        status: t.status || "in_progress",
-      }));
-    }
-
-    const lastTrip = meta.lastTrip;
-    if (lastTrip && (lastTrip.destination || lastTrip.selectedRoute)) {
-      return [{
-        tripNumber: lastTrip.tripNumber || 1,
-        title: lastTrip.destination?.name || "Trip 1",
-        subtitle: lastTrip.destination?.address || "",
-        destination: {
-          latitude: lastTrip.destination?.latitude ?? lastTrip.destination?.lat,
-          longitude: lastTrip.destination?.longitude ?? lastTrip.destination?.lng,
-          name: lastTrip.destination?.name || "Destination",
-          address: lastTrip.destination?.address || "",
-        },
-        start: lastTrip.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
-        selectedRoute: lastTrip.selectedRoute || null,
-        availableRoutes: lastTrip.availableRoutes || (lastTrip.selectedRoute ? [lastTrip.selectedRoute] : []),
-        status: lastTrip.tripStatus || "in_progress",
-      }];
-    }
-
-    if (meta.destination) {
-      return [{
-        tripNumber: meta.tripNumber || 1,
-        title: meta.destination.name || "Trip 1",
-        subtitle: meta.destination.address || "",
-        destination: {
-          latitude: meta.destination.latitude ?? meta.destination.lat,
-          longitude: meta.destination.longitude ?? meta.destination.lng,
-          name: meta.destination.name || "Destination",
-          address: meta.destination.address || "",
-        },
-        start: meta.start || (punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null),
-        selectedRoute: meta.selectedRoute || null,
-        availableRoutes: meta.availableRoutes || (meta.selectedRoute ? [meta.selectedRoute] : []),
-        status: "in_progress",
-      }];
-    }
-
-    if (Array.isArray(visibleVisits) && visibleVisits.length > 0) {
-      return visibleVisits.map((v, idx) => ({
-        tripNumber: idx + 1,
-        title: v.partyName || v.clientName || v.purpose || `Trip ${idx + 1}`,
-        subtitle: v.address || "",
-        destination: {
-          latitude: v.coordinates?.lat ?? v.location?.lat ?? v.location?.latitude ?? v.lat,
-          longitude: v.coordinates?.lng ?? v.location?.lng ?? v.location?.longitude ?? v.lng,
-          name: v.partyName || v.clientName || v.purpose || `Trip ${idx + 1}`,
-          address: v.address || "",
-        },
-        start: punchInLocation ? { latitude: punchInLocation.lat, longitude: punchInLocation.lng } : null,
-        selectedRoute: null,
-        availableRoutes: [],
-        status: v.status || "completed",
-      }));
-    }
-
-    return [];
-  }, [attendanceRecord, visibleVisits, punchInLocation]);
   const selectedStatusLabel = formatStatusLabel(attendanceRecord?.status, isPunchedIn, hasPunchedOut);
   const selectedDayLabel = getDateRangeLabel(filters.dateRange);
   const punchInTimeValue = punchInLocation?.time || attendanceRecord?.punchIn?.time || null;
@@ -1870,7 +2276,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
               boxShadow: "0 4px 24px rgba(0,0,0,0.06)", transition: "height 0.3s ease",
               position: "relative",
             }}>
-
+             
 
               <Tooltip title={fullscreen ? "Exit fullscreen" : "Fullscreen"} placement="left">
                 <Box onClick={() => setFullscreen(p => !p)} sx={{ position: "absolute", top: 50, right: 10, zIndex: 1000, bgcolor: cardBg, borderRadius: "10px", p: 0.75, cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.12)", border: `1px solid ${cardBorder}`, display: "flex", "&:hover": { bgcolor: "#f8fafc" } }}>
@@ -1891,52 +2297,53 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                   {locating ? <CircularProgress size={18} sx={{ color: "#fff" }} /> : <GpsFixed sx={{ fontSize: 18, color: PRIMARY }} />}
                 </Box>
               </Tooltip>
+          
 
 
-
-              {hasValidTargetUserId ? (
-                <LiveTrackingMap
-                  isPunchedIn={isPunchedIn}
-                  hasPunchedOut={hasPunchedOut}
-                  userId={targetUserId}
-                  isOwner={!isAdminView}
-                  height="100%"
-                  locateTrigger={locateTrigger}
-                  punchInPopupTrigger={punchInPopupTrigger}
-                  onDistanceChange={setMapDistance}
-                  onCurrentLocationChange={setCurrentLocation}
-                  punchInLocation={punchInLocation}
-                  punchOutLocation={punchOutLocation}
-                  punchBatteryInfo={punchBatteryInfo}
-                  resolvedAddress={resolvedAddress}
-                  visits={visibleVisits}
-                  selectedDate={selectedMapDate}
-                  preferVisitTrail={useVisitTrailOnly}
-                  trips={memberTrips}
-                />
-              ) : (
-                <Box
-                  sx={{
-                    height: "100%",
-                    display: "grid",
-                    placeItems: "center",
-                    bgcolor: "#f8fafc",
-                    borderRadius: "18px",
-                    p: 3,
-                    textAlign: "center",
-                  }}
-                >
-                  <Alert severity="warning">
-                    Selected member is not available. Please reopen this page from Team Tracking.
-                  </Alert>
-                </Box>
-              )}
+{hasValidTargetUserId ? (
+  <LiveTrackingMap
+    isPunchedIn={isPunchedIn}
+    hasPunchedOut={hasPunchedOut}
+    userId={targetUserId}
+    userName={memberName}
+    currentLocation={currentLocation}
+    isOwner={!isAdminView}
+    height="100%"
+    locateTrigger={locateTrigger}
+    punchInPopupTrigger={punchInPopupTrigger}
+    onDistanceChange={setMapDistance}
+    onCurrentLocationChange={setCurrentLocation}
+    punchInLocation={punchInLocation}
+    punchOutLocation={punchOutLocation}
+    punchBatteryInfo={punchBatteryInfo}
+    resolvedAddress={resolvedAddress}
+    visits={visibleVisits}
+    selectedDate={selectedMapDate}
+    preferVisitTrail={useVisitTrailOnly}
+  />
+) : (
+  <Box
+    sx={{
+      height: "100%",
+      display: "grid",
+      placeItems: "center",
+      bgcolor: "#f8fafc",
+      borderRadius: "18px",
+      p: 3,
+      textAlign: "center",
+    }}
+  >
+    <Alert severity="warning">
+      Selected member is not available. Please reopen this page from Team Tracking.
+    </Alert>
+  </Box>
+)}
 
 
             </Box>
 
             {/* Stats row */}
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" }, gap: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
               {/* Card 1: Distance */}
               <Box sx={{
                 bgcolor: cardBg, borderRadius: "16px", p: 2.25,
@@ -1988,57 +2395,6 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                   </>
                 )}
               </Box>
-
-              {/* Card 3: Avg Time */}
-              <Box sx={{
-                bgcolor: cardBg, borderRadius: "16px", p: 2.25,
-                border: `1px solid ${cardBorder}`, boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
-                transition: "all 0.25s ease",
-                "&:hover": { transform: "translateY(-3px)", boxShadow: "0 8px 24px rgba(245, 158, 11, 0.12)", borderColor: alpha(WARNING, 0.4) }
-              }}>
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.25 }}>
-                  <Typography sx={{ color: textSub, fontWeight: 700, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Avg. Time</Typography>
-                  <Box sx={{ width: 34, height: 34, borderRadius: "10px", bgcolor: alpha(WARNING, 0.1), color: WARNING, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Timer sx={{ fontSize: 18 }} />
-                  </Box>
-                </Box>
-                {loading ? <Skeleton width={60} height={32} /> : (
-                  <>
-                    <Typography sx={{ fontSize: "1.5rem", fontWeight: 800, color: textTitle, letterSpacing: "-0.5px", lineHeight: 1 }}>
-                      {avgTime}{" "}
-                      <Typography component="span" sx={{ fontSize: "0.78rem", fontWeight: 600, color: textSub }}>mins</Typography>
-                    </Typography>
-                    <Typography sx={{ fontSize: "0.68rem", color: textMuted, mt: 0.75, fontWeight: 500 }}>
-                      Per stop duration
-                    </Typography>
-                  </>
-                )}
-              </Box>
-
-              {/* Card 4: Expense */}
-              <Box sx={{
-                bgcolor: cardBg, borderRadius: "16px", p: 2.25,
-                border: `1px solid ${cardBorder}`, boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
-                transition: "all 0.25s ease",
-                "&:hover": { transform: "translateY(-3px)", boxShadow: "0 8px 24px rgba(139, 92, 246, 0.12)", borderColor: alpha("#8b5cf6", 0.4) }
-              }}>
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.25 }}>
-                  <Typography sx={{ color: textSub, fontWeight: 700, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Expense</Typography>
-                  <Box sx={{ width: 34, height: 34, borderRadius: "10px", bgcolor: alpha("#8b5cf6", 0.1), color: "#8b5cf6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <ReceiptLong sx={{ fontSize: 18 }} />
-                  </Box>
-                </Box>
-                {loading ? <Skeleton width={60} height={32} /> : (
-                  <>
-                    <Typography sx={{ fontSize: "1.5rem", fontWeight: 800, color: textTitle, letterSpacing: "-0.5px", lineHeight: 1 }}>
-                      {formatCurrency(expenseTotal)}
-                    </Typography>
-                    <Typography sx={{ fontSize: "0.68rem", color: textMuted, mt: 0.75, fontWeight: 500 }}>
-                      {expenseCount} submitted items
-                    </Typography>
-                  </>
-                )}
-              </Box>
             </Box>
 
 
@@ -2052,15 +2408,15 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                   </Typography>
                 </Box>
                 <Box sx={{ display: "flex", height: 10, borderRadius: "999px", overflow: "hidden", bgcolor: "#f1f5f9", mb: 1.5 }}>
-                  {completedCount > 0 && <Box sx={{ width: `${(completedCount / visibleVisits.length) * 100}%`, bgcolor: SUCCESS, transition: "width 0.6s" }} />}
+                  {completedCount  > 0 && <Box sx={{ width: `${(completedCount  / visibleVisits.length) * 100}%`, bgcolor: SUCCESS, transition: "width 0.6s" }} />}
                   {inProgressCount > 0 && <Box sx={{ width: `${(inProgressCount / visibleVisits.length) * 100}%`, bgcolor: PRIMARY, animation: "sh 1.5s ease-in-out infinite", "@keyframes sh": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.5 } } }} />}
-                  {cancelledCount > 0 && <Box sx={{ width: `${(cancelledCount / visibleVisits.length) * 100}%`, bgcolor: ERROR, opacity: 0.45 }} />}
+                  {cancelledCount  > 0 && <Box sx={{ width: `${(cancelledCount  / visibleVisits.length) * 100}%`, bgcolor: ERROR, opacity: 0.45 }} />}
                 </Box>
                 <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-                  {[
-                    { label: "Done", count: completedCount, color: SUCCESS },
-                    { label: "Active", count: inProgressCount, color: PRIMARY },
-                    { label: "Cancelled", count: cancelledCount, color: ERROR },
+{[
+                    { label: "Done",      count: completedCount,  color: SUCCESS },
+                    { label: "Active",    count: inProgressCount, color: PRIMARY },
+                    { label: "Cancelled", count: cancelledCount,  color: ERROR   },
                   ].map(s => (
                     <Box key={s.label} sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                       <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: s.color }} />
@@ -2072,6 +2428,204 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                       </Box>
                     </Box>
                   ))}
+                </Box>
+              </Box>
+            )}
+
+            {/* Odometer Section (Shows photo, AI Scanned KM and Manual KM if user wrote one) */}
+            {activeOdometerInfo && (
+              <Box sx={{
+                bgcolor: cardBg,
+                borderRadius: "18px",
+                p: { xs: 2, sm: 2.5 },
+                border: `1px solid ${cardBorder}`,
+                boxShadow: "0 4px 20px rgba(0,0,0,0.04)",
+                transition: "all 0.25s ease",
+                "&:hover": {
+                  boxShadow: "0 8px 28px rgba(37, 99, 235, 0.1)",
+                  borderColor: alpha(PRIMARY, 0.35),
+                }
+              }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5, flexWrap: "wrap", gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                    <Box sx={{
+                      width: 36, height: 36, borderRadius: "10px",
+                      bgcolor: alpha("#2563eb", 0.1), color: "#2563eb",
+                      display: "flex", alignItems: "center", justifyContent: "center"
+                    }}>
+                      <Speed sx={{ fontSize: 20 }} />
+                    </Box>
+                    <Box>
+                      <Typography sx={{ fontWeight: 800, fontSize: "0.88rem", color: textTitle, lineHeight: 1.2 }}>
+                        Starting Odometer
+                      </Typography>
+                      <Typography sx={{ fontSize: "0.7rem", color: textSub, fontWeight: 500, mt: 0.2 }}>
+                        {activeOdometerInfo.recordedAt ? `Recorded at ${fmt(activeOdometerInfo.recordedAt)}` : "First trip of the day"}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Badges: AI Verified vs Manual Correction */}
+                  {activeOdometerInfo.hasManual ? (
+                    <Chip
+                      label="✏️ Manual Override"
+                      size="small"
+                      sx={{
+                        height: 24,
+                        bgcolor: alpha(WARNING, 0.12),
+                        color: "#b45309",
+                        fontWeight: 800,
+                        fontSize: "0.7rem",
+                        border: `1px solid ${alpha(WARNING, 0.3)}`,
+                      }}
+                    />
+                  ) : (
+                    <Chip
+                      icon={<CheckCircle sx={{ fontSize: "14px !important", color: `${SUCCESS} !important` }} />}
+                      label="AI Verified"
+                      size="small"
+                      sx={{
+                        height: 24,
+                        bgcolor: alpha(SUCCESS, 0.1),
+                        color: SUCCESS,
+                        fontWeight: 800,
+                        fontSize: "0.7rem",
+                        border: `1px solid ${alpha(SUCCESS, 0.25)}`,
+                      }}
+                    />
+                  )}
+                </Box>
+
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: { xs: "wrap", sm: "nowrap" } }}>
+                  {/* Odometer Photo Thumbnail */}
+                  {activeOdometerInfo.photoUrl ? (
+                    <Tooltip title="Click to view full-size photo" arrow>
+                      <Box
+                        onClick={() => setPreviewOdoImg({ url: activeOdometerInfo.photoUrl, title: "Starting Odometer Photo" })}
+                        sx={{
+                          width: { xs: 90, sm: 84 },
+                          height: { xs: 90, sm: 84 },
+                          borderRadius: "14px",
+                          overflow: "hidden",
+                          border: "2px solid #cbd5e1",
+                          position: "relative",
+                          cursor: "pointer",
+                          flexShrink: 0,
+                          boxShadow: "0 3px 12px rgba(0,0,0,0.08)",
+                          transition: "all 0.2s ease",
+                          "&:hover": {
+                            transform: "scale(1.05)",
+                            boxShadow: "0 8px 24px rgba(37,99,235,0.25)",
+                            borderColor: "#2563eb",
+                          }
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={activeOdometerInfo.photoUrl}
+                          alt="Odometer"
+                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                        <Box sx={{
+                          position: "absolute",
+                          bottom: 0, left: 0, right: 0,
+                          bgcolor: "rgba(15, 23, 42, 0.8)",
+                          py: 0.3,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 0.4,
+                        }}>
+                          <PhotoCamera sx={{ fontSize: 11, color: "#fff" }} />
+                          <Typography sx={{ fontSize: "0.6rem", color: "#fff", fontWeight: 700 }}>
+                            ZOOM
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Tooltip>
+                  ) : (
+                    <Box sx={{
+                      width: 84, height: 84, borderRadius: "14px",
+                      bgcolor: "#f1f5f9", display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      border: "1.5px dashed #cbd5e1"
+                    }}>
+                      <PhotoCamera sx={{ fontSize: 24, color: "#94a3b8" }} />
+                      <Typography sx={{ fontSize: "0.62rem", color: "#94a3b8", mt: 0.5, fontWeight: 600 }}>
+                        No Photo
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* KM Readings (AI KM & Manual KM) */}
+                  <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+                    {/* AI Scanned KM */}
+                    <Box sx={{
+                      p: 1.1,
+                      borderRadius: "10px",
+                      bgcolor: alpha("#2563eb", 0.05),
+                      border: `1px solid ${alpha("#2563eb", 0.15)}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}>
+                      <Box>
+                        <Typography sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                          🤖 AI Scanned KM
+                        </Typography>
+                        <Typography sx={{ fontSize: "1.1rem", fontWeight: 800, color: textTitle, lineHeight: 1.1, mt: 0.2 }}>
+                          {activeOdometerInfo.aiKm != null ? Number(activeOdometerInfo.aiKm).toLocaleString() : "—"}{" "}
+                          <Typography component="span" sx={{ fontSize: "0.72rem", fontWeight: 600, color: textSub }}>KM</Typography>
+                        </Typography>
+                      </Box>
+                      <Chip label="Gemini AI" size="small" sx={{ height: 20, fontSize: "0.62rem", fontWeight: 700, bgcolor: "#dbeafe", color: "#1d4ed8" }} />
+                    </Box>
+
+                    {/* Manual KM (if different/entered) OR Applied KM */}
+                    {activeOdometerInfo.hasManual ? (
+                      <Box sx={{
+                        p: 1.1,
+                        borderRadius: "10px",
+                        bgcolor: alpha(WARNING, 0.08),
+                        border: `1px solid ${alpha(WARNING, 0.25)}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}>
+                        <Box>
+                          <Typography sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#b45309", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                            ✏️ Manual Typed KM
+                          </Typography>
+                          <Typography sx={{ fontSize: "1.1rem", fontWeight: 800, color: "#b45309", lineHeight: 1.1, mt: 0.2 }}>
+                            {Number(activeOdometerInfo.manualKm).toLocaleString()}{" "}
+                            <Typography component="span" sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#b45309" }}>KM</Typography>
+                          </Typography>
+                        </Box>
+                        <Chip label="Manual Override" size="small" sx={{ height: 20, fontSize: "0.62rem", fontWeight: 700, bgcolor: "#fef3c7", color: "#b45309" }} />
+                      </Box>
+                    ) : (
+                      <Box sx={{
+                        p: 1.1,
+                        borderRadius: "10px",
+                        bgcolor: alpha(SUCCESS, 0.06),
+                        border: `1px solid ${alpha(SUCCESS, 0.18)}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}>
+                        <Box>
+                          <Typography sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#15803d", textTransform: "uppercase", letterSpacing: "0.3px" }}>
+                            ✓ Active Trip Reading
+                          </Typography>
+                          <Typography sx={{ fontSize: "1.1rem", fontWeight: 800, color: textTitle, lineHeight: 1.1, mt: 0.2 }}>
+                            {activeOdometerInfo.effectiveKm != null ? Number(activeOdometerInfo.effectiveKm).toLocaleString() : "—"}{" "}
+                            <Typography component="span" sx={{ fontSize: "0.72rem", fontWeight: 600, color: textSub }}>KM</Typography>
+                          </Typography>
+                        </Box>
+                        <Chip label="Matches AI" size="small" sx={{ height: 20, fontSize: "0.62rem", fontWeight: 700, bgcolor: "#dcfce7", color: "#15803d" }} />
+                      </Box>
+                    )}
+                  </Box>
                 </Box>
               </Box>
             )}
@@ -2209,8 +2763,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                           borderColor: alpha("#22c55e", 0.3), borderRadius: "6px",
                           px: 0.9, py: 0.25,
                         }}>
-                          <Box sx={{
-                            width: 6, height: 6, borderRadius: "50%", bgcolor: "#22c55e",
+                          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#22c55e",
                             animation: "livePulse 1.5s ease-in-out infinite",
                             "@keyframes livePulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.3 } },
                           }} />
@@ -2240,233 +2793,9 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                 </Box>
               </Box>
             </Box>
-
-            {/* Odometer Trip Verification Card */}
-            {(() => {
-              const startOdo = attendanceRecord?.startOdometer || null;
-              const endOdo = attendanceRecord?.endOdometer || null;
-
-              const startPhoto = startOdo?.photoUrl || attendanceRecord?.startOdometerPhotoUrl || null;
-              const startReading = startOdo?.reading ?? attendanceRecord?.startOdometerReading ?? null;
-              const startTime = startOdo?.recordedAt ? fmt(startOdo.recordedAt) : (attendanceRecord?.punchIn?.time ? fmt(attendanceRecord.punchIn.time) : null);
-
-              const endPhoto = endOdo?.photoUrl || attendanceRecord?.endOdometerPhotoUrl || (attendanceRecord?.punchOut?.photos && attendanceRecord.punchOut.photos[0]) || null;
-              const endReading = endOdo?.reading ?? attendanceRecord?.endOdometerReading ?? null;
-              const endTime = (endOdo?.recordedAt || attendanceRecord?.punchOut?.time) ? fmt(endOdo?.recordedAt || attendanceRecord?.punchOut?.time) : null;
-
-              const hasOdoDiff = Number.isFinite(Number(startReading)) && Number.isFinite(Number(endReading));
-              const odoKmDiff = hasOdoDiff ? Math.max(0, Number(endReading) - Number(startReading)) : null;
-
-              return (
-                <Box sx={{
-                  bgcolor: cardBg,
-                  borderRadius: "20px",
-                  border: `1px solid ${cardBorder}`,
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
-                  p: { xs: 2.5, sm: 3 },
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 2,
-                }}>
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1.5 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                      <Box sx={{
-                        width: 42, height: 42, borderRadius: "14px",
-                        bgcolor: alpha("#6366f1", 0.12),
-                        color: "#6366f1",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        boxShadow: "0 4px 12px rgba(99, 102, 241, 0.2)",
-                      }}>
-                        <Speed sx={{ fontSize: 22 }} />
-                      </Box>
-                      <Box>
-                        <Typography sx={{ fontWeight: 800, fontSize: "0.98rem", color: textTitle, lineHeight: 1.2 }}>
-                          Odometer Trip Verification
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: textSub, mt: 0.3 }}>
-                          Start trip photo & pre-punch out odometer reading
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    {odoKmDiff !== null && (
-                      <Chip
-                        icon={<Route sx={{ fontSize: "14px !important", color: "#16a34a !important" }} />}
-                        label={`+${odoKmDiff.toFixed(1)} km by odometer`}
-                        size="small"
-                        sx={{
-                          bgcolor: alpha(SUCCESS, 0.12),
-                          color: SUCCESS,
-                          fontWeight: 800,
-                          fontSize: "0.75rem",
-                          height: 28,
-                          px: 1,
-                          border: `1px solid ${alpha(SUCCESS, 0.3)}`,
-                        }}
-                      />
-                    )}
-                  </Box>
-
-                  {/* Two Column Grid: Start Odometer & End Odometer */}
-                  <Box sx={{
-                    display: "grid",
-                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-                    gap: 2,
-                  }}>
-                    {/* Card 1: Start Trip Odometer */}
-                    <Box sx={{
-                      bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
-                      borderRadius: "16px",
-                      p: 2,
-                      border: `1px solid ${dividerBorder}`,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 1.5,
-                    }}>
-                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "#2563eb" }} />
-                          <Typography sx={{ fontSize: "0.78rem", fontWeight: 800, color: textTitle, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                            Start Trip Odometer
-                          </Typography>
-                        </Box>
-                        {startTime && (
-                          <Typography sx={{ fontSize: "0.72rem", color: textSub, fontWeight: 600 }}>
-                            {startTime}
-                          </Typography>
-                        )}
-                      </Box>
-
-                      {startPhoto ? (
-                        <OdometerThumb
-                          rawUrl={startPhoto}
-                          alt="Start Odometer"
-                          onClick={() => setOdometerPreview({
-                            title: "Start Trip Odometer Photo",
-                            url: startPhoto,
-                            reading: startReading,
-                            time: startTime,
-                          })}
-                        />
-                      ) : (
-                        <Box sx={{
-                          width: "100%",
-                          height: { xs: 130, sm: 150 },
-                          borderRadius: "14px",
-                          bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f1f5f9",
-                          border: "1.5px dashed #cbd5e1",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 1,
-                          p: 2,
-                          textAlign: "center",
-                        }}>
-                          <PhotoCamera sx={{ fontSize: 28, color: "#94a3b8" }} />
-                          <Typography sx={{ fontSize: "0.75rem", color: textSub, fontWeight: 600 }}>
-                            No start odometer photo uploaded
-                          </Typography>
-                        </Box>
-                      )}
-
-                      <Box sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        bgcolor: isDark ? "rgba(0,0,0,0.2)" : "#ffffff",
-                        p: 1.25,
-                        borderRadius: "12px",
-                        border: `1px solid ${dividerBorder}`,
-                      }}>
-                        <Typography sx={{ fontSize: "0.72rem", color: textSub, fontWeight: 600 }}>Reading</Typography>
-                        <Typography sx={{ fontSize: "0.95rem", fontWeight: 800, color: textTitle }}>
-                          {startReading != null ? `${Number(startReading).toLocaleString("en-IN")} KM` : "Not entered"}
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    {/* Card 2: Ending Odometer (Before Punch Out) */}
-                    <Box sx={{
-                      bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
-                      borderRadius: "16px",
-                      p: 2,
-                      border: `1px solid ${dividerBorder}`,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 1.5,
-                    }}>
-                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "#16a34a" }} />
-                          <Typography sx={{ fontSize: "0.78rem", fontWeight: 800, color: textTitle, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                            Ending Odometer (Punch Out)
-                          </Typography>
-                        </Box>
-                        {endTime && (
-                          <Typography sx={{ fontSize: "0.72rem", color: textSub, fontWeight: 600 }}>
-                            {endTime}
-                          </Typography>
-                        )}
-                      </Box>
-
-                      {endPhoto ? (
-                        <OdometerThumb
-                          rawUrl={endPhoto}
-                          alt="Ending Odometer"
-                          onClick={() => setOdometerPreview({
-                            title: "Ending Odometer Photo (Punch Out)",
-                            url: endPhoto,
-                            reading: endReading,
-                            time: endTime,
-                          })}
-                        />
-                      ) : (
-                        <Box sx={{
-                          width: "100%",
-                          height: { xs: 130, sm: 150 },
-                          borderRadius: "14px",
-                          bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f1f5f9",
-                          border: "1.5px dashed #cbd5e1",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 1,
-                          p: 2,
-                          textAlign: "center",
-                        }}>
-                          <PhotoCamera sx={{ fontSize: 28, color: "#94a3b8" }} />
-                          <Typography sx={{ fontSize: "0.75rem", color: textSub, fontWeight: 600 }}>
-                            {isPunchedIn && !hasPunchedOut
-                              ? "Pending (Required before Punch Out)"
-                              : "No ending odometer photo uploaded"}
-                          </Typography>
-                        </Box>
-                      )}
-
-                      <Box sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        bgcolor: isDark ? "rgba(0,0,0,0.2)" : "#ffffff",
-                        p: 1.25,
-                        borderRadius: "12px",
-                        border: `1px solid ${dividerBorder}`,
-                      }}>
-                        <Typography sx={{ fontSize: "0.72rem", color: textSub, fontWeight: 600 }}>Reading</Typography>
-                        <Typography sx={{ fontSize: "0.95rem", fontWeight: 800, color: textTitle }}>
-                          {endReading != null ? `${Number(endReading).toLocaleString("en-IN")} KM` : "Not entered"}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                </Box>
-              );
-            })()}
           </Box>
 
-          {/* ── RIGHT — Visit Timeline ── */}
+          {/* ── RIGHT — Visit & Trip Timeline ── */}
           <Box sx={{
             bgcolor: cardBg, borderRadius: "20px", border: `1px solid ${cardBorder}`,
             boxShadow: "0 8px 32px rgba(0,0,0,0.05)", overflow: "hidden",
@@ -2475,9 +2804,11 @@ export default function MemberVisitHistory({ userId: propUserId }) {
             maxHeight: "calc(100vh - 110px)",
           }}>
             {/* Header */}
-            <Box sx={{ px: 3, py: 2.5, borderBottom: `1px solid ${dividerBorder}` }}>
+            <Box sx={{ px: 3, pt: 2.5, pb: 1.5, borderBottom: `1px solid ${dividerBorder}` }}>
               <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", mb: 0.5 }}>
-                <Typography sx={{ fontWeight: 700, fontSize: "1rem", color: textTitle }}>Visit Timeline</Typography>
+                <Typography sx={{ fontWeight: 700, fontSize: "1rem", color: textTitle }}>
+                  {activeRightTab === "trips" ? "Vehicle Trips" : "Visit Timeline"}
+                </Typography>
                 <Tooltip title="Refresh">
                   <IconButton size="small" onClick={handleRefresh}
                     sx={{ color: "#94a3b8", "&:hover": { color: PRIMARY, bgcolor: alpha(PRIMARY, 0.06) } }}>
@@ -2496,129 +2827,165 @@ export default function MemberVisitHistory({ userId: propUserId }) {
               )}
 
               {updatedLabel && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.4, mb: 1 }}>
                   <AccessTime sx={{ fontSize: 12, color: "#94a3b8" }} />
                   <Typography sx={{ fontSize: "0.7rem", color: "#94a3b8" }}>Updated {updatedLabel}</Typography>
                 </Box>
               )}
+
+              {/* Tabs Switcher: Visits & Stays vs Vehicle Trips */}
+              <Box sx={{ display: "flex", gap: 1, mt: 1, bgcolor: isDark ? "rgba(255,255,255,0.05)" : "#f1f5f9", p: "4px", borderRadius: "10px" }}>
+                <Button
+                  size="small"
+                  onClick={() => setActiveRightTab("timeline")}
+                  startIcon={<Store sx={{ fontSize: 15 }} />}
+                  sx={{
+                    flex: 1,
+                    textTransform: "none",
+                    fontWeight: activeRightTab === "timeline" ? 800 : 600,
+                    fontSize: "0.75rem",
+                    py: 0.6,
+                    borderRadius: "8px",
+                    bgcolor: activeRightTab === "timeline" ? (isDark ? "rgba(255,255,255,0.14)" : "#ffffff") : "transparent",
+                    color: activeRightTab === "timeline" ? (isDark ? "#ffffff" : PRIMARY) : (isDark ? "#94a3b8" : "#64748b"),
+                    boxShadow: activeRightTab === "timeline" ? (isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 6px rgba(0,0,0,0.08)") : "none",
+                    "&:hover": { bgcolor: activeRightTab === "timeline" ? (isDark ? "rgba(255,255,255,0.18)" : "#ffffff") : (isDark ? "rgba(255,255,255,0.05)" : alpha(PRIMARY, 0.04)) },
+                  }}
+                >
+                  Visits & Stays ({visibleVisits.length + stayedLocations.length})
+                </Button>
+
+                <Button
+                  size="small"
+                  onClick={() => setActiveRightTab("trips")}
+                  startIcon={<DirectionsCar sx={{ fontSize: 15 }} />}
+                  sx={{
+                    flex: 1,
+                    textTransform: "none",
+                    fontWeight: activeRightTab === "trips" ? 800 : 600,
+                    fontSize: "0.75rem",
+                    py: 0.6,
+                    borderRadius: "8px",
+                    bgcolor: activeRightTab === "trips" ? (isDark ? "rgba(255,255,255,0.14)" : "#ffffff") : "transparent",
+                    color: activeRightTab === "trips" ? (isDark ? "#ffffff" : PRIMARY) : (isDark ? "#94a3b8" : "#64748b"),
+                    boxShadow: activeRightTab === "trips" ? (isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 6px rgba(0,0,0,0.08)") : "none",
+                    "&:hover": { bgcolor: activeRightTab === "trips" ? (isDark ? "rgba(255,255,255,0.18)" : "#ffffff") : (isDark ? "rgba(255,255,255,0.05)" : alpha(PRIMARY, 0.04)) },
+                  }}
+                >
+                  Trips ({trips.length})
+                </Button>
+              </Box>
             </Box>
 
-            {/* Filter bar */}
+            {/* Filter / Sub-header bar */}
             <Box sx={{ px: 3, py: 1.25, borderBottom: `1px solid ${dividerBorder}`, bgcolor: barBg, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <CalendarToday sx={{ fontSize: 13, color: PRIMARY }} />
-
                 <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: PRIMARY }}>
                   {filters.dateRange === "today" ? "Today"
                     : filters.dateRange === "yesterday" ? "Yesterday"
-                      : filters.dateRange === "week" ? "This Week"
-                        : filters.dateRange === "month" ? "This Month"
-                          : filters.dateRange?.match(/^\d{4}-\d{2}-\d{2}$/)
-                            ? new Date(filters.dateRange).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-                            : filters.dateRange}
+                    : filters.dateRange === "week" ? "This Week"
+                    : filters.dateRange === "month" ? "This Month"
+                    : filters.dateRange?.match(/^\d{4}-\d{2}-\d{2}$/)
+                      ? new Date(filters.dateRange).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                      : filters.dateRange}
                 </Typography>
 
-
-                <Typography sx={{ fontSize: "0.72rem", color: "#94a3b8" }}>
-                  · {loading ? "…" : `${visibleVisits.length} visit${visibleVisits.length !== 1 ? "s" : ""}`}
-                  {stayedLocations.length > 0 ? ` · ${stayedLocations.length} stayed` : ""}
-                </Typography>
+                {activeRightTab === "timeline" ? (
+                  <Typography sx={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                    · {loading ? "…" : `${visibleVisits.length} visit${visibleVisits.length !== 1 ? "s" : ""}`}
+                    {stayedLocations.length > 0 ? ` · ${stayedLocations.length} stayed` : ""}
+                  </Typography>
+                ) : (
+                  <Typography sx={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                    · {tripsLoading ? "…" : `${trips.length} trip${trips.length !== 1 ? "s" : ""}`}
+                  </Typography>
+                )}
               </Box>
-              <Badge badgeContent={filters.statuses?.length || 0} color="primary"
-                sx={{ "& .MuiBadge-badge": { fontSize: "0.6rem", height: 16, minWidth: 16 } }}>
-                <Box onClick={() => setFilterOpen(true)} sx={{ display: "flex", alignItems: "center", gap: 0.5, cursor: "pointer", px: 1, py: 0.4, borderRadius: "6px", "&:hover": { bgcolor: alpha(PRIMARY, 0.06) } }}>
-                  <FilterList sx={{ fontSize: 15, color: PRIMARY }} />
-                  <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: PRIMARY }}>Filter</Typography>
-                </Box>
-              </Badge>
+
+              {activeRightTab === "timeline" && (
+                <Badge badgeContent={filters.statuses?.length || 0} color="primary"
+                  sx={{ "& .MuiBadge-badge": { fontSize: "0.6rem", height: 16, minWidth: 16 } }}>
+                  <Box onClick={() => setFilterOpen(true)} sx={{ display: "flex", alignItems: "center", gap: 0.5, cursor: "pointer", px: 1, py: 0.4, borderRadius: "6px", "&:hover": { bgcolor: alpha(PRIMARY, 0.06) } }}>
+                    <FilterList sx={{ fontSize: 15, color: PRIMARY }} />
+                    <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: PRIMARY }}>Filter</Typography>
+                  </Box>
+                </Badge>
+              )}
             </Box>
 
-            {/* Scrollable visits */}
+            {/* Scrollable Content Area */}
             <Box sx={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", "&::-webkit-scrollbar": { width: 4 }, "&::-webkit-scrollbar-track": { bgcolor: "#f8fafc" }, "&::-webkit-scrollbar-thumb": { bgcolor: "#e2e8f0", borderRadius: 2 } }}>
-              {loading ? (
-                <Box sx={{ p: 3 }}>
-                  {[1, 2, 3].map(i => (
-                    <Box key={i} sx={{ display: "flex", gap: 2, mb: 3 }}>
-                      <Skeleton variant="circular" width={38} height={38} sx={{ flexShrink: 0 }} />
-                      <Box sx={{ flex: 1 }}>
-                        <Skeleton width="55%" height={20} />
-                        <Skeleton width="80%" height={14} sx={{ mt: 0.5 }} />
-                        <Skeleton width="40%" height={14} sx={{ mt: 0.5 }} />
-                        <Skeleton variant="rounded" width="100%" height={40} sx={{ mt: 1 }} />
+              {activeRightTab === "trips" ? (
+                /* ── VEHICLE TRIPS TAB ── */
+                tripsLoading ? (
+                  <Box sx={{ p: 3 }}>
+                    {[1, 2, 3].map(i => (
+                      <Box key={i} sx={{ p: 2, mb: 2, borderRadius: "14px", border: "1px solid #e2e8f0" }}>
+                        <Skeleton width="40%" height={24} />
+                        <Skeleton width="90%" height={16} sx={{ mt: 1 }} />
+                        <Skeleton width="75%" height={16} sx={{ mt: 0.5 }} />
+                        <Skeleton variant="rounded" width="100%" height={32} sx={{ mt: 1.5 }} />
                       </Box>
+                    ))}
+                  </Box>
+                ) : trips.length === 0 ? (
+                  <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", p: 4, minHeight: 250, textAlign: "center" }}>
+                    <Box sx={{ width: 56, height: 56, borderRadius: "50%", bgcolor: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", mb: 2 }}>
+                      <DirectionsCar sx={{ fontSize: 28, color: "#94a3b8" }} />
                     </Box>
-                  ))}
-                </Box>
-              ) : visibleVisits.length === 0 && stayedLocations.length === 0 ? (
-                <Box sx={{ flex: 1, display: "flex", flexDirection: "column", p: 3 }}>
-                  {isPunchedIn && !hasPunchedOut ? (
-                    <Box sx={{ display: "flex", gap: 2 }}>
-                      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                        <Box
-                          onClick={handlePunchInFocus}
-                          sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: SUCCESS, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 0 4px ${alpha(SUCCESS, 0.2)}`, animation: "pl 1.5s ease-in-out infinite", "@keyframes pl": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.6 } }, cursor: "pointer", transition: "transform 0.15s", "&:hover": { transform: "scale(1.12)" } }}
-                        >
-                          <MyLocation sx={{ fontSize: 18, color: "#fff" }} />
-                        </Box>
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
-                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.4 }}>
-                          <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>Punched In</Typography>
-                          {punchInLocation?.time && <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8" }}>{fmt(punchInLocation.time)}</Typography>}
-                        </Box>
-                        {timelineBatteryInfo.percentage !== null && (
-                          <Box sx={{ mb: 0.8 }}>
-                            <Chip
-                              size="small"
-                              label={`${timelineBatteryChip.label}${timelineBatteryInfo.isCharging ? " • Charging" : ""}`}
-                              sx={{ bgcolor: timelineBatteryChip.bg, color: timelineBatteryChip.color, fontWeight: 700, border: `1px solid ${timelineBatteryChip.border}`, height: 24 }}
-                            />
-                          </Box>
-                        )}
-                        {/* Address (prefer resolved geocoded address, fallback to punchInLocation.address, then coords) */}
-                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4, mb: 0.5 }}>
-                          <LocationOn sx={{ fontSize: 12, color: "#94a3b8", mt: "2px", flexShrink: 0 }} />
-                          <Typography sx={{ fontSize: "0.75rem", color: "#64748b", lineHeight: 1.5 }}>
-                            {resolvedAddress ||
-                              (!isRawCoordinateValue(punchInLocation?.address) ? (typeof punchInLocation?.address === "string" ? punchInLocation.address : punchInLocation?.address?.full || punchInLocation?.address?.short) : null) ||
-                              (punchInLocation?.lat ? "Locating address…" : "Location not available")}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: SUCCESS, animation: "dp 1.5s ease-in-out infinite", "@keyframes dp": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.3 } } }} />
-                          <Typography sx={{ fontSize: "0.7rem", color: SUCCESS, fontWeight: 600 }}>On Duty · No visits yet today</Typography>
-                        </Box>
-                      </Box>
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, minHeight: 200 }}>
-                      <Box sx={{ width: 48, height: 48, borderRadius: "50%", bgcolor: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", mb: 1.5 }}>
-                        <MyLocation sx={{ fontSize: 22, color: "#cbd5e1" }} />
-                      </Box>
-                      <Typography sx={{ fontWeight: 600, color: textSub, fontSize: "0.88rem", mb: 0.4 }}>Not Punched In</Typography>
-                      <Typography sx={{ color: "#cbd5e1", fontSize: "0.75rem", textAlign: "center" }}>Punch in to start tracking visits</Typography>
-                    </Box>
-                  )}
-                </Box>
+                    <Typography sx={{ fontWeight: 700, color: textTitle, fontSize: "0.95rem", mb: 0.5 }}>
+                      No Vehicle Trips Recorded
+                    </Typography>
+                    <Typography sx={{ color: "#64748b", fontSize: "0.78rem", maxWidth: 260, lineHeight: 1.5 }}>
+                      Trips started or ended by this member with start/end odometer and locations will appear here.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ p: 2.5 }}>
+                    {trips.map((t, idx) => (
+                      <TripTimelineCard
+                        key={t._id || t.id || idx}
+                        trip={t}
+                        index={idx}
+                        onDeleteTrip={handleDeleteTrip}
+                        onPreviewImage={(url, title) => setPreviewOdoImg({ url, title })}
+                      />
+                    ))}
+                  </Box>
+                )
               ) : (
-                <Box sx={{ p: 3 }}>
-
-                  {/* ── Punch In header ── */}
-                  {punchInLocation?.address && (
-                    <Box sx={{ mb: 0 }}>
+                /* ── VISITS & TIMELINE TAB ── */
+                loading ? (
+                  <Box sx={{ p: 3 }}>
+                    {[1, 2, 3].map(i => (
+                      <Box key={i} sx={{ display: "flex", gap: 2, mb: 3 }}>
+                        <Skeleton variant="circular" width={38} height={38} sx={{ flexShrink: 0 }} />
+                        <Box sx={{ flex: 1 }}>
+                          <Skeleton width="55%" height={20} />
+                          <Skeleton width="80%" height={14} sx={{ mt: 0.5 }} />
+                          <Skeleton width="40%" height={14} sx={{ mt: 0.5 }} />
+                          <Skeleton variant="rounded" width="100%" height={40} sx={{ mt: 1 }} />
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : visibleVisits.length === 0 && stayedLocations.length === 0 ? (
+                  <Box sx={{ flex: 1, display: "flex", flexDirection: "column", p: 3 }}>
+                    {isPunchedIn && !hasPunchedOut ? (
                       <Box sx={{ display: "flex", gap: 2 }}>
                         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                           <Box
                             onClick={handlePunchInFocus}
-                            sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: SUCCESS, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 2px 8px ${alpha(SUCCESS, 0.3)}`, cursor: "pointer", transition: "transform 0.15s", "&:hover": { transform: "scale(1.12)" } }}
+                            sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: SUCCESS, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 0 4px ${alpha(SUCCESS, 0.2)}`, animation: "pl 1.5s ease-in-out infinite", "@keyframes pl": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.6 } }, cursor: "pointer", transition: "transform 0.15s", "&:hover": { transform: "scale(1.12)" } }}
                           >
                             <MyLocation sx={{ fontSize: 18, color: "#fff" }} />
                           </Box>
                         </Box>
-                        <Box sx={{ flex: 1, minWidth: 0, pt: 0.5, pb: 0.5 }}>
+                        <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
                           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.4 }}>
                             <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>Punched In</Typography>
-                            {punchInLocation.time && <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8" }}>{fmt(punchInLocation.time)}</Typography>}
+                            {punchInLocation?.time && <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8" }}>{fmt(punchInLocation.time)}</Typography>}
                           </Box>
                           {timelineBatteryInfo.percentage !== null && (
                             <Box sx={{ mb: 0.8 }}>
@@ -2630,101 +2997,156 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                             </Box>
                           )}
                           {/* Address (prefer resolved geocoded address, fallback to punchInLocation.address, then coords) */}
-                          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4 }}>
-                            <LocationOn sx={{ fontSize: 12, color: PRIMARY, mt: "2px", flexShrink: 0 }} />
-                            <Typography sx={{ fontSize: "0.75rem", color: "#475569", lineHeight: 1.5 }}>
+                          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4, mb: 0.5 }}>
+                            <LocationOn sx={{ fontSize: 12, color: "#94a3b8", mt: "2px", flexShrink: 0 }} />
+                            <Typography sx={{ fontSize: "0.75rem", color: "#64748b", lineHeight: 1.5 }}>
                               {resolvedAddress ||
-                                (!isRawCoordinateValue(punchInLocation?.address) ? (typeof punchInLocation.address === "string" ? punchInLocation.address : punchInLocation.address?.full || punchInLocation.address?.short) : null) ||
-                                (punchInLocation?.lat ? "Locating address…" : "")}
+                                (!isRawCoordinateValue(punchInLocation?.address) ? (typeof punchInLocation?.address === "string" ? punchInLocation.address : punchInLocation?.address?.full || punchInLocation?.address?.short) : null) ||
+                                (punchInLocation?.lat ? "Locating address…" : "Location not available")}
                             </Typography>
                           </Box>
-                        </Box>
-                      </Box>
-
-                      {/* Route connector from punch-in to first visit */}
-                      {sortedVisits.length > 0 && sortedVisits[0].distanceFromPreviousKm > 0 && (
-                        <RouteConnector visit={sortedVisits[0]} />
-                      )}
-                    </Box>
-                  )}
-
-                  {stayedLocations.length > 0 && (
-                    <Box sx={{ mt: 1.5, mb: 2 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1.25 }}>
-                        <Timer sx={{ fontSize: 15, color: WARNING }} />
-                        <Typography sx={{ fontSize: "0.78rem", color: "#0f172a", fontWeight: 800 }}>
-                          Stayed 15+ Minutes
-                        </Typography>
-                        <Chip
-                          size="small"
-                          label={`${stayedLocations.length}`}
-                          sx={{ height: 18, bgcolor: alpha(WARNING, 0.12), color: WARNING, fontSize: "0.62rem", fontWeight: 800 }}
-                        />
-                      </Box>
-                      {stayedLocations.map((stay, index) => (
-                        <StayedLocationCard
-                          key={`${stay.lat || "stay"}-${stay.lng || index}-${stay.lastEndTime || index}`}
-                          stay={stay}
-                        />
-                      ))}
-                    </Box>
-                  )}
-
-                  {/* ── Visit cards with route connectors between them ── */}
-                  {sortedVisits.map((v, i) => (
-                    <Box key={v._id || i}>
-                      <VisitCard
-                        visit={v}
-                        index={i}
-                        isLast={i === sortedVisits.length - 1 && !hasPunchedOut}
-                        fixedBatteryInfo={timelineBatteryInfo}
-                        fixedBatteryChip={timelineBatteryChip}
-                      />
-                      {/* Route connector AFTER this visit, pointing to next visit */}
-                      {i < sortedVisits.length - 1 && sortedVisits[i + 1]?.distanceFromPreviousKm > 0 && (
-                        <RouteConnector visit={sortedVisits[i + 1]} />
-                      )}
-                    </Box>
-                  ))}
-
-                  {hasPunchedOut && punchOutLocation?.time && (
-                    <Box sx={{ display: "flex", gap: 2, mt: 0 }}>
-                      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                        <Box sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: WARNING, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 2px 8px ${alpha(WARNING, 0.3)}` }}>
-                          <MyLocation sx={{ fontSize: 18, color: "#fff" }} />
-                        </Box>
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
-                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.4 }}>
-                          <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>Punched Out</Typography>
-                          <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8" }}>{fmt(punchOutLocation.time)}</Typography>
-                        </Box>
-                        {timelineBatteryInfo.percentage !== null && (
-                          <Box sx={{ mb: 0.8 }}>
-                            <Chip
-                              size="small"
-                              label={`${timelineBatteryChip.label}${timelineBatteryInfo.isCharging ? " • Charging" : ""}`}
-                              sx={{ bgcolor: timelineBatteryChip.bg, color: timelineBatteryChip.color, fontWeight: 700, border: `1px solid ${timelineBatteryChip.border}`, height: 24 }}
-                            />
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: SUCCESS, animation: "dp 1.5s ease-in-out infinite", "@keyframes dp": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.3 } } }} />
+                            <Typography sx={{ fontSize: "0.7rem", color: SUCCESS, fontWeight: 600 }}>On Duty · No visits yet today</Typography>
                           </Box>
-                        )}
-                        {punchOutLocation?.address && (
-                          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4 }}>
-                            <LocationOn sx={{ fontSize: 12, color: WARNING, mt: "2px", flexShrink: 0 }} />
-                            <Typography sx={{ fontSize: "0.75rem", color: "#475569", lineHeight: 1.5 }}>
-                              {typeof punchOutLocation.address === "string" ? punchOutLocation.address : punchOutLocation.address?.full || punchOutLocation.address?.short || ""}
-                            </Typography>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, minHeight: 200 }}>
+                        <Box sx={{ width: 48, height: 48, borderRadius: "50%", bgcolor: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", mb: 1.5 }}>
+                          <MyLocation sx={{ fontSize: 22, color: "#cbd5e1" }} />
+                        </Box>
+                        <Typography sx={{ fontWeight: 600, color: textSub, fontSize: "0.88rem", mb: 0.4 }}>Not Punched In</Typography>
+                        <Typography sx={{ color: "#cbd5e1", fontSize: "0.75rem", textAlign: "center" }}>Punch in to start tracking visits</Typography>
+                      </Box>
+                    )}
+                  </Box>
+                ) : (
+                  <Box sx={{ p: 3 }}>
+
+                    {/* ── Punch In header ── */}
+                    {punchInLocation?.address && (
+                      <Box sx={{ mb: 0 }}>
+                        <Box sx={{ display: "flex", gap: 2 }}>
+                          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                            <Box
+                              onClick={handlePunchInFocus}
+                              sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: SUCCESS, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 2px 8px ${alpha(SUCCESS, 0.3)}`, cursor: "pointer", transition: "transform 0.15s", "&:hover": { transform: "scale(1.12)" } }}
+                            >
+                              <MyLocation sx={{ fontSize: 18, color: "#fff" }} />
+                            </Box>
                           </Box>
+                          <Box sx={{ flex: 1, minWidth: 0, pt: 0.5, pb: 0.5 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.4 }}>
+                              <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>Punched In</Typography>
+                              {punchInLocation.time && <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8" }}>{fmt(punchInLocation.time)}</Typography>}
+                            </Box>
+                            {timelineBatteryInfo.percentage !== null && (
+                              <Box sx={{ mb: 0.8 }}>
+                                <Chip
+                                  size="small"
+                                  label={`${timelineBatteryChip.label}${timelineBatteryInfo.isCharging ? " • Charging" : ""}`}
+                                  sx={{ bgcolor: timelineBatteryChip.bg, color: timelineBatteryChip.color, fontWeight: 700, border: `1px solid ${timelineBatteryChip.border}`, height: 24 }}
+                                />
+                              </Box>
+                            )}
+                            {/* Address (prefer resolved geocoded address, fallback to punchInLocation.address, then coords) */}
+                            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4 }}>
+                              <LocationOn sx={{ fontSize: 12, color: PRIMARY, mt: "2px", flexShrink: 0 }} />
+                              <Typography sx={{ fontSize: "0.75rem", color: "#475569", lineHeight: 1.5 }}>
+                                {resolvedAddress ||
+                                  (!isRawCoordinateValue(punchInLocation?.address) ? (typeof punchInLocation.address === "string" ? punchInLocation.address : punchInLocation.address?.full || punchInLocation.address?.short) : null) ||
+                                  (punchInLocation?.lat ? "Locating address…" : "")}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+
+                        {/* Route connector from punch-in to first visit */}
+                        {sortedVisits.length > 0 && sortedVisits[0].distanceFromPreviousKm > 0 && (
+                          <RouteConnector visit={sortedVisits[0]} />
                         )}
                       </Box>
-                    </Box>
-                  )}
-                </Box>
+                    )}
+
+                    {stayedLocations.length > 0 && (
+                      <Box sx={{ mt: 1.5, mb: 2 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1.25 }}>
+                          <Timer sx={{ fontSize: 15, color: WARNING }} />
+                          <Typography sx={{ fontSize: "0.78rem", color: "#0f172a", fontWeight: 800 }}>
+                            Stayed 15+ Minutes
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={`${stayedLocations.length}`}
+                            sx={{ height: 18, bgcolor: alpha(WARNING, 0.12), color: WARNING, fontSize: "0.62rem", fontWeight: 800 }}
+                          />
+                        </Box>
+                        {stayedLocations.map((stay, index) => (
+                          <StayedLocationCard
+                            key={`${stay.lat || "stay"}-${stay.lng || index}-${stay.lastEndTime || index}`}
+                            stay={stay}
+                          />
+                        ))}
+                      </Box>
+                    )}
+
+                    {/* ── Visit cards with route connectors between them ── */}
+                    {sortedVisits.map((v, i) => (
+                      <Box key={v._id || i}>
+                        <VisitCard
+                          visit={v}
+                          index={i}
+                          isLast={i === sortedVisits.length - 1 && !hasPunchedOut}
+                          fixedBatteryInfo={timelineBatteryInfo}
+                          fixedBatteryChip={timelineBatteryChip}
+                        />
+                        {/* Route connector AFTER this visit, pointing to next visit */}
+                        {i < sortedVisits.length - 1 && sortedVisits[i + 1]?.distanceFromPreviousKm > 0 && (
+                          <RouteConnector visit={sortedVisits[i + 1]} />
+                        )}
+                      </Box>
+                    ))}
+
+                    {hasPunchedOut && punchOutLocation?.time && (
+                      <Box sx={{ display: "flex", gap: 2, mt: 0 }}>
+                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                          <Box sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: WARNING, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 2px 8px ${alpha(WARNING, 0.3)}` }}>
+                            <MyLocation sx={{ fontSize: 18, color: "#fff" }} />
+                          </Box>
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
+                          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.4 }}>
+                            <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>Punched Out</Typography>
+                            <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8" }}>{fmt(punchOutLocation.time)}</Typography>
+                          </Box>
+                          {timelineBatteryInfo.percentage !== null && (
+                            <Box sx={{ mb: 0.8 }}>
+                              <Chip
+                                size="small"
+                                label={`${timelineBatteryChip.label}${timelineBatteryInfo.isCharging ? " • Charging" : ""}`}
+                                sx={{ bgcolor: timelineBatteryChip.bg, color: timelineBatteryChip.color, fontWeight: 700, border: `1px solid ${timelineBatteryChip.border}`, height: 24 }}
+                              />
+                            </Box>
+                          )}
+                          {punchOutLocation?.address && (
+                            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4 }}>
+                              <LocationOn sx={{ fontSize: 12, color: WARNING, mt: "2px", flexShrink: 0 }} />
+                              <Typography sx={{ fontSize: "0.75rem", color: "#475569", lineHeight: 1.5 }}>
+                                {typeof punchOutLocation.address === "string" ? punchOutLocation.address : punchOutLocation.address?.full || punchOutLocation.address?.short || ""}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      </Box>
+                    )}
+                  </Box>
+                )
               )}
             </Box>
 
-            {/* Load more */}
-            {(hInchargeore || loadingMore) && (
+            {/* Load more (only for Visits tab) */}
+            {activeRightTab === "timeline" && (hInchargeore || loadingMore) && (
               <Box sx={{ px: 3, py: 2, borderTop: "1px solid #f1f5f9", textAlign: "center" }}>
                 <Button size="small" disabled={loadingMore}
                   startIcon={loadingMore ? <CircularProgress size={12} /> : null}
@@ -2736,65 +3158,80 @@ export default function MemberVisitHistory({ userId: propUserId }) {
             )}
           </Box>
         </Box>
-      </Box>
-
-      {/* Odometer Photo Enlarge Dialog */}
-      <Dialog
-        open={Boolean(odometerPreview)}
-        onClose={() => setOdometerPreview(null)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: "20px",
-            bgcolor: cardBg,
-            overflow: "hidden",
-          },
-        }}
-      >
-        <DialogTitle sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderBottom: `1px solid ${dividerBorder}`,
-          py: 2,
-          px: 3,
-        }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Speed sx={{ color: "#6366f1" }} />
-            <Box>
-              <Typography sx={{ fontWeight: 800, fontSize: "1rem", color: textTitle }}>
-                {odometerPreview?.title || "Odometer Photo"}
-              </Typography>
-              {(odometerPreview?.reading != null || odometerPreview?.time) && (
-                <Typography sx={{ fontSize: "0.75rem", color: textSub, fontWeight: 600 }}>
-                  {odometerPreview?.reading != null ? `Odometer Reading: ${Number(odometerPreview.reading).toLocaleString("en-IN")} KM` : ""}
-                  {odometerPreview?.reading != null && odometerPreview?.time ? " • " : ""}
-                  {odometerPreview?.time ? `Recorded at ${odometerPreview.time}` : ""}
-                </Typography>
-              )}
+        {/* Full-Screen Odometer Image Preview Modal */}
+        {previewOdoImg && (
+          <Box
+            onClick={() => setPreviewOdoImg(null)}
+            sx={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 99999,
+              bgcolor: "rgba(15, 23, 42, 0.94)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "zoom-out",
+              p: { xs: 1.5, sm: 3 },
+            }}
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                top: 20,
+                right: 20,
+                width: 42,
+                height: 42,
+                borderRadius: "50%",
+                bgcolor: "rgba(255,255,255,0.18)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                "&:hover": { bgcolor: "rgba(255,255,255,0.32)", transform: "scale(1.08)" },
+              }}
+            >
+              <Close sx={{ color: "#fff", fontSize: 24 }} />
             </Box>
-          </Box>
-          <IconButton onClick={() => setOdometerPreview(null)} size="small">
-            <Close sx={{ fontSize: 20 }} />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ p: 2, display: "flex", justifyContent: "center", bgcolor: "#000" }}>
-          {odometerPreview?.url && (
+
+            <Box
+              sx={{
+                position: "absolute",
+                top: 20,
+                left: 20,
+                bgcolor: "rgba(0,0,0,0.65)",
+                borderRadius: "10px",
+                px: 2,
+                py: 1,
+                border: "1px solid rgba(255,255,255,0.15)",
+                display: "flex",
+                alignItems: "center",
+                gap: 1
+              }}
+            >
+              <PhotoCamera sx={{ color: "#38bdf8", fontSize: 18 }} />
+              <Typography sx={{ color: "#fff", fontSize: "0.92rem", fontWeight: 700 }}>
+                {previewOdoImg.title || "Odometer Photo"}
+              </Typography>
+            </Box>
+
             <Box
               component="img"
-              src={getPhotoUrlCandidates(odometerPreview.url)[0] || odometerPreview.url}
-              alt="Enlarged Odometer"
+              src={previewOdoImg.url}
+              alt="Odometer Preview"
+              onClick={(e) => e.stopPropagation()}
               sx={{
-                maxWidth: "100%",
-                maxHeight: "75vh",
+                maxWidth: "92vw",
+                maxHeight: "88vh",
+                borderRadius: "16px",
                 objectFit: "contain",
-                borderRadius: "12px",
+                boxShadow: "0 16px 48px rgba(0,0,0,0.65)",
+                border: "2px solid rgba(255,255,255,0.12)",
               }}
             />
-          )}
-        </DialogContent>
-      </Dialog>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }

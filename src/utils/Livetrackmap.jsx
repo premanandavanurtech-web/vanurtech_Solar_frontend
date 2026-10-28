@@ -1628,14 +1628,25 @@ export default function LiveTrackingMap({
     if (!mapLoaded || !userId) return;
     const fetchTripData = async () => {
       try {
-        const res = await fetch(`${API}/api/v1/attendance/trip-status/today?userId=${userId}`, {
+        const dateParam = getLocalDateString(selectedDate);
+        let res = await fetch(`${API}/api/v1/trips?userId=${userId}&dateKey=${dateParam}`, {
           headers: { Authorization: `Bearer ${getToken()}` },
         });
+        if (!res.ok) {
+          res = await fetch(`${API}/api/v1/trip/status/today?userId=${userId}`, {
+            headers: { Authorization: `Bearer ${getToken()}` },
+          });
+        }
+        if (!res.ok) {
+          res = await fetch(`${API}/api/v1/attendance/trip-status/today?userId=${userId}`, {
+            headers: { Authorization: `Bearer ${getToken()}` },
+          });
+        }
         if (!res.ok) return;
         const data = await res.json();
-        const payload = data?.data || data?.result || data || {};
-        const lastTrip = payload?.lastTrip;
-        const vehicleTrips = payload?.vehicleTrips;
+        const payload = data?.result || data?.data || data || {};
+        const lastTrip = payload?.lastTrip || payload?.activeTrip;
+        const vehicleTrips = Array.isArray(payload) ? payload : (payload?.vehicleTrips || payload?.trips || []);
         if (Array.isArray(vehicleTrips) && vehicleTrips.length > 0) {
           const formatted = vehicleTrips.map((t, idx) => ({
             tripNumber: t.tripNumber || idx + 1,
