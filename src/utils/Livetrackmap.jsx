@@ -481,12 +481,18 @@ export default function LiveTrackingMap({
   visits          = [],
   preferVisitTrail = false,
   punchInPopupTrigger = 0,
+<<<<<<< HEAD
   trips           = [],
+=======
+  activeTrip       = null,
+>>>>>>> origin/dipak
 }) {
   const mapDivRef  = useRef(null);
   const gMapRef    = useRef(null);
   const leafletMapRef = useRef(null);
   const polyRef    = useRef({ casing: null, main: null });
+  const tripDestMkRef = useRef(null);
+  const tripRoutePolyRef = useRef({ casing: null, main: null });
   const startMkRef = useRef(null);
   const liveMkRef  = useRef(null);
   const endMkRef   = useRef(null);
@@ -537,6 +543,14 @@ export default function LiveTrackingMap({
   const [geofenceAlerts, setGeofenceAlerts] = useState([]);
   const fenceLayersRef = useRef({});
 
+  const withProgrammaticViewport = useCallback((fn) => {
+    suppressViewportEventsRef.current = true;
+    fn();
+    window.setTimeout(() => {
+      suppressViewportEventsRef.current = false;
+    }, 0);
+  }, []);
+
   const syncStartMarker = useCallback((points = allPtsRef.current) => {
     const lMap = leafletMapRef.current;
     if (!mapLoaded || !lMap) return;
@@ -581,7 +595,123 @@ export default function LiveTrackingMap({
     } else {
       startMkRef.current.setLatLng(pos);
     }
-  }, [mapLoaded]);
+  }, [mapLoaded, withProgrammaticViewport]);
+
+  // ── Render Active Trip Destination Marker & Planned Route Line (Location A to B) ──
+  useEffect(() => {
+    const lMap = leafletMapRef.current;
+    if (!lMap || !mapLoaded) return;
+
+    // Cleanup previous trip layers
+    if (tripDestMkRef.current) {
+      tripDestMkRef.current.remove();
+      tripDestMkRef.current = null;
+    }
+    if (tripRoutePolyRef.current?.casing) {
+      tripRoutePolyRef.current.casing.remove();
+      tripRoutePolyRef.current.casing = null;
+    }
+    if (tripRoutePolyRef.current?.main) {
+      tripRoutePolyRef.current.main.remove();
+      tripRoutePolyRef.current.main = null;
+    }
+
+    if (!activeTrip) return;
+
+    const dest = activeTrip.destination;
+    const destLat = Number(dest?.latitude || dest?.lat);
+    const destLng = Number(dest?.longitude || dest?.lng);
+
+    if (!destLat || !destLng) return;
+
+    const destTitle = dest.name || dest.title || "Destination";
+    const destAddr = dest.address || dest.subtitle || "";
+    const tripNum = activeTrip.tripNumber || 1;
+    const isTripActive = activeTrip.tripStatus === "active" || activeTrip.tripStatus === "in_progress";
+
+    // 1. Draw Destination Marker (Location B)
+    const tripDestIcon = L.divIcon({
+      className: "",
+      html: `<div style="
+        position:relative;display:flex;align-items:center;justify-content:center;
+      ">
+        <div style="
+          width:36px;height:36px;border-radius:50%;
+          background:#ffe4e6;border:2.5px solid #e11d48;
+          display:flex;align-items:center;justify-content:center;
+          box-shadow:0 4px 12px rgba(225,29,72,0.35);
+        ">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="#e11d48">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          </svg>
+        </div>
+        <div style="
+          position:absolute;top:-8px;right:-8px;
+          background:#0f172a;color:#ffffff;
+          font-size:10px;font-weight:800;border-radius:10px;
+          padding:1px 6px;border:1.5px solid #ffffff;
+        ">B</div>
+      </div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+    });
+
+    tripDestMkRef.current = L.marker([destLat, destLng], {
+      icon: tripDestIcon,
+      zIndexOffset: 550,
+      title: `Trip #${tripNum} Destination: ${destTitle}`,
+    })
+      .addTo(lMap)
+      .bindPopup(
+        `<div style="font-family:sans-serif;min-width:180px;padding:4px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;font-weight:800;color:${isTripActive ? '#2563eb' : '#d97706'};text-transform:uppercase;letter-spacing:0.5px">
+              Trip #${tripNum} ${isTripActive ? 'Live Destination' : 'Destination (Stopped)'}
+            </span>
+          </div>
+          <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px">${destTitle}</div>
+          ${destAddr ? `<div style="font-size:12px;color:#64748b;margin-top:2px">${destAddr}</div>` : ""}
+          ${activeTrip.actualDistanceKm !== undefined ? `<div style="font-size:12px;font-weight:700;color:#d97706;margin-top:4px">🛑 Travelled: ${activeTrip.actualDistanceKm} km ${activeTrip.selectedRoute?.distanceKm ? '(of ' + activeTrip.selectedRoute.distanceKm + ' km)' : ''}</div>` : (activeTrip.selectedRoute?.distanceKm ? `<div style="font-size:12px;font-weight:700;color:#2563eb;margin-top:4px">📍 ${activeTrip.selectedRoute.distanceKm} km planned</div>` : "")}
+          ${activeTrip.stopReason ? `<div style="font-size:11px;color:#b45309;margin-top:3px;background:#fef3c7;padding:2px 6px;border-radius:4px">Stop Reason: ${activeTrip.stopReason}</div>` : ""}
+        </div>`
+      );
+
+    // 2. Draw Planned Road Route (A to B) if route coordinates are available
+    const routeCoords = activeTrip.selectedRoute?.coordinates;
+    if (Array.isArray(routeCoords) && routeCoords.length >= 2) {
+      const latlngs = routeCoords.map((pt) => [
+        Number(pt.latitude ?? pt.lat),
+        Number(pt.longitude ?? pt.lng),
+      ]).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+
+      if (latlngs.length >= 2) {
+        tripRoutePolyRef.current = {
+          casing: L.polyline(latlngs, {
+            color: "#ffffff",
+            weight: 8,
+            opacity: 0.9,
+          }).addTo(lMap),
+          main: L.polyline(latlngs, {
+            color: isTripActive ? "#2563eb" : "#f59e0b",
+            weight: 5,
+            opacity: 0.95,
+            dashArray: isTripActive ? undefined : "8, 8",
+          }).addTo(lMap),
+        };
+
+        if (!userAdjustedViewportRef.current) {
+          withProgrammaticViewport(() => {
+            lMap.fitBounds(latlngs, { padding: [50, 50] });
+          });
+        }
+      }
+    } else if (!userAdjustedViewportRef.current && startMkRef.current) {
+      const startPos = startMkRef.current.getLatLng();
+      withProgrammaticViewport(() => {
+        lMap.fitBounds([[startPos.lat, startPos.lng], [destLat, destLng]], { padding: [60, 60] });
+      });
+    }
+  }, [activeTrip, mapLoaded, withProgrammaticViewport]);
 
   const isTodaySelected =
     !selectedDate || selectedDate === new Date().toISOString().split("T")[0];
@@ -596,14 +726,6 @@ export default function LiveTrackingMap({
       onDistanceChange({ totalKm: normalizedKm, totalPoints: normalizedPoints });
     }
   }, [onDistanceChange]);
-
-  const withProgrammaticViewport = useCallback((fn) => {
-    suppressViewportEventsRef.current = true;
-    fn();
-    window.setTimeout(() => {
-      suppressViewportEventsRef.current = false;
-    }, 0);
-  }, []);
 
   useEffect(() => {
     visitsRef.current = visits;
@@ -1828,7 +1950,9 @@ export default function LiveTrackingMap({
     if (!socket) return;
 
     const onAck   = (data) => setSockAck(data.timestamp);
-    const onError = (data) => toast.error(data.message || "Socket error.", { title: "Live Sync Error" });
+    const onError = (data) => {
+      console.warn("[LiveSync Socket Notice]:", data?.message || data);
+    };
 
     const onGeofenceAlert = (data) => {
       const msg = `${data.event === "entered" ? "🟠 Entered" : "⚪ Exited"} "${data.name}"`;
@@ -1855,8 +1979,18 @@ export default function LiveTrackingMap({
       const last = allPtsRef.current[allPtsRef.current.length - 1];
       if (last) {
         const dist = distMetres(last.lat, last.lng, data.lat, data.lng);
+<<<<<<< HEAD
         // Only append to GPS trail line if user has moved at least 25 meters outside stationary noise
         if (dist < 25 || dist > MAX_LIVE_SEGMENT_METRES) {
+=======
+        const minMoveRequired = routeMode === ROUTE_MODE_RAW
+          ? 3
+          : getEffectiveMoveThreshold(data.accuracy, last.accuracy);
+        if (dist < minMoveRequired || dist > MAX_LIVE_SEGMENT_METRES) {
+          if (liveMkRef.current && dist <= MAX_LIVE_SEGMENT_METRES) {
+            animateMarkerSmooth(liveMkRef.current, data.lat, data.lng, 600);
+          }
+>>>>>>> origin/dipak
           return;
         }
       }

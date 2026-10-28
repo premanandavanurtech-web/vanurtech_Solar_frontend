@@ -238,19 +238,41 @@ export const upsertQuotation = async (quotation) => {
 
 export const updateQuotationStatus = (quotationId, status) => {
   const currentQuotations = loadQuotationLibrary();
+<<<<<<< HEAD
   const nextQuotations = currentQuotations.map((quotation) => {
     if (quotation.id !== quotationId && quotation._id !== quotationId && quotation.quotationNumber !== quotationId) {
       return quotation;
     }
+=======
+  const targetQuotation = currentQuotations.find((q) => q.id === quotationId);
+  const targetLeadId = targetQuotation ? getQuotationLeadId(targetQuotation) : null;
+>>>>>>> origin/dipak
 
-    const now = new Date().toISOString();
-    return {
-      ...quotation,
-      status,
-      savedAt: now,
-      sentAt: status === "sent" ? quotation.sentAt || now : quotation.sentAt,
-      acceptedAt: status === "accepted" ? quotation.acceptedAt || now : quotation.acceptedAt,
-    };
+  const nextQuotations = currentQuotations.map((quotation) => {
+    if (quotation.id === quotationId) {
+      const now = new Date().toISOString();
+      return {
+        ...quotation,
+        status,
+        savedAt: now,
+        sentAt: status === "sent" ? quotation.sentAt || now : quotation.sentAt,
+        acceptedAt: status === "accepted" ? quotation.acceptedAt || now : quotation.acceptedAt,
+      };
+    }
+
+    if (
+      status === "accepted" &&
+      targetLeadId &&
+      getQuotationLeadId(quotation) === targetLeadId &&
+      quotation.status === "accepted"
+    ) {
+      return {
+        ...quotation,
+        status: "sent",
+      };
+    }
+
+    return quotation;
   }).sort((leftEntry, rightEntry) => new Date(rightEntry.savedAt || 0) - new Date(leftEntry.savedAt || 0));
 
   writeStorage(QUOTATION_LIBRARY_STORAGE_KEY, nextQuotations);

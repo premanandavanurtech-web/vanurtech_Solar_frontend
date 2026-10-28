@@ -1817,44 +1817,9 @@ const DisbursementStatusUpdateModal = ({
             </FormControl>
           </Box>
 
-          <Box>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-              Lead Status *
-            </Typography>
-            <FormControl fullWidth size="small" error={!!errors.leadStatus}>
-              <Select
-                value={selectedLeadStatus}
-                onChange={(e) => setSelectedLeadStatus(e.target.value)}
-                disabled={!selectedDisbursementStatus || loading}
-              >
-                <MenuItem value="" disabled>
-                  Select status
-                </MenuItem>
-                {getLeadStatusOptions.map((status) => {
-                  const cfg = getLeadStatusConfig(status);
-                  return (
-                    <MenuItem key={status} value={status}>
-                      <Stack direction="row" alignItems="center" spacing={1.5}>
-                        {cfg.icon}
-                        <Box>
-                          <Typography variant="body2">{status}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {cfg.description}
-                          </Typography>
-                        </Box>
-                      </Stack>
-                    </MenuItem>
-                  );
-                })}
-              </Select>
-              {errors.leadStatus && (
-                <FormHelperText>{errors.leadStatus}</FormHelperText>
-              )}
-            </FormControl>
-          </Box>
+          
 
-          {selectedDisbursementStatus === "completed" && (
-            <Stack spacing={2}>
+          <Stack spacing={2}>
               <TextField
                 label="Disbursement Amount *"
                 value={disbursementAmount}

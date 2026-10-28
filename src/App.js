@@ -45,10 +45,14 @@ import PublicDocumentUpload from "./pages/PublicDocumentUpload";
 import Projects from "./pages/Projects";
 import ProjectDetails from "./pages/ProjectDetails";
 import ProjectImagesPage from "./pages/ProjectImagesPage";
+<<<<<<< HEAD
 import AddProjectMaterialsPage from "./pages/AddProjectMaterialsPage";
+=======
+>>>>>>> origin/dipak
 import WorkRegister from "./pages/WorkRegister";
 import InventoryERP from "./pages/InventoryERP";
 import SettingsPage from "./pages/Settings";
+import AppPermissionsPage from "./pages/AppPermissionsPage";
 import Salaries from "./pages/Salaries";
 import Payroll from "./pages/Payroll";
 import Payslips from "./pages/Payslips";
@@ -277,7 +281,10 @@ function App() {
                         <Route path="all-leads/:leadId" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><LeadDetailsPage /></ProtectedRoute>} />
                         <Route path="all-leads" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><LeadOverview /></ProtectedRoute>} />
                         <Route path="projects/:projectId/images" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><ProjectImagesPage /></ProtectedRoute>} />
+<<<<<<< HEAD
                         <Route path="projects/:projectId/issue-materials" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><AddProjectMaterialsPage /></ProtectedRoute>} />
+=======
+>>>>>>> origin/dipak
                         <Route path="projects/:projectId" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><ProjectDetails /></ProtectedRoute>} />
                         <Route path="projects" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Projects /></ProtectedRoute>} />
                         <Route path="inventory" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><InventoryERP /></ProtectedRoute>} />
@@ -289,6 +296,8 @@ function App() {
                         <Route path="payroll/salary-slips" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><Payslips /></ProtectedRoute>} />
                         <Route path="payroll/payments" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><PayrollPayments /></ProtectedRoute>} />
                         <Route path="settings" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><SettingsPage /></ProtectedRoute>} />
+                        <Route path="apk-permissions" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><AppPermissionsPage /></ProtectedRoute>} />
+                        <Route path="app-permissions" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><AppPermissionsPage /></ProtectedRoute>} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                       </Routes>
                     </MainLayout>

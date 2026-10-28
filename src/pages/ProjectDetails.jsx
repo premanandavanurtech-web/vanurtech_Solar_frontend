@@ -75,10 +75,13 @@ import {
   EmailOutlined,
   Inventory2Outlined,
   WhatsApp,
+<<<<<<< HEAD
   Search,
   PeopleAlt,
   CalendarMonthOutlined,
   KeyboardArrowDownRounded,
+=======
+>>>>>>> origin/dipak
 } from "@mui/icons-material";
 import { format, parseISO } from "date-fns";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -897,6 +900,7 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
           borderRadius: RADIUS,
           overflow: "hidden",
           boxShadow: SHADOW_LG,
+<<<<<<< HEAD
           bgcolor: isDark ? "#0b0e1a" : PANEL,
           color: isDark ? "#f8fafc" : "inherit",
           border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
@@ -904,12 +908,22 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
       }}
     >
       <DialogTitle sx={{ px: 3, py: 2.25, borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE }}>
+=======
+        },
+      }}
+    >
+      <DialogTitle sx={{ px: 3, py: 2.25, borderBottom: `1px solid ${BORDER}`, bgcolor: SURFACE }}>
+>>>>>>> origin/dipak
         <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
           <Stack direction="row" alignItems="center" spacing={1.25}>
             <Box sx={{ width: 34, height: 34, borderRadius: "9px", bgcolor: alpha(WARNING, 0.12), color: WARNING, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <FactCheck sx={{ fontSize: 18 }} />
             </Box>
+<<<<<<< HEAD
             <Typography variant="subtitle1" fontWeight={800} color={isDark ? "#f8fafc" : "text.primary"} letterSpacing="-0.01em">
+=======
+            <Typography variant="subtitle1" fontWeight={800} color="text.primary" letterSpacing="-0.01em">
+>>>>>>> origin/dipak
               Site Survey Details
             </Typography>
             <Chip
@@ -918,24 +932,41 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
               sx={{ height: 23, bgcolor: alpha(SUCCESS, 0.12), color: SUCCESS, fontSize: 11, fontWeight: 800 }}
             />
           </Stack>
+<<<<<<< HEAD
           <IconButton size="small" onClick={onClose} sx={{ color: isDark ? "#94a3b8" : MUTED }}>
+=======
+          <IconButton size="small" onClick={onClose} sx={{ color: MUTED }}>
+>>>>>>> origin/dipak
             <Clear sx={{ fontSize: 20 }} />
           </IconButton>
         </Stack>
       </DialogTitle>
 
       <DialogContent sx={{ p: 3 }}>
+<<<<<<< HEAD
         <Grid container spacing={2} sx={{ p: 2, mb: 2.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE }}>
           <Grid item xs={12} md={4}>
             <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Visit Date
             </Typography>
             <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : "text.primary"}>
+=======
+        <Grid container spacing={2} sx={{ p: 2, mb: 2.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: SURFACE }}>
+          <Grid item xs={12} md={4}>
+            <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Visit Date
+            </Typography>
+            <Typography variant="body2" fontWeight={800} color="text.primary">
+>>>>>>> origin/dipak
               {formatDate(siteSurvey.savedAt || project?.visitDate, "dd MMM yyyy")}
             </Typography>
           </Grid>
           <Grid item xs={12} md={4}>
+<<<<<<< HEAD
             <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+=======
+            <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+>>>>>>> origin/dipak
               Inspector
             </Typography>
             <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
@@ -943,7 +974,11 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
             </Typography>
           </Grid>
           <Grid item xs={12} md={4}>
+<<<<<<< HEAD
             <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+=======
+            <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+>>>>>>> origin/dipak
               Customer
             </Typography>
             <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
@@ -955,7 +990,11 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
         <Typography variant="caption" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ display: "block", mb: 1.25, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           General
         </Typography>
+<<<<<<< HEAD
         <Divider sx={{ mb: 1.5, borderColor: isDark ? "rgba(255,255,255,0.08)" : BORDER }} />
+=======
+        <Divider sx={{ mb: 1.5, borderColor: BORDER }} />
+>>>>>>> origin/dipak
 
         <Grid container spacing={1.5}>
           {SITE_SURVEY_FIELDS.map(([key, label]) => (
@@ -968,8 +1007,12 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
                   p: 1.5,
                   borderRadius: RADIUS_SM,
                   border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
+<<<<<<< HEAD
                   bgcolor: isDark ? "#0e1322" : PANEL,
                   color: isDark ? "#f8fafc" : "inherit",
+=======
+                  bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit",
+>>>>>>> origin/dipak
                 }}
               >
                 <Box
@@ -992,7 +1035,11 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
                   )}
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
+<<<<<<< HEAD
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
+=======
+                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
+>>>>>>> origin/dipak
                     {label}
                   </Typography>
                   <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mt: 0.45, wordBreak: "break-word" }}>
@@ -1003,12 +1050,20 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
             </Grid>
           ))}
           <Grid item xs={12} sm={6} md={3}>
+<<<<<<< HEAD
             <Stack direction="row" spacing={1.5} sx={{ minHeight: 74, p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : PANEL }}>
+=======
+            <Stack direction="row" spacing={1.5} sx={{ minHeight: 74, p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: PANEL }}>
+>>>>>>> origin/dipak
               <Box sx={{ width: 34, height: 34, flexShrink: 0, borderRadius: "9px", bgcolor: alpha(WARNING, 0.1), color: WARNING, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Typography variant="caption" fontWeight={800}>#</Typography>
               </Box>
               <Box sx={{ minWidth: 0 }}>
+<<<<<<< HEAD
                 <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
+=======
+                <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
+>>>>>>> origin/dipak
                   GPS Longitude
                 </Typography>
                 <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mt: 0.45 }}>
@@ -1018,12 +1073,20 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
             </Stack>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
+<<<<<<< HEAD
             <Stack direction="row" spacing={1.5} sx={{ minHeight: 74, p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : PANEL }}>
+=======
+            <Stack direction="row" spacing={1.5} sx={{ minHeight: 74, p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: PANEL }}>
+>>>>>>> origin/dipak
               <Box sx={{ width: 34, height: 34, flexShrink: 0, borderRadius: "9px", bgcolor: alpha(WARNING, 0.1), color: WARNING, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Typography variant="caption" fontWeight={800}>#</Typography>
               </Box>
               <Box sx={{ minWidth: 0 }}>
+<<<<<<< HEAD
                 <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
+=======
+                <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
+>>>>>>> origin/dipak
                   GPS Latitude
                 </Typography>
                 <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mt: 0.45 }}>
@@ -1064,28 +1127,48 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
         )}
 
         {siteSurveyNotes && (
+<<<<<<< HEAD
           <Box sx={{ mt: 2.5, p: 1.75, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE }}>
             <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Notes
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: "pre-wrap", wordBreak: "break-word", color: isDark ? "#f8fafc" : INK }}>
+=======
+          <Box sx={{ mt: 2.5, p: 1.75, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: SURFACE }}>
+            <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Notes
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: "pre-wrap", wordBreak: "break-word", color: INK }}>
+>>>>>>> origin/dipak
               {siteSurveyNotes}
             </Typography>
           </Box>
         )}
       </DialogContent>
 
+<<<<<<< HEAD
       <DialogActions sx={{ px: 3, py: 2, borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}` }}>
+=======
+      <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${BORDER}` }}>
+>>>>>>> origin/dipak
         <Button
           size="small"
           variant="contained"
           startIcon={<LinkIcon sx={{ fontSize: 15 }} />}
           onClick={onOpenEditor}
+<<<<<<< HEAD
           sx={{ mr: "auto", borderRadius: RADIUS_SM, bgcolor: isDark ? "rgba(255,255,255,0.08)" : "#EEF1F6", color: isDark ? "#f8fafc" : INK, boxShadow: "none", fontWeight: 800, textTransform: "none", "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.14)" : "#E3E7EF", boxShadow: "none" } }}
         >
           Open full editor
         </Button>
         <Button size="small" variant="outlined" onClick={onClose} sx={{ borderRadius: RADIUS_SM, borderColor: isDark ? "rgba(255,255,255,0.15)" : BORDER, color: isDark ? "#cbd5e1" : INK, textTransform: "none", fontWeight: 700 }}>
+=======
+          sx={{ mr: "auto", borderRadius: RADIUS_SM, bgcolor: "#EEF1F6", color: INK, boxShadow: "none", fontWeight: 800, textTransform: "none", "&:hover": { bgcolor: "#E3E7EF", boxShadow: "none" } }}
+        >
+          Open full editor
+        </Button>
+        <Button size="small" variant="outlined" onClick={onClose} sx={{ borderRadius: RADIUS_SM, borderColor: BORDER, color: INK, textTransform: "none", fontWeight: 700 }}>
+>>>>>>> origin/dipak
           Close
         </Button>
       </DialogActions>
@@ -1157,6 +1240,7 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                 startIcon={<FactCheck sx={{ fontSize: 17 }} />}
                 onClick={() => setSurveyOpen(true)}
                 disabled={!siteSurveyReady}
+<<<<<<< HEAD
                 sx={{
                   borderRadius: RADIUS_SM,
                   borderColor: isDark ? "rgba(255,255,255,0.15)" : BORDER,
@@ -1169,6 +1253,9 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                   },
                   "&:hover": { borderColor: alpha(BRAND, 0.4), bgcolor: alpha(BRAND, 0.04) },
                 }}
+=======
+                sx={{ borderRadius: RADIUS_SM, borderColor: BORDER, color: INK, fontWeight: 700, textTransform: "none", "&:hover": { borderColor: alpha(BRAND, 0.4), bgcolor: alpha(BRAND, 0.04) } }}
+>>>>>>> origin/dipak
               >
                 Site Survey
               </Button>
@@ -1181,8 +1268,13 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
             <Stack spacing={3}>
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+<<<<<<< HEAD
                   <Typography variant="body2" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2 }}>#</Typography>
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+=======
+                  <Typography variant="body2" fontWeight={800} sx={{ color: MUTED_2 }}>#</Typography>
+                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+>>>>>>> origin/dipak
                     Project Code
                   </Typography>
                 </Stack>
@@ -1193,8 +1285,13 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
 
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+<<<<<<< HEAD
                   <TaskAlt sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+=======
+                  <TaskAlt sx={{ fontSize: 17, color: MUTED_2 }} />
+                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+>>>>>>> origin/dipak
                     Status
                   </Typography>
                 </Stack>
@@ -1207,7 +1304,11 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                   <IconButton
                     size="small"
                     onClick={() => onGoToStage?.(normalizeProjectStage(project))}
+<<<<<<< HEAD
                     sx={{ width: 30, height: 30, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, borderRadius: RADIUS_SM, color: isDark ? "#f8fafc" : INK, "&:hover": { borderColor: alpha(BRAND, 0.4), bgcolor: alpha(BRAND, 0.04) } }}
+=======
+                    sx={{ width: 30, height: 30, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, borderRadius: RADIUS_SM, color: INK, "&:hover": { borderColor: alpha(BRAND, 0.4), bgcolor: alpha(BRAND, 0.04) } }}
+>>>>>>> origin/dipak
                   >
                     <Edit sx={{ fontSize: 15 }} />
                   </IconButton>
@@ -1216,8 +1317,13 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
 
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+<<<<<<< HEAD
                   <CalendarMonth sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+=======
+                  <CalendarMonth sx={{ fontSize: 17, color: MUTED_2 }} />
+                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+>>>>>>> origin/dipak
                     Created
                   </Typography>
                 </Stack>
@@ -1234,32 +1340,55 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                 <>
                   <Box>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+<<<<<<< HEAD
                       <Workspaces sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                       <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                         Created By
                       </Typography>
                     </Stack>
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: createdByName ? (isDark ? "#f8fafc" : INK) : (isDark ? "#64748b" : MUTED_2) }}>
+=======
+                      <Workspaces sx={{ fontSize: 17, color: MUTED_2 }} />
+                      <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Created By
+                      </Typography>
+                    </Stack>
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: createdByName ? INK : MUTED_2 }}>
+>>>>>>> origin/dipak
                       {createdByName || "Not available"}
                     </Typography>
                   </Box>
 
                   <Box>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+<<<<<<< HEAD
                       <Build sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                       <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                         Supervisor
                       </Typography>
                     </Stack>
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: supervisorName ? (isDark ? "#f8fafc" : INK) : (isDark ? "#64748b" : MUTED_2) }}>
+=======
+                      <Build sx={{ fontSize: 17, color: MUTED_2 }} />
+                      <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Supervisor
+                      </Typography>
+                    </Stack>
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: supervisorName ? INK : MUTED_2 }}>
+>>>>>>> origin/dipak
                       {supervisorName || "Not assigned"}
                     </Typography>
                   </Box>
 
                   <Box>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+<<<<<<< HEAD
                       <TaskAlt sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                       <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+=======
+                      <TaskAlt sx={{ fontSize: 17, color: MUTED_2 }} />
+                      <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+>>>>>>> origin/dipak
                         Team Members
                       </Typography>
                     </Stack>
@@ -1270,12 +1399,20 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                             key={name}
                             label={name}
                             size="small"
+<<<<<<< HEAD
                             sx={{ borderRadius: "6px", bgcolor: isDark ? "rgba(79, 70, 229, 0.2)" : alpha(BRAND, 0.08), color: isDark ? "#a5b4fc" : INK, fontWeight: 700 }}
+=======
+                            sx={{ borderRadius: "6px", bgcolor: alpha(BRAND, 0.08), color: INK, fontWeight: 700 }}
+>>>>>>> origin/dipak
                           />
                         ))}
                       </Stack>
                     ) : (
+<<<<<<< HEAD
                       <Typography variant="subtitle1" fontWeight={700} sx={{ color: isDark ? "#64748b" : MUTED_2 }}>
+=======
+                      <Typography variant="subtitle1" fontWeight={700} sx={{ color: MUTED_2 }}>
+>>>>>>> origin/dipak
                         No team members added
                       </Typography>
                     )}
@@ -1286,13 +1423,22 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
               {!isWorksheetProject && (
                 <Box>
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+<<<<<<< HEAD
                     <Build sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                     <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+=======
+                    <Build sx={{ fontSize: 17, color: MUTED_2 }} />
+                    <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+>>>>>>> origin/dipak
                       Site Installer
                     </Typography>
                   </Stack>
                   <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap>
+<<<<<<< HEAD
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: installerName ? (isDark ? "#f8fafc" : INK) : (isDark ? "#64748b" : MUTED_2) }}>
+=======
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: installerName ? INK : MUTED_2 }}>
+>>>>>>> origin/dipak
                       {installerName || "Not assigned"}
                     </Typography>
                     {!installerName && (
@@ -1314,7 +1460,11 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
 
         {isWorksheetProject && (
           <>
+<<<<<<< HEAD
             <Divider sx={{ my: 3, borderColor: isDark ? "rgba(255,255,255,0.08)" : BORDER_SOFT }} />
+=======
+            <Divider sx={{ my: 3, borderColor: BORDER_SOFT }} />
+>>>>>>> origin/dipak
 
             <Stack spacing={2.5}>
               <Box>
@@ -1324,11 +1474,19 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                 <Grid container spacing={1.5}>
                   {worksheetFields.map((field) => (
                     <Grid item xs={12} sm={field.wide ? 12 : 6} md={field.wide ? 12 : 3} key={field.label}>
+<<<<<<< HEAD
                       <Box sx={{ p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE, minHeight: 78 }}>
                         <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                           {field.label}
                         </Typography>
                         <Typography variant="body2" fontWeight={800} color={field.value ? (isDark ? "#f8fafc" : INK) : (isDark ? "#64748b" : MUTED_2)} sx={{ mt: 0.75, wordBreak: "break-word" }}>
+=======
+                      <Box sx={{ p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1220" : SURFACE, minHeight: 78 }}>
+                        <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                          {field.label}
+                        </Typography>
+                        <Typography variant="body2" fontWeight={800} color={field.value ? INK : MUTED_2} sx={{ mt: 0.75, wordBreak: "break-word" }}>
+>>>>>>> origin/dipak
                           {field.value || "Not available"}
                         </Typography>
                       </Box>
@@ -1340,6 +1498,7 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
               <Box>
                 <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1.5} sx={{ mb: 1.5 }}>
                   <Stack direction="row" alignItems="center" spacing={1}>
+<<<<<<< HEAD
                     <PhotoCameraOutlined sx={{ fontSize: 18, color: isDark ? "#94a3b8" : MUTED_2 }} />
                     <Typography variant="subtitle2" fontWeight={900} color={isDark ? "#f8fafc" : INK}>
                       Geo Tagged Photos
@@ -1370,6 +1529,25 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                   >
                     Open GPS Location
                   </Button>
+=======
+                    <PhotoCameraOutlined sx={{ fontSize: 18, color: MUTED_2 }} />
+                    <Typography variant="subtitle2" fontWeight={900} color={isDark ? "#f8fafc" : INK}>
+                      Geo Tagged Photos
+                    </Typography>
+                    <Chip label={`${worksheetPhotos.length} photo${worksheetPhotos.length === 1 ? "" : "s"}`} size="small" sx={{ height: 22, borderRadius: "6px", bgcolor: alpha(BRAND, 0.08), color: BRAND, fontWeight: 800 }} />
+                  </Stack>
+                  {worksheetGpsUrl && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<LocationOn sx={{ fontSize: 16 }} />}
+                      onClick={() => window.open(worksheetGpsUrl, "_blank", "noopener,noreferrer")}
+                      sx={{ borderRadius: RADIUS_SM, textTransform: "none", fontWeight: 800, borderColor: BORDER, color: INK }}
+                    >
+                      Open GPS Location
+                    </Button>
+                  )}
+>>>>>>> origin/dipak
                 </Stack>
 
                 {worksheetPhotos.length > 0 ? (
@@ -1377,13 +1555,21 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                     {worksheetPhotos.map(({ photo, url, index }) => {
                       const photoGpsUrl = getGpsMapUrl(photo);
                       return (
+<<<<<<< HEAD
                         <Box key={`${url}-${index}`} sx={{ width: 148, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, borderRadius: RADIUS_SM, overflow: "hidden", bgcolor: isDark ? "#0e1322" : PANEL }}>
+=======
+                        <Box key={`${url}-${index}`} sx={{ width: 148, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, borderRadius: RADIUS_SM, overflow: "hidden", bgcolor: PANEL }}>
+>>>>>>> origin/dipak
                           <Box
                             component="img"
                             src={url}
                             alt={`Geo tagged project photo ${index + 1}`}
                             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+<<<<<<< HEAD
                             sx={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block", cursor: "pointer", bgcolor: isDark ? "#070a12" : SURFACE }}
+=======
+                            sx={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block", cursor: "pointer", bgcolor: SURFACE }}
+>>>>>>> origin/dipak
                           />
                           <Stack spacing={0.5} sx={{ p: 1 }}>
                             <Typography variant="caption" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
@@ -1397,7 +1583,11 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                                 size="small"
                                 startIcon={<LocationOn sx={{ fontSize: 14 }} />}
                                 onClick={() => window.open(photoGpsUrl, "_blank", "noopener,noreferrer")}
+<<<<<<< HEAD
                                 sx={{ alignSelf: "flex-start", minWidth: 0, p: 0, color: isDark ? "#818cf8" : BRAND, fontSize: 12, fontWeight: 800, textTransform: "none" }}
+=======
+                                sx={{ alignSelf: "flex-start", minWidth: 0, p: 0, color: BRAND, fontSize: 12, fontWeight: 800, textTransform: "none" }}
+>>>>>>> origin/dipak
                               >
                                 Map
                               </Button>
@@ -1408,8 +1598,13 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                     })}
                   </Stack>
                 ) : (
+<<<<<<< HEAD
                   <Box sx={{ p: 2, borderRadius: RADIUS_SM, border: isDark ? "1px dashed rgba(255,255,255,0.12)" : `1px dashed ${BORDER}`, bgcolor: isDark ? "rgba(255,255,255,0.03)" : SURFACE }}>
                     <Typography variant="body2" color={isDark ? "#94a3b8" : MUTED_2} fontWeight={700}>
+=======
+                  <Box sx={{ p: 2, borderRadius: RADIUS_SM, border: `1px dashed ${BORDER}`, bgcolor: SURFACE }}>
+                    <Typography variant="body2" color={MUTED_2} fontWeight={700}>
+>>>>>>> origin/dipak
                       No geo tagged photos uploaded for this project.
                     </Typography>
                   </Box>
@@ -1423,7 +1618,11 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
       <Paper elevation={0} sx={{ p: 3, borderRadius: RADIUS, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit", boxShadow: SHADOW_SM }}>
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} spacing={2} sx={{ mb: 2.5 }}>
           <Stack direction="row" spacing={1.25} alignItems="center">
+<<<<<<< HEAD
             <AccessTime sx={{ fontSize: 20, color: isDark ? "#818cf8" : BRAND }} />
+=======
+            <AccessTime sx={{ fontSize: 20, color: BRAND }} />
+>>>>>>> origin/dipak
             <Typography variant="h6" fontWeight={800} color={isDark ? "#f8fafc" : INK} letterSpacing="-0.01em">
               Activity Timeline
             </Typography>
@@ -1440,6 +1639,7 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                     minWidth: 0,
                     px: 2,
                     borderRadius: "999px",
+<<<<<<< HEAD
                     color: active ? (isDark ? "#a5b4fc" : BRAND) : (isDark ? "#cbd5e1" : "#475569"),
                     bgcolor: active
                       ? (isDark ? "rgba(79, 70, 229, 0.2)" : alpha(BRAND, 0.08))
@@ -1452,6 +1652,13 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                         ? (isDark ? "rgba(79, 70, 229, 0.3)" : alpha(BRAND, 0.12))
                         : (isDark ? "rgba(255, 255, 255, 0.1)" : "#e2e8f0"),
                     },
+=======
+                    color: active ? BRAND : "#475569",
+                    bgcolor: active ? alpha(BRAND, 0.08) : "#F1F4F9",
+                    border: `1px solid ${active ? alpha(BRAND, 0.3) : "transparent"}`,
+                    fontWeight: 800,
+                    textTransform: "none",
+>>>>>>> origin/dipak
                   }}
                 >
                   {filter.label}
@@ -1466,10 +1673,17 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
             {Object.entries(groupedEntries).map(([groupLabel, entries]) => (
               <Box key={groupLabel}>
                 <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
+<<<<<<< HEAD
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, minWidth: 92, letterSpacing: "0.04em" }}>
                     {groupLabel}
                   </Typography>
                   <Divider sx={{ flex: 1, borderColor: isDark ? "rgba(255,255,255,0.08)" : BORDER }} />
+=======
+                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, minWidth: 92, letterSpacing: "0.04em" }}>
+                    {groupLabel}
+                  </Typography>
+                  <Divider sx={{ flex: 1, borderColor: BORDER }} />
+>>>>>>> origin/dipak
                 </Stack>
                 <Stack spacing={2}>
                   {entries.map((entry) => (
@@ -1479,11 +1693,19 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                           width: 40,
                           height: 40,
                           borderRadius: "50%",
+<<<<<<< HEAD
                           bgcolor: isDark ? "rgba(79, 70, 229, 0.18)" : alpha(BRAND, 0.08),
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           color: isDark ? "#818cf8" : BRAND,
+=======
+                          bgcolor: alpha(BRAND, 0.08),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: BRAND,
+>>>>>>> origin/dipak
                           flexShrink: 0,
                         }}
                       >
@@ -1497,10 +1719,17 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                           <Chip
                             label={entry.tag}
                             size="small"
+<<<<<<< HEAD
                             sx={{ height: 21, bgcolor: isDark ? "rgba(255,255,255,0.08)" : "#EEF1F6", color: isDark ? "#cbd5e1" : "#475569", fontSize: 10.5, fontWeight: 800 }}
                           />
                         </Stack>
                         <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : MUTED, mt: 0.4 }}>
+=======
+                            sx={{ height: 21, bgcolor: "#EEF1F6", color: "#475569", fontSize: 10.5, fontWeight: 800 }}
+                          />
+                        </Stack>
+                        <Typography variant="body2" sx={{ color: MUTED, mt: 0.4 }}>
+>>>>>>> origin/dipak
                           {entry.actor || "System"} · {formatDate(entry.date, "dd MMM, hh:mm a")}
                         </Typography>
                       </Box>
@@ -1511,7 +1740,11 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
             ))}
           </Stack>
         ) : (
+<<<<<<< HEAD
           <Typography variant="body2" sx={{ color: isDark ? "#64748b" : MUTED_2, py: 3, textAlign: "center" }}>
+=======
+          <Typography variant="body2" sx={{ color: MUTED_2, py: 3, textAlign: "center" }}>
+>>>>>>> origin/dipak
             No activity available.
           </Typography>
         )}
@@ -1533,6 +1766,7 @@ const workspaceHeaderIcon = (Icon) => (
   </Box>
 );
 
+<<<<<<< HEAD
 const LeadConvertedWorkspace = ({ project, onGoToStage }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -1673,6 +1907,8 @@ const LeadConvertedWorkspace = ({ project, onGoToStage }) => {
   );
 };
 
+=======
+>>>>>>> origin/dipak
 const RegistrationWorkspace = ({
   project,
   formData,
@@ -2539,8 +2775,11 @@ const InstallationWorkspace = ({
     (s) => s.value === formData.installationStatus || s.value === project?.installationStatus
   ) || (isCompletedStatus(project?.installationStatus) ? INSTALLATION_STATUS_OPTIONS[1] : INSTALLATION_STATUS_OPTIONS[0]);
 
+<<<<<<< HEAD
   const isCompleted = currentStatusObj.value === "installation_completed";
 
+=======
+>>>>>>> origin/dipak
   const existingPartners = useMemo(() => {
     const defaultList = ["In-House Team", "Solar Pro Tech", "Apex Installations", "BrightSun Solar EPC", "SunRay Tech Partners"];
     if (formData.installationPartner && !defaultList.includes(formData.installationPartner)) {
@@ -2580,6 +2819,7 @@ const InstallationWorkspace = ({
     <Paper
       elevation={0}
       sx={{
+<<<<<<< HEAD
         borderRadius: 4,
         border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
         bgcolor: isDark ? "#0b0f19" : "#ffffff",
@@ -2898,10 +3138,138 @@ const InstallationWorkspace = ({
                         borderColor: isDark ? "#818cf8" : "#4338ca",
                         bgcolor: isDark ? "rgba(79, 70, 229, 0.25)" : "#eef2ff",
                       },
+=======
+        borderRadius: RADIUS,
+        border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
+        bgcolor: isDark ? "#0b0e1a" : PANEL,
+        color: isDark ? "#f8fafc" : "inherit",
+        overflow: "hidden",
+        boxShadow: SHADOW_SM,
+      }}
+    >
+      {workflowStatusHeader(Build, "Update Installation Status", getCustomerName(project), onCancel)}
+
+      <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
+        {/* Status Chip Banner */}
+        <Grid container spacing={2} sx={{ mb: 2.5 }}>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mb: 0.75 }}>
+              Current Installation Status
+            </Typography>
+            <Chip
+              icon={currentStatusObj.value === "installation_completed" ? <CheckCircle sx={{ fontSize: "16px !important" }} /> : <AccessTime sx={{ fontSize: "16px !important" }} />}
+              label={currentStatusObj.label}
+              size="small"
+              sx={{
+                bgcolor: currentStatusObj.value === "installation_completed" ? alpha(SUCCESS, 0.15) : alpha(WARNING, 0.15),
+                color: currentStatusObj.value === "installation_completed" ? SUCCESS : WARNING,
+                fontWeight: 800,
+                "& .MuiChip-icon": { color: `${currentStatusObj.value === "installation_completed" ? SUCCESS : WARNING} !important` }
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mb: 0.75 }}>
+              Assigned Partner
+            </Typography>
+            <Chip
+              label={formData.installationPartner || project?.installationPartner || "Not Assigned"}
+              size="small"
+              sx={{ bgcolor: alpha(BRAND, 0.08), color: BRAND, fontWeight: 800 }}
+            />
+          </Grid>
+        </Grid>
+
+        <Stack spacing={2.5}>
+          <Grid container spacing={2}>
+            {/* 1. Installation Status */}
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth size="small" error={!!errors.installationStatus}>
+                <InputLabel>Installation Status *</InputLabel>
+                <Select
+                  label="Installation Status *"
+                  value={
+                    formData.installationStatus === "installation_completed" || formData.installationStatus === "Completed Installation"
+                      ? "installation_completed"
+                      : "pending_installation"
+                  }
+                  onChange={(event) => onChange("installationStatus", event.target.value)}
+                  sx={{ borderRadius: RADIUS_SM }}
+                >
+                  {INSTALLATION_STATUS_OPTIONS.map((status) => (
+                    <MenuItem key={status.value} value={status.value}>
+                      <Stack direction="row" spacing={1.25} alignItems="center">
+                        {status.value === "installation_completed" ? (
+                          <CheckCircle sx={{ fontSize: 18, color: SUCCESS }} />
+                        ) : (
+                          <AccessTime sx={{ fontSize: 18, color: WARNING }} />
+                        )}
+                        <Box>
+                          <Typography variant="body2" fontWeight={700}>{status.label}</Typography>
+                          <Typography variant="caption" sx={{ color: MUTED }}>{status.description}</Typography>
+                        </Box>
+                      </Stack>
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.installationStatus && <FormHelperText>{errors.installationStatus}</FormHelperText>}
+              </FormControl>
+            </Grid>
+
+            {/* 2. Installation Partner Name */}
+            <Grid item xs={12} md={6}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Autocomplete
+                  freeSolo
+                  fullWidth
+                  size="small"
+                  options={existingPartners}
+                  value={formData.installationPartner || ""}
+                  onInputChange={(_, newInputValue) => {
+                    onChange("installationPartner", newInputValue);
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Installation Partner Name"
+                      placeholder="Select or enter partner name"
+                      error={!!errors.installationPartner}
+                      helperText={errors.installationPartner}
+                      InputProps={{
+                        ...params.InputProps,
+                        startAdornment: (
+                          <>
+                            <InputAdornment position="start">
+                              <Build sx={{ fontSize: 16, color: MUTED_2 }} />
+                            </InputAdornment>
+                            {params.InputProps.startAdornment}
+                          </>
+                        ),
+                      }}
+                    />
+                  )}
+                />
+                <Tooltip title="Add New Partner Name">
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setPartnerDialogOpen(true)}
+                    sx={{
+                      minWidth: 40,
+                      px: 1.5,
+                      height: 40,
+                      borderRadius: RADIUS_SM,
+                      borderColor: BORDER,
+                      color: BRAND,
+                      fontWeight: 800,
+                      textTransform: "none",
+                      whiteSpace: "nowrap",
+>>>>>>> origin/dipak
                     }}
                   >
                     + Add
                   </Button>
+<<<<<<< HEAD
                 </Box>
 
                 {/* Installation Notes Input */}
@@ -2981,6 +3349,60 @@ const InstallationWorkspace = ({
                 >
                   {`${photos.length} photo${photos.length === 1 ? "" : "s"}`}
                 </Box>
+=======
+                </Tooltip>
+              </Stack>
+            </Grid>
+
+            {/* 3. Installation Date */}
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                size="small"
+                type="date"
+                label="Installation Date"
+                value={formData.installationDate || formatInputDate(new Date())}
+                onChange={(event) => onChange("installationDate", event.target.value)}
+                disabled={readOnly}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+
+            {/* 4. Notes */}
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Installation Notes"
+                placeholder="Add notes about this installation..."
+                value={formData.installationNotes || ""}
+                onChange={(event) => onChange("installationNotes", event.target.value)}
+              />
+            </Grid>
+          </Grid>
+
+          {/* 5. 📸 Installation Pictures Upload Section */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              borderRadius: RADIUS_SM,
+              border: isDark ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${BORDER_SOFT}`,
+              bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#FAFBFC",
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <PhotoCameraOutlined sx={{ fontSize: 18, color: BRAND }} />
+                <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
+                  Installation Pictures (Post-Installation Photographs)
+                </Typography>
+                <Chip
+                  label={`${photos.length} photo${photos.length === 1 ? "" : "s"}`}
+                  size="small"
+                  sx={{ height: 20, fontSize: 10.5, fontWeight: 800, bgcolor: alpha(BRAND, 0.1), color: BRAND }}
+                />
+>>>>>>> origin/dipak
               </Stack>
 
               <input
@@ -2999,6 +3421,7 @@ const InstallationWorkspace = ({
 
               <Button
                 variant="contained"
+<<<<<<< HEAD
                 startIcon={<CloudUpload sx={{ fontSize: 17 }} />}
                 disabled={uploadingPhoto || !project?._id}
                 onClick={() => fileInputRef.current?.click()}
@@ -3012,6 +3435,19 @@ const InstallationWorkspace = ({
                   py: 0.8,
                   boxShadow: "0 4px 14px rgba(79, 70, 229, 0.3)",
                   "&:hover": { bgcolor: "#4338ca" },
+=======
+                size="small"
+                startIcon={<CloudUpload sx={{ fontSize: 16 }} />}
+                disabled={uploadingPhoto || !project?._id}
+                onClick={() => fileInputRef.current?.click()}
+                sx={{
+                  borderRadius: RADIUS_SM,
+                  bgcolor: BRAND,
+                  fontWeight: 800,
+                  textTransform: "none",
+                  boxShadow: "none",
+                  "&:hover": { bgcolor: BRAND_DARK },
+>>>>>>> origin/dipak
                 }}
               >
                 {uploadingPhoto ? "Uploading..." : "Upload Photos"}
@@ -3025,10 +3461,17 @@ const InstallationWorkspace = ({
                     <Box
                       sx={{
                         position: "relative",
+<<<<<<< HEAD
                         borderRadius: 2.5,
                         overflow: "hidden",
                         border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
                         bgcolor: isDark ? "#0b0f19" : "#ffffff",
+=======
+                        borderRadius: RADIUS_SM,
+                        overflow: "hidden",
+                        border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
+                        bgcolor: isDark ? "#0e1220" : "#FFFFFF",
+>>>>>>> origin/dipak
                         "&:hover .photo-overlay": { opacity: 1 },
                       }}
                     >
@@ -3051,13 +3494,21 @@ const InstallationWorkspace = ({
                         direction="row"
                         justifyContent="space-between"
                         alignItems="center"
+<<<<<<< HEAD
                         sx={{ p: 1, bgcolor: isDark ? "#0b0f19" : "#ffffff" }}
+=======
+                        sx={{ p: 1, bgcolor: isDark ? "#0b0e1a" : "#FFFFFF" }}
+>>>>>>> origin/dipak
                       >
                         <Typography
                           variant="caption"
                           fontWeight={700}
                           noWrap
+<<<<<<< HEAD
                           sx={{ flex: 1, pr: 0.5, color: isDark ? "#f8fafc" : "#0f172a" }}
+=======
+                          sx={{ flex: 1, pr: 0.5, color: isDark ? "#f8fafc" : INK }}
+>>>>>>> origin/dipak
                         >
                           {photo.name || `Photo ${idx + 1}`}
                         </Typography>
@@ -3068,7 +3519,11 @@ const InstallationWorkspace = ({
                               e.stopPropagation();
                               onDeletePhoto?.(photo.index);
                             }}
+<<<<<<< HEAD
                             sx={{ width: 22, height: 22, color: "#ef4444", "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" } }}
+=======
+                            sx={{ width: 22, height: 22, color: DANGER, "&:hover": { bgcolor: alpha(DANGER, 0.1) } }}
+>>>>>>> origin/dipak
                           >
                             <DeleteOutline sx={{ fontSize: 15 }} />
                           </IconButton>
@@ -3082,6 +3537,7 @@ const InstallationWorkspace = ({
               <Box
                 onClick={() => fileInputRef.current?.click()}
                 sx={{
+<<<<<<< HEAD
                   p: 4,
                   textAlign: "center",
                   borderRadius: 2.5,
@@ -3114,12 +3570,29 @@ const InstallationWorkspace = ({
                   No installation photographs uploaded yet
                 </Typography>
                 <Typography sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.78rem", mt: 0.5 }}>
+=======
+                  p: 3,
+                  textAlign: "center",
+                  borderRadius: RADIUS_SM,
+                  border: `1.5px dashed ${BORDER}`,
+                  bgcolor: isDark ? "rgba(255,255,255,0.01)" : "#FFFFFF",
+                  cursor: "pointer",
+                  "&:hover": { borderColor: BRAND, bgcolor: alpha(BRAND, 0.02) },
+                }}
+              >
+                <PhotoCameraOutlined sx={{ fontSize: 32, color: MUTED_2, mb: 1 }} />
+                <Typography variant="body2" fontWeight={700} color={isDark ? "#f8fafc" : INK}>
+                  No installation photographs uploaded yet
+                </Typography>
+                <Typography variant="caption" sx={{ color: MUTED, display: "block", mt: 0.5 }}>
+>>>>>>> origin/dipak
                   Click here or use the "Upload Photos" button to attach on-site installation pictures
                 </Typography>
               </Box>
             )}
           </Paper>
 
+<<<<<<< HEAD
           {/* Information Alert Banner */}
           <Stack
             direction="row"
@@ -3150,11 +3623,18 @@ const InstallationWorkspace = ({
             </Box>
             <Typography sx={{ fontSize: "0.82rem", color: isDark ? "#cbd5e1" : "#1e293b", lineHeight: 1.4 }}>
               Marking status as <strong>Completed Installation</strong> updates the project to <strong>Installation Completion</strong> and advances to <strong>DCR Generation</strong>.
+=======
+          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ p: 1.75, borderRadius: RADIUS_SM, bgcolor: alpha(BRAND, 0.06), color: INK }}>
+            <InfoOutlined sx={{ fontSize: 20, color: BRAND }} />
+            <Typography variant="body2">
+              Marking status as <strong>Completed Installation</strong> updates the project to <strong>Installation Completion</strong> and advances to DCR Generation.
+>>>>>>> origin/dipak
             </Typography>
           </Stack>
         </Stack>
       </Box>
 
+<<<<<<< HEAD
       {/* ── Footer Actions ── */}
       <Stack
         direction="row"
@@ -3216,12 +3696,15 @@ const InstallationWorkspace = ({
         </Button>
       </Stack>
 
+=======
+>>>>>>> origin/dipak
       {/* Manual Add Partner Modal */}
       <Dialog
         open={partnerDialogOpen}
         onClose={() => setPartnerDialogOpen(false)}
         maxWidth="xs"
         fullWidth
+<<<<<<< HEAD
         PaperProps={{
           sx: {
             borderRadius: 3,
@@ -3237,6 +3720,13 @@ const InstallationWorkspace = ({
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", mb: 2 }}>
+=======
+        PaperProps={{ sx: { borderRadius: RADIUS_SM, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Add Installation Partner</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color={MUTED} sx={{ mb: 2 }}>
+>>>>>>> origin/dipak
             Enter the name of the installer / contractor partner for this project:
           </Typography>
           <TextField
@@ -3250,14 +3740,22 @@ const InstallationWorkspace = ({
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
+<<<<<<< HEAD
           <Button onClick={() => setPartnerDialogOpen(false)} sx={{ textTransform: "none", fontWeight: 700, color: isDark ? "#94a3b8" : "#64748b" }}>
+=======
+          <Button onClick={() => setPartnerDialogOpen(false)} sx={{ textTransform: "none", fontWeight: 700 }}>
+>>>>>>> origin/dipak
             Cancel
           </Button>
           <Button
             variant="contained"
             onClick={handleAddPartnerSubmit}
             disabled={!newPartnerName.trim()}
+<<<<<<< HEAD
             sx={{ bgcolor: "#4f46e5", fontWeight: 800, textTransform: "none", borderRadius: 999 }}
+=======
+            sx={{ bgcolor: BRAND, fontWeight: 800, textTransform: "none" }}
+>>>>>>> origin/dipak
           >
             Add Partner
           </Button>
@@ -3270,7 +3768,11 @@ const InstallationWorkspace = ({
         onClose={() => setPreviewPhoto(null)}
         maxWidth="md"
         fullWidth
+<<<<<<< HEAD
         PaperProps={{ sx: { borderRadius: 3, bgcolor: "#000", overflow: "hidden" } }}
+=======
+        PaperProps={{ sx: { borderRadius: RADIUS_SM, bgcolor: "#000", overflow: "hidden" } }}
+>>>>>>> origin/dipak
       >
         {previewPhoto && (
           <>
@@ -3293,6 +3795,11 @@ const InstallationWorkspace = ({
           </>
         )}
       </Dialog>
+<<<<<<< HEAD
+=======
+
+      {workflowFooter(onCancel, onSave, saving, "Updating...", saving || !project?._id)}
+>>>>>>> origin/dipak
     </Paper>
   );
 };
@@ -5080,7 +5587,11 @@ function ProjectDetails() {
   const navigate = useNavigate();
   const { fetchAPI } = useAuth();
   const initialProject = location.state?.project || null;
+<<<<<<< HEAD
   const isWorksheetProject = initialProject?.source === "installerWorksheet" || String(projectId || "").startsWith("worksheet-");
+=======
+  const isWorksheetProject = initialProject?.source === "installerWorksheet";
+>>>>>>> origin/dipak
 
   const [project, setProject] = useState(initialProject);
   const [loading, setLoading] = useState(!initialProject);
@@ -5270,7 +5781,11 @@ function ProjectDetails() {
   const hasInitialProjectRef = useRef(Boolean(location.state?.project));
 
   const fetchProject = useCallback(async () => {
+<<<<<<< HEAD
     if (isWorksheetProject && hasInitialProjectRef.current) {
+=======
+    if (isWorksheetProject) {
+>>>>>>> origin/dipak
       setError("");
       setLoading(false);
       return;
@@ -7742,6 +8257,7 @@ function ProjectDetails() {
               onCancel={() => setSelectedWorkflowStage("summary")}
               onSave={saveSubsidyReceived}
             />
+<<<<<<< HEAD
           ) : selectedWorkflowStage === "lead_converted" ? (
             <LeadConvertedWorkspace
               project={project}
@@ -7757,12 +8273,23 @@ function ProjectDetails() {
                   {selectedWorkflow.label} Workspace
                 </Typography>
                 <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : MUTED, maxWidth: 520 }}>
+=======
+          ) : (
+            <Paper elevation={0} sx={{ minHeight: 220, p: 3, borderRadius: RADIUS, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit", boxShadow: SHADOW_SM }}>
+              <Stack alignItems="center" justifyContent="center" spacing={1.25} sx={{ minHeight: 170, textAlign: "center" }}>
+                <TaskAlt sx={{ fontSize: 44, color: alpha(INK, 0.25) }} />
+                <Typography variant="subtitle1" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
+                  {selectedWorkflow.label} Workspace
+                </Typography>
+                <Typography variant="body2" sx={{ color: MUTED, maxWidth: 520 }}>
+>>>>>>> origin/dipak
                   This stage is available in the project workflow. Open the full page when you need the detailed update tools.
                 </Typography>
                 <Button
                   size="small"
                   variant="outlined"
                   onClick={() => openStagePage(selectedWorkflowStage)}
+<<<<<<< HEAD
                   sx={{
                     mt: 1,
                     borderRadius: RADIUS_SM,
@@ -7778,6 +8305,9 @@ function ProjectDetails() {
                       bgcolor: isDark ? "rgba(255,255,255,0.08)" : alpha(BRAND, 0.04),
                     },
                   }}
+=======
+                  sx={{ mt: 1, borderRadius: RADIUS_SM, borderColor: BORDER, color: INK, fontWeight: 700, textTransform: "none" }}
+>>>>>>> origin/dipak
                 >
                   Open {selectedWorkflow.label}
                 </Button>

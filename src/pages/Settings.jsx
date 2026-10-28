@@ -43,7 +43,9 @@ import {
   Palette as PaletteIcon,
   Security as SecurityIcon,
   Check as CheckIcon,
+  PhoneAndroid as MobileAppIcon,
 } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE_URL } from "../utils/apiConfig";
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
@@ -60,6 +62,7 @@ const Settings = () => {
   const theme = useTheme();
   const { user, updateLocalUser } = useAuth();
   const isDark = theme.palette.mode === "dark";
+  const navigate = useNavigate();
 
   // Modal control state: null | 'profile' | 'password' | 'theme'
   const [activeModal, setActiveModal] = useState(null);
@@ -96,6 +99,25 @@ const Settings = () => {
 
   // Snackbar Toast State
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [usersList, setUsersList] = useState([]);
+
+  useEffect(() => {
+    const fetchUsersForPerms = async () => {
+      try {
+        const token = getToken();
+        const res = await fetch(`${API}/user/getAllUsers?page=1&limit=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success && data.result?.users) {
+          setUsersList(data.result.users);
+        }
+      } catch (err) {
+        console.warn("Could not load users list for settings:", err);
+      }
+    };
+    fetchUsersForPerms();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -239,6 +261,12 @@ const Settings = () => {
       subtitle: "Change admin security password",
     },
     {
+      key: "appPermissions",
+      icon: <MobileAppIcon sx={{ fontSize: 30, color: "#10b981" }} />,
+      title: "Mobile APK Permissions",
+      subtitle: "Select menus & features Incharge, Supervisor & Manager see in the APK",
+    },
+    {
       key: "theme",
       icon: darkMode ? (
         <DarkModeIcon sx={{ fontSize: 30, color: "#3b82f6" }} />
@@ -251,24 +279,30 @@ const Settings = () => {
   ];
 
   return (
-    <Box sx={{ p: { xs: 2.5, sm: 4 }, bgcolor: theme.palette.background.default, minHeight: "100vh", maxWidth: 1200, mx: "auto" }}>
+    <Box sx={{ p: { xs: 2.5, sm: 4 }, bgcolor: theme.palette.background.default, minHeight: "100vh", maxWidth: 1280, mx: "auto" }}>
       {/* Page Title Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight={800} sx={{ color: theme.palette.text.primary, letterSpacing: "-0.02em" }}>
           Settings & Configuration
         </Typography>
         <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 0.5, fontSize: "0.9rem" }}>
-          Manage admin profile credentials, security password, and application theme appearance.
+          Manage admin profile, password security, mobile APK role permissions, and theme appearance.
         </Typography>
       </Box>
 
       {/* Grid Cards Section */}
-      <Grid container spacing={3}>
+      <Grid container spacing={2.5}>
         {cards.map((card) => (
-          <Grid item xs={12} sm={6} md={4} key={card.key}>
+          <Grid item xs={12} sm={6} md={3} key={card.key}>
             <Paper
               elevation={0}
-              onClick={() => setActiveModal(card.key)}
+              onClick={() => {
+                if (card.key === "appPermissions") {
+                  navigate("/apk-permissions");
+                } else {
+                  setActiveModal(card.key);
+                }
+              }}
               sx={{
                 p: 3.5,
                 height: "100%",

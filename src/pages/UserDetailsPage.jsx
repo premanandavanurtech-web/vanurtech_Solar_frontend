@@ -1696,6 +1696,7 @@ const UserDetailsPage = () => {
         }
 
         if (holRes.status === "fulfilled" && holRes.value?.data?.success) {
+<<<<<<< HEAD
           const resObj = holRes.value.data.result || holRes.value.data.data;
           const hList = Array.isArray(resObj)
             ? resObj
@@ -1705,6 +1706,15 @@ const UserDetailsPage = () => {
           setHolidaysList(hList);
         } else if (holRes.status === "fulfilled" && Array.isArray(holRes.value?.data)) {
           setHolidaysList(holRes.value.data);
+=======
+          const holData = holRes.value.data.data || holRes.value.data.result || [];
+          const hList = Array.isArray(holData)
+            ? holData
+            : Array.isArray(holData?.holidays)
+            ? holData.holidays
+            : [];
+          setHolidaysList(hList);
+>>>>>>> origin/dipak
         } else {
           setHolidaysList([]);
         }
@@ -1744,6 +1754,7 @@ const UserDetailsPage = () => {
     let totalWorkHoursSum = 0;
     let lateArrivalsCount = 0;
 
+<<<<<<< HEAD
     const safeAttendance = Array.isArray(attendanceRecords) ? attendanceRecords : [];
     safeAttendance.forEach((rec) => {
       let recDate = null;
@@ -1753,6 +1764,12 @@ const UserDetailsPage = () => {
         recDate = new Date(rec.punchIn.time);
       }
       if (recDate && !isNaN(recDate.getTime())) {
+=======
+    const safeRecords = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+    safeRecords.forEach((rec) => {
+      const recDate = rec?.date ? new Date(rec.date) : (rec?.punchIn?.time ? new Date(rec.punchIn.time) : null);
+      if (recDate) {
+>>>>>>> origin/dipak
         const key = `${recDate.getFullYear()}-${String(recDate.getMonth() + 1).padStart(2, "0")}-${String(recDate.getDate()).padStart(2, "0")}`;
         recordMap[key] = rec;
         const utcKey = recDate.toISOString().split("T")[0];
@@ -1768,13 +1785,25 @@ const UserDetailsPage = () => {
     });
 
     const holidayMap = {};
+<<<<<<< HEAD
     const safeHolidays = Array.isArray(holidaysList) ? holidaysList : [];
+=======
+    const safeHolidays = Array.isArray(holidaysList)
+      ? holidaysList
+      : Array.isArray(holidaysList?.holidays)
+      ? holidaysList.holidays
+      : [];
+>>>>>>> origin/dipak
     safeHolidays.forEach((h) => {
       if (h?.date) {
         const d = new Date(h.date);
         if (!isNaN(d.getTime())) {
           const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+<<<<<<< HEAD
           holidayMap[key] = h.reason || h.name || h.title || "Holiday";
+=======
+          holidayMap[key] = h.name || h.title || h.reason || "Holiday";
+>>>>>>> origin/dipak
         }
       }
     });

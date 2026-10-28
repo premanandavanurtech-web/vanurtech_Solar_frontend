@@ -106,11 +106,18 @@ const getStatusDetails = (status) => {
 
 const QuotationCard = ({ quotation, selected, onSelect, onViewDetails }) => {
   const chips = getQuotationMeta(quotation);
+<<<<<<< HEAD
   const issueDate = formatDisplayDate(quotation?.savedAt || quotation?.createdAt || quotation?.issueDate);
   const statusInfo = getStatusDetails(quotation?.status);
   const systemSize = Number(quotation?.systemSize || quotation?.form?.systemSize || 0).toFixed(2);
   const totalCost = quotation?.totalCost || quotation?.form?.totalCost || 0;
   const subsidyAmount = Number(quotation?.form?.subsidy || quotation?.subsidy || 0);
+=======
+  const issueDate = formatDisplayDate(quotation?.savedAt || quotation?.createdAt);
+  const statusLabel = String(quotation?.status || "draft").toUpperCase();
+  const isAccepted = quotation?.status === "accepted";
+  const isSent = quotation?.status === "sent";
+>>>>>>> origin/dipak
 
   return (
     <Paper
@@ -194,10 +201,20 @@ const QuotationCard = ({ quotation, selected, onSelect, onViewDetails }) => {
           {/* View Details Ghost Button */}
           <Button
             size="small"
+<<<<<<< HEAD
             startIcon={<RemoveRedEyeOutlined sx={{ fontSize: "14px !important" }} />}
             onClick={(e) => {
               e.stopPropagation();
               onViewDetails?.(quotation);
+=======
+            sx={{
+              height: 30,
+              fontWeight: 700,
+              color: isAccepted ? "#15803d" : isSent ? "#2563eb" : "#d97706",
+              bgcolor: isAccepted ? "#f0fdf4" : isSent ? "#eff6ff" : "#fff7ed",
+              border: `1px solid ${isAccepted ? "#bbf7d0" : isSent ? "#bfdbfe" : "#fed7aa"}`,
+              borderRadius: 999,
+>>>>>>> origin/dipak
             }}
             sx={{
               minWidth: "auto",
@@ -329,7 +346,11 @@ export default function ConvertProjectDialog({
 
   useEffect(() => {
     if (!open) return;
+<<<<<<< HEAD
     const accepted = quotations.find((q) => q.status === "accepted" || q.status === "approved");
+=======
+    const accepted = quotations.find((q) => q.status === "accepted");
+>>>>>>> origin/dipak
     setSelectedQuotationId(accepted?.id || quotations[0]?.id || "");
     setProjectType(PROJECT_TYPES.includes(lead?.projectType) ? lead.projectType : "Residential");
   }, [open, quotations, lead?.projectType]);
@@ -448,11 +469,106 @@ export default function ConvertProjectDialog({
               </Stack>
             </Box>
 
+<<<<<<< HEAD
             {/* ── Main Content Area ── */}
             <Box sx={{ flex: 1, p: { xs: 2.5, sm: 3.5, md: 3.8 }, display: "flex", flexDirection: "column" }}>
               {/* Section 1: Select Project Type */}
               <Box sx={{ mb: 3 }}>
                 <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1.2 }}>
+=======
+                <Stack spacing={2.2} sx={{ maxWidth: 520 }}>
+                  {quotations.map((quotation) => (
+                    <QuotationCard
+                      key={quotation.id}
+                      quotation={quotation}
+                      selected={quotation.id === selectedQuotationId}
+                      onSelect={() => setSelectedQuotationId(quotation.id)}
+                    />
+                  ))}
+                </Stack>
+
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={1.8}
+                  justifyContent="flex-end"
+                  sx={{ mt: "auto", pt: 4, borderTop: "1px solid #e5e7eb" }}
+                >
+                  <Button
+                    variant="outlined"
+                    startIcon={<Add />}
+                    onClick={onCreateQuotation}
+                    disabled={submitting}
+                    sx={{
+                      minHeight: 50,
+                      px: 2.8,
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontWeight: 700,
+                      color: "#475569",
+                      borderColor: "#dbe2ea",
+                    }}
+                  >
+                    Create New Quote
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<ChevronRight />}
+                    onClick={() => onCreateWithoutQuotation({ projectType })}
+                    disabled={submitting || !projectType}
+                    sx={{
+                      minHeight: 50,
+                      px: 2.8,
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontWeight: 700,
+                      color: "#475569",
+                      borderColor: "#dbe2ea",
+                    }}
+                  >
+                    Create without a quotation
+                  </Button>
+                  <Button
+                    variant="contained"
+                    endIcon={!submitting ? <ArrowForward /> : undefined}
+                    startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : undefined}
+                    onClick={() => onContinueWithQuotation(selectedQuotation, { projectType })}
+                    disabled={!selectedQuotation || submitting || !projectType}
+                    sx={{
+                      minHeight: 50,
+                      px: 3.2,
+                      borderRadius: 2.5,
+                      textTransform: "none",
+                      fontWeight: 800,
+                      fontSize: "0.96rem",
+                      bgcolor: "#2563eb",
+                      color: "#ffffff",
+                      boxShadow: "0 10px 24px rgba(37, 99, 235, 0.28)",
+                      "&:hover": {
+                        bgcolor: "#1d4ed8",
+                        boxShadow: "0 12px 28px rgba(37, 99, 235, 0.38)",
+                      },
+                      "&.Mui-disabled": {
+                        bgcolor: "#e2e8f0",
+                        color: "#94a3b8",
+                        boxShadow: "none",
+                      },
+                    }}
+                  >
+                    {submitting ? "Converting to Project..." : "Continue with Selected Quote"}
+                  </Button>
+                </Stack>
+              </>
+            ) : (
+              <Box
+                sx={{
+                  flex: 1,
+                  minHeight: 420,
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <Stack spacing={2.4} alignItems="center" textAlign="center" sx={{ maxWidth: 560 }}>
+>>>>>>> origin/dipak
                   <Box
                     sx={{
                       width: 32,

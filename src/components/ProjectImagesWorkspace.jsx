@@ -32,7 +32,10 @@ import {
   FilterList,
 } from "@mui/icons-material";
 import axiosInstance from "../utils/axiosConfig";
+<<<<<<< HEAD
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
+=======
+>>>>>>> origin/dipak
 
 const INDIGO = "#6366f1";
 const BLUE = "#3b82f6";
@@ -359,11 +362,16 @@ export default function ProjectImagesWorkspace({
                     >
                       <Box
                         component="img"
+<<<<<<< HEAD
                         src={toBackendAssetUrl(img.url)}
                         alt={img.caption || img.name}
                         onError={(e) => {
                           e.currentTarget.src = "https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=1200&q=80";
                         }}
+=======
+                        src={img.url}
+                        alt={img.caption || img.name}
+>>>>>>> origin/dipak
                         sx={{
                           width: "100%",
                           height: "100%",
@@ -482,11 +490,16 @@ export default function ProjectImagesWorkspace({
           {previewImage && (
             <Box
               component="img"
+<<<<<<< HEAD
               src={toBackendAssetUrl(previewImage.url)}
               alt={previewImage.caption || previewImage.name}
               onError={(e) => {
                 e.currentTarget.src = "https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=1200&q=80";
               }}
+=======
+              src={previewImage.url}
+              alt={previewImage.caption || previewImage.name}
+>>>>>>> origin/dipak
               sx={{
                 maxWidth: "100%",
                 maxHeight: "80vh",
