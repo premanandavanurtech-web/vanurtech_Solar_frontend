@@ -92,10 +92,12 @@ import {
   ErrorOutline,
   MoreVert,
   InfoOutlined,
+  PhoneAndroid,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "../components/useToast.jsx";
+import AppRolePermissionsModal from "../components/AppRolePermissionsModal.jsx";
 
 const PRIMARY_COLOR = "#0f1f3d";
 const SECONDARY_COLOR = "#1a237e";
@@ -876,6 +878,7 @@ const MobileUserCard = ({
   currentUserRole,
   currentUserId,
   statusLoading,
+  onManagePermissions,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const roleConfig = getRoleConfig(user.role);
@@ -1076,6 +1079,23 @@ const MobileUserCard = ({
                   }}
                 >
                   Details
+                </Button>
+              )}
+              {onManagePermissions && isAdminRole(currentUserRole) && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<PhoneAndroid sx={{ ml: 1 }} />}
+                  onClick={() => onManagePermissions(user)}
+                  sx={{
+                    flex: 1,
+                    borderColor: "#10b981",
+                    color: "#10b981",
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  APK Access
                 </Button>
               )}
               {canEdit && (
@@ -2581,6 +2601,8 @@ const UserManagement = () => {
   const [userToViewPassword, setUserToViewPassword] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
+  const [selectedUserForPermissions, setSelectedUserForPermissions] = useState(null);
 
   // Action menu state
   const [actionAnchorEl, setActionAnchorEl] = useState(null);
@@ -3111,7 +3133,7 @@ const UserManagement = () => {
             </Typography>
           </Box>
 
-          <Box sx={{ display: "flex", gap: 1.5 }}>
+          <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
             <Button
               variant="outlined"
               startIcon={<Refresh sx={{ fontSize: 16 }} />}
@@ -3132,6 +3154,30 @@ const UserManagement = () => {
             >
               Refresh
             </Button>
+
+            {/* APK Access Control Button */}
+            {isAdminRole(userRole) && (
+              <Button
+                variant="contained"
+                startIcon={<PhoneAndroid sx={{ fontSize: 17 }} />}
+                onClick={() => navigate("/apk-permissions")}
+                sx={{
+                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  height: 38,
+                  px: 2,
+                  fontWeight: 800,
+                  fontSize: "0.82rem",
+                  textTransform: "none",
+                  boxShadow: "0 4px 14px rgba(16, 185, 129, 0.3)",
+                  "&:hover": { background: "linear-gradient(135deg, #059669 0%, #047857 100%)" },
+                }}
+              >
+                APK Access Control
+              </Button>
+            )}
+
             {canAddUser && (
               <Button
                 variant="contained"
@@ -3682,6 +3728,7 @@ const UserManagement = () => {
                       currentUserRole={userRole}
                       currentUserId={currentUser?._id}
                       statusLoading={statusLoading}
+                      onManagePermissions={(user) => navigate("/apk-permissions", { state: { selectedUser: user } })}
                     />
                   ))}
                 <Box display="flex" justifyContent="center" mt={2}>
@@ -3766,6 +3813,19 @@ const UserManagement = () => {
         >
           <Edit sx={{ fontSize: 17, color: "#3b82f6" }} />
           <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }}>Edit User</Typography>
+        </MenuItem>
+
+        <MenuItem
+          onClick={() => {
+            const u = actionUser;
+            handleCloseActionMenu();
+            if (u) {
+              navigate("/apk-permissions", { state: { selectedUser: u } });
+            }
+          }}
+        >
+          <PhoneAndroid sx={{ fontSize: 17, color: "#10b981" }} />
+          <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }}>APK Permissions</Typography>
         </MenuItem>
 
         <MenuItem

@@ -48,6 +48,7 @@ import ProjectImagesPage from "./pages/ProjectImagesPage";
 import WorkRegister from "./pages/WorkRegister";
 import InventoryERP from "./pages/InventoryERP";
 import SettingsPage from "./pages/Settings";
+import AppPermissionsPage from "./pages/AppPermissionsPage";
 import Salaries from "./pages/Salaries";
 import Payroll from "./pages/Payroll";
 import Payslips from "./pages/Payslips";
@@ -284,6 +285,8 @@ function App() {
                         <Route path="payroll/salary-slips" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><Payslips /></ProtectedRoute>} />
                         <Route path="payroll/payments" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><PayrollPayments /></ProtectedRoute>} />
                         <Route path="settings" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><SettingsPage /></ProtectedRoute>} />
+                        <Route path="apk-permissions" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><AppPermissionsPage /></ProtectedRoute>} />
+                        <Route path="app-permissions" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"]}><AppPermissionsPage /></ProtectedRoute>} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                       </Routes>
                     </MainLayout>

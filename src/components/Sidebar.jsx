@@ -144,13 +144,13 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         path: TEAM_ATTENDANCE_ROLES.includes(userRole) ? "/team-attendance" : "/attendance",
         roles: ["Admin_panel","ZSM","Incharge","TEAM"],
       },
-      { text: "Employees",          icon: <AdminPanelSettings />, path: "/user-management",    roles: ["Admin_panel","ZSM","Incharge"] },
       { text: "Leave",              icon: <EventBusy />,          path: "/leave-management",   roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Leave Types",        icon: <Inventory2Outlined />, path: "/leave-types",        roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Holiday Management", icon: <Celebration />,        path: "/holiday-management", roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Payroll",            icon: <Paid />,               path: "/payroll",            roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
       { text: "Salary Structure",   icon: <ReceiptLong />,        path: "/payroll/salaries",   roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
       { text: "Salary Slips",       icon: <AccountBalanceWallet />,path: "/payroll/payslips",   roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
+      { text: "Employees",          icon: <AdminPanelSettings />, path: "/user-management",    roles: ["Admin_panel","ZSM","Incharge"] },
       {
         text: "Location Visit",
         icon: <LocationOnIcon />,
@@ -188,9 +188,9 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         { text: "Leads",       icon: <FilterAlt />,    itemNames: ["All Leads","Missed Leads","Import Leads"] },
         { text: "Projects",    icon: <TaskAlt />,      itemNames: ["Projects","Total Visits","3D Design","Add Quotation","All Quotes"] },
         { text: "Inventory",   icon: <Inventory2Outlined />, itemNames: ["Inventory In","Inventory Out"] },
-        { text: "Attendance",  icon: <CalendarMonth />,itemNames: ["Team Attendance","My Attendance","Leave Types","Holiday Management"] },
+        { text: "Attendance",  icon: <CalendarMonth />,itemNames: ["Team Attendance","My Attendance","Leave","Leave Types","Holiday Management"] },
         { text: "Salary",      icon: <AccountBalanceWallet />, itemNames: ["Payroll","Salary Structure","Salary Slips"] },
-        { text: "HR",          icon: <Groups />,       itemNames: ["Employees","Leave"] },
+        { text: "HR",          icon: <Groups />,       itemNames: ["Employees"] },
         { text: "Team",        icon: <Groups />,       itemNames: ["Location Visit","Expense"] },
         { text: "Insights",    icon: <Insights />,     itemNames: ["Reports","Installer Work Register","Notifications"] },
         { text: "Settings",    icon: <SettingsIcon />, itemNames: ["Settings"] },
@@ -490,7 +490,7 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         }}
       >
         <Box
-          component="img" src={currentLogo} alt="Myra Enterprise Pvt.Ltd."
+          component="img" src={currentLogo} alt="Vanurtech Pvt Ltd"
           onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = currentLogo; }}
           sx={{ width: "100%", height: "100%", objectFit: "contain", p: 0.3 }}
         />
@@ -499,7 +499,7 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         <Box sx={{ overflow: "hidden" }}>
           <Typography variant="subtitle1" color={textPri} fontWeight={800}
             sx={{ lineHeight: 1.2, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
-            Myra Enterprise Pvt.Ltd.
+            Vanurtech Pvt Ltd
           </Typography>
         </Box>
       )}
@@ -524,14 +524,14 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
           border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : borderCol}`,
           boxShadow: isDark ? "0 6px 16px rgba(0,0,0,0.4)" : "0 6px 16px rgba(30,64,175,0.14)",
         }}>
-          <Box component="img" src={currentLogo} alt="Myra Enterprise Pvt.Ltd."
+          <Box component="img" src={currentLogo} alt="Vanurtech Pvt Ltd"
             onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = currentLogo; }}
             sx={{ height: "85%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
           />
         </Box>
         <Box>
           <Typography variant="subtitle1" color={textPri} fontWeight={800} sx={{ lineHeight: 1.2 }}>
-            Myra Enterprise Pvt.Ltd.
+            Vanurtech Pvt Ltd
           </Typography>
         </Box>
       </Box>

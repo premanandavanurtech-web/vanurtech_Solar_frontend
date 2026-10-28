@@ -1263,12 +1263,20 @@ const UserDetailsPage = () => {
         }
 
         if (holRes.status === "fulfilled" && holRes.value?.data?.success) {
-          const hList = holRes.value.data.result || holRes.value.data.data || [];
+          const holData = holRes.value.data.data || holRes.value.data.result || [];
+          const hList = Array.isArray(holData)
+            ? holData
+            : Array.isArray(holData?.holidays)
+            ? holData.holidays
+            : [];
           setHolidaysList(hList);
+        } else {
+          setHolidaysList([]);
         }
       } catch (err) {
         console.warn("Attendance fetch error:", err);
         setAttendanceRecords([]);
+        setHolidaysList([]);
       } finally {
         setAttendanceLoading(false);
       }
@@ -1291,8 +1299,9 @@ const UserDetailsPage = () => {
     let totalWorkHoursSum = 0;
     let lateArrivalsCount = 0;
 
-    attendanceRecords.forEach((rec) => {
-      const recDate = rec.date ? new Date(rec.date) : (rec.punchIn?.time ? new Date(rec.punchIn.time) : null);
+    const safeRecords = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+    safeRecords.forEach((rec) => {
+      const recDate = rec?.date ? new Date(rec.date) : (rec?.punchIn?.time ? new Date(rec.punchIn.time) : null);
       if (recDate) {
         const key = `${recDate.getFullYear()}-${String(recDate.getMonth() + 1).padStart(2, "0")}-${String(recDate.getDate()).padStart(2, "0")}`;
         recordMap[key] = rec;
@@ -1307,11 +1316,18 @@ const UserDetailsPage = () => {
     });
 
     const holidayMap = {};
-    holidaysList.forEach((h) => {
-      if (h.date) {
+    const safeHolidays = Array.isArray(holidaysList)
+      ? holidaysList
+      : Array.isArray(holidaysList?.holidays)
+      ? holidaysList.holidays
+      : [];
+    safeHolidays.forEach((h) => {
+      if (h?.date) {
         const d = new Date(h.date);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        holidayMap[key] = h.name || h.title || "Holiday";
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          holidayMap[key] = h.name || h.title || h.reason || "Holiday";
+        }
       }
     });
 

@@ -919,6 +919,154 @@ const FilterDrawer = ({ open, onClose, filters, onApply }) => {
   );
 };
 
+const ActiveTripCard = ({ trip, resolvedAddress, isDark }) => {
+  if (!trip || (!trip.destination && trip.tripStatus !== "active")) return null;
+
+  const destTitle = trip.destination?.name || trip.destination?.title || "Destination (Location B)";
+  const destSubtitle = trip.destination?.address || trip.destination?.subtitle || "";
+  const startLoc = trip.start?.locationName || resolvedAddress || "Punch-in Location (Location A)";
+  const isStopped = trip.tripStatus === "stopped";
+  const isCompleted = trip.tripStatus === "completed";
+
+  return (
+    <Box
+      sx={{
+        mt: 1.5,
+        mb: 2,
+        p: 2,
+        borderRadius: "14px",
+        bgcolor: isDark ? "rgba(37,99,235,0.08)" : "#f0f7ff",
+        border: `1.5px solid ${isStopped ? "#f59e0b" : isCompleted ? "#22c55e" : "#3b82f6"}`,
+        boxShadow: "0 4px 14px rgba(37,99,235,0.08)",
+        transition: "all 0.2s ease",
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              width: 28,
+              height: 28,
+              borderRadius: "8px",
+              bgcolor: isStopped ? "#fef3c7" : isCompleted ? "#dcfce7" : "#dbeafe",
+              color: isStopped ? "#d97706" : isCompleted ? "#16a34a" : "#2563eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <DirectionsCar sx={{ fontSize: 17 }} />
+          </Box>
+          <Typography sx={{ fontSize: "0.82rem", fontWeight: 800, color: isDark ? "#fff" : "#0f172a" }}>
+            Trip #{trip.tripNumber || 1}
+          </Typography>
+        </Box>
+        <Chip
+          size="small"
+          label={
+            isStopped
+              ? "Paused / Stopped"
+              : isCompleted
+              ? "Trip Completed"
+              : "● Navigation Live"
+          }
+          sx={{
+            bgcolor: isStopped ? "#fef3c7" : isCompleted ? "#dcfce7" : "#2563eb",
+            color: isStopped ? "#92400e" : isCompleted ? "#166534" : "#ffffff",
+            fontWeight: 700,
+            fontSize: "0.68rem",
+            height: 22,
+          }}
+        />
+      </Box>
+
+      {/* Origin (A) -> Destination (B) details */}
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8, pl: 0.5 }}>
+        {/* Start / Origin A */}
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+          <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "#22c55e", mt: "5px", flexShrink: 0 }} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>
+              Start (A){trip.start?.time ? ` · ${trip.start.time}` : ""}
+            </Typography>
+            <Typography sx={{ fontSize: "0.78rem", fontWeight: 600, color: isDark ? "#e2e8f0" : "#0f172a", lineHeight: 1.3 }}>
+              {startLoc}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Vertical dotted track */}
+        <Box sx={{ width: 2, height: 10, bgcolor: "#cbd5e1", ml: "3px" }} />
+
+        {/* Destination B */}
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: "#dc2626", mt: "5px", flexShrink: 0 }} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: "0.7rem", color: "#dc2626", fontWeight: 700 }}>
+              Destination (B)
+            </Typography>
+            <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: isDark ? "#fff" : "#0f172a", lineHeight: 1.3 }}>
+              {destTitle}
+            </Typography>
+            {destSubtitle && (
+              <Typography sx={{ fontSize: "0.72rem", color: "#64748b", mt: 0.2 }}>
+                {destSubtitle}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Stats footer: Exact Distance & Duration */}
+      <Box
+        sx={{
+          mt: 1.25,
+          pt: 1,
+          borderTop: isDark ? "1px dashed rgba(255,255,255,0.12)" : "1px dashed #bfdbfe",
+          display: "flex",
+          flexDirection: "column",
+          gap: 0.75,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {trip.actualDistanceKm !== undefined ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Route sx={{ fontSize: 15, color: isStopped ? "#d97706" : "#22c55e" }} />
+              <Typography sx={{ fontSize: "0.75rem", fontWeight: 800, color: isStopped ? "#b45309" : "#15803d" }}>
+                {trip.actualDistanceKm} km travelled {trip.selectedRoute?.distanceKm ? "(of " + trip.selectedRoute.distanceKm + " km)" : ""}
+              </Typography>
+            </Box>
+          ) : trip.selectedRoute?.distanceKm ? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Route sx={{ fontSize: 14, color: "#2563eb" }} />
+              <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, color: isDark ? "#93c5fd" : "#1e40af" }}>
+                {trip.selectedRoute.distanceKm} km planned
+              </Typography>
+            </Box>
+          ) : null}
+
+          {trip.selectedRoute?.durationMin && !isStopped && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Schedule sx={{ fontSize: 14, color: "#2563eb" }} />
+              <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, color: isDark ? "#93c5fd" : "#1e40af" }}>
+                ~{trip.selectedRoute.durationMin} min ETA
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </Box>
+
+      {trip.stopReason && (
+        <Box sx={{ mt: 1, p: 1, borderRadius: "8px", bgcolor: "#fffbeb", border: "1px solid #fde68a" }}>
+          <Typography sx={{ fontSize: "0.72rem", color: "#92400e", fontWeight: 700 }}>
+            🛑 Stopped at {trip.actualDistanceKm !== undefined ? trip.actualDistanceKm + " km" : "early"}: {trip.stopReason}
+          </Typography>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function MemberVisitHistory({ userId: propUserId }) {
   const theme    = useTheme();
@@ -955,6 +1103,8 @@ export default function MemberVisitHistory({ userId: propUserId }) {
   const [isPunchedIn,      setIsPunchedIn]      = useState(false);
   const [hasPunchedOut,    setHasPunchedOut]    = useState(false);
   const [attendanceRecord, setAttendanceRecord] = useState(null);
+  const [activeTrip,       setActiveTrip]       = useState(null);
+  const [vehicleTrips,     setVehicleTrips]     = useState([]);
   const [punchInLocation,  setPunchInLocation]  = useState(null);
   const [punchOutLocation, setPunchOutLocation] = useState(null);
   const [expenses,         setExpenses]         = useState([]);
@@ -1251,6 +1401,14 @@ export default function MemberVisitHistory({ userId: propUserId }) {
       const list = res?.data?.attendances || res?.result?.attendances || res?.data || [];
       const att  = Array.isArray(list) ? list[0] : list;
       setAttendanceRecord(att || null);
+
+      const metadata = att?.metadata instanceof Map
+        ? Object.fromEntries(att.metadata)
+        : (att?.metadata || {});
+      const lastTrip = metadata.lastTrip || null;
+      const vTrips = metadata.vehicleTrips || (lastTrip ? [lastTrip] : []);
+      setActiveTrip(lastTrip);
+      setVehicleTrips(Array.isArray(vTrips) ? vTrips : lastTrip ? [lastTrip] : []);
 
       if (att?.punchIn?.time) {
         const out = !!att?.punchOut?.time;
@@ -1767,6 +1925,7 @@ export default function MemberVisitHistory({ userId: propUserId }) {
     visits={visibleVisits}
     selectedDate={selectedMapDate}
     preferVisitTrail={useVisitTrailOnly}
+    activeTrip={activeTrip}
   />
 ) : (
   <Box
@@ -2181,44 +2340,49 @@ export default function MemberVisitHistory({ userId: propUserId }) {
               ) : visibleVisits.length === 0 && stayedLocations.length === 0 ? (
                 <Box sx={{ flex: 1, display: "flex", flexDirection: "column", p: 3 }}>
                   {isPunchedIn && !hasPunchedOut ? (
-                    <Box sx={{ display: "flex", gap: 2 }}>
-                      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                        <Box
-                          onClick={handlePunchInFocus}
-                          sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: SUCCESS, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 0 4px ${alpha(SUCCESS, 0.2)}`, animation: "pl 1.5s ease-in-out infinite", "@keyframes pl": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.6 } }, cursor: "pointer", transition: "transform 0.15s", "&:hover": { transform: "scale(1.12)" } }}
-                        >
-                          <MyLocation sx={{ fontSize: 18, color: "#fff" }} />
-                        </Box>
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
-                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.4 }}>
-                          <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>Punched In</Typography>
-                          {punchInLocation?.time && <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8" }}>{fmt(punchInLocation.time)}</Typography>}
-                        </Box>
-                        {timelineBatteryInfo.percentage !== null && (
-                          <Box sx={{ mb: 0.8 }}>
-                            <Chip
-                              size="small"
-                              label={`${timelineBatteryChip.label}${timelineBatteryInfo.isCharging ? " • Charging" : ""}`}
-                              sx={{ bgcolor: timelineBatteryChip.bg, color: timelineBatteryChip.color, fontWeight: 700, border: `1px solid ${timelineBatteryChip.border}`, height: 24 }}
-                            />
+                    <>
+                      <Box sx={{ display: "flex", gap: 2 }}>
+                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                          <Box
+                            onClick={handlePunchInFocus}
+                            sx={{ width: 40, height: 40, borderRadius: "50%", bgcolor: SUCCESS, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 0 4px ${alpha(SUCCESS, 0.2)}`, animation: "pl 1.5s ease-in-out infinite", "@keyframes pl": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.6 } }, cursor: "pointer", transition: "transform 0.15s", "&:hover": { transform: "scale(1.12)" } }}
+                          >
+                            <MyLocation sx={{ fontSize: 18, color: "#fff" }} />
                           </Box>
-                        )}
-                        {/* Address (prefer resolved geocoded address, fallback to punchInLocation.address, then coords) */}
-                        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4, mb: 0.5 }}>
-                          <LocationOn sx={{ fontSize: 12, color: "#94a3b8", mt: "2px", flexShrink: 0 }} />
-                          <Typography sx={{ fontSize: "0.75rem", color: "#64748b", lineHeight: 1.5 }}>
-                            {resolvedAddress ||
-                              (!isRawCoordinateValue(punchInLocation?.address) ? (typeof punchInLocation?.address === "string" ? punchInLocation.address : punchInLocation?.address?.full || punchInLocation?.address?.short) : null) ||
-                              (punchInLocation?.lat ? "Locating address…" : "Location not available")}
-                          </Typography>
                         </Box>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
-                          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: SUCCESS, animation: "dp 1.5s ease-in-out infinite", "@keyframes dp": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.3 } } }} />
-                          <Typography sx={{ fontSize: "0.7rem", color: SUCCESS, fontWeight: 600 }}>On Duty · No visits yet today</Typography>
+                        <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
+                          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.4 }}>
+                            <Typography sx={{ fontWeight: 700, color: "#0f172a", fontSize: "0.88rem" }}>Punched In</Typography>
+                            {punchInLocation?.time && <Typography sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#94a3b8" }}>{fmt(punchInLocation.time)}</Typography>}
+                          </Box>
+                          {timelineBatteryInfo.percentage !== null && (
+                            <Box sx={{ mb: 0.8 }}>
+                              <Chip
+                                size="small"
+                                label={`${timelineBatteryChip.label}${timelineBatteryInfo.isCharging ? " • Charging" : ""}`}
+                                sx={{ bgcolor: timelineBatteryChip.bg, color: timelineBatteryChip.color, fontWeight: 700, border: `1px solid ${timelineBatteryChip.border}`, height: 24 }}
+                              />
+                            </Box>
+                          )}
+                          {/* Address (prefer resolved geocoded address, fallback to punchInLocation.address, then coords) */}
+                          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4, mb: 0.5 }}>
+                            <LocationOn sx={{ fontSize: 12, color: "#94a3b8", mt: "2px", flexShrink: 0 }} />
+                            <Typography sx={{ fontSize: "0.75rem", color: "#64748b", lineHeight: 1.5 }}>
+                              {resolvedAddress ||
+                                (!isRawCoordinateValue(punchInLocation?.address) ? (typeof punchInLocation?.address === "string" ? punchInLocation.address : punchInLocation?.address?.full || punchInLocation?.address?.short) : null) ||
+                                (punchInLocation?.lat ? "Locating address…" : "Location not available")}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: SUCCESS, animation: "dp 1.5s ease-in-out infinite", "@keyframes dp": { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.3 } } }} />
+                            <Typography sx={{ fontSize: "0.7rem", color: SUCCESS, fontWeight: 600 }}>On Duty · No visits yet today</Typography>
+                          </Box>
                         </Box>
                       </Box>
-                    </Box>
+
+                      {/* Active Navigation Trip Card (Origin A -> Destination B) */}
+                      <ActiveTripCard trip={activeTrip} resolvedAddress={resolvedAddress} isDark={isDark} />
+                    </>
                   ) : (
                     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, minHeight: 200 }}>
                       <Box sx={{ width: 48, height: 48, borderRadius: "50%", bgcolor: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", mb: 1.5 }}>
@@ -2231,6 +2395,9 @@ export default function MemberVisitHistory({ userId: propUserId }) {
                 </Box>
               ) : (
                 <Box sx={{ p: 3 }}>
+
+                  {/* ── Active Navigation Trip Card ── */}
+                  <ActiveTripCard trip={activeTrip} resolvedAddress={resolvedAddress} isDark={isDark} />
 
                   {/* ── Punch In header ── */}
                   {punchInLocation?.address && (
