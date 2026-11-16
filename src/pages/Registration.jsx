@@ -248,24 +248,6 @@ const ROLE_CONFIG = {
     label: "Admin Panel",
     color: PRIMARY,
     icon: <AdminPanelSettings sx={{ fontSize: 16 }} />,
-};
-
-// Solar Requirement Types
-const SOLAR_REQUIREMENT_TYPES = [
-  "ULA 1kW",
-  "PMSG Residential(1-10k)",
-  "Commercial (10kW  & above)",
-  "Industrial (50+ kW)",
-  "Residental(Above 10kw)(GHS/RWA)",
-  "Other",
-];
-
-// Role Configuration
-const ROLE_CONFIG = {
-  Admin_panel: {
-    label: "Admin Panel",
-    color: PRIMARY,
-    icon: <AdminPanelSettings sx={{ fontSize: 16 }} />,
   },
   ZSM: {
     label: "Operation Lead",

@@ -92,43 +92,52 @@ export default function Payslips() {
       const monthName = parts[0] || "October";
       const yearVal = parts[1] || "2026";
 
-      const [usersRes, structuresRes, payslipsRes] = await Promise.allSettled([
+      const [overviewRes, usersRes, structuresRes, payslipsRes] = await Promise.allSettled([
+        axiosInstance.get(`/payroll/overview?month=${monthName}&year=${yearVal}`),
         axiosInstance.get("/user/getAllUsers?page=1&limit=200"),
         axiosInstance.get("/payroll/salary-structures"),
         axiosInstance.get(`/payroll/payslips?month=${monthName}&year=${yearVal}&limit=200`),
       ]);
+
+      const overviewData = overviewRes.status === "fulfilled"
+        ? (overviewRes.value?.data?.result || overviewRes.value?.data?.data || overviewRes.value?.data || {})
+        : {};
+
+      const currentRun = overviewData.currentRun || null;
+      const attendanceSummary = overviewData.attendanceSummary || {};
 
       let users = [];
       if (usersRes.status === "fulfilled") {
         const root = usersRes.value?.data || {};
         const d = root.result || root.data || root;
         users = Array.isArray(d) ? d : d.users || d.data?.users || [];
+      } else if (overviewData.employees && Array.isArray(overviewData.employees)) {
+        users = overviewData.employees;
       }
 
       let structures = [];
       if (structuresRes.status === "fulfilled") {
         const sRoot = structuresRes.value?.data || {};
-        structures = sRoot.salaryStructures || sRoot.data?.salaryStructures || [];
+        const sData = sRoot.result || sRoot.data || sRoot;
+        structures = sData.salaryStructures || sRoot.salaryStructures || (Array.isArray(sData) ? sData : []);
       }
 
       let payslipsFromDb = [];
       if (payslipsRes.status === "fulfilled") {
         const pRoot = payslipsRes.value?.data || {};
-        payslipsFromDb = pRoot.payslips || pRoot.data?.payslips || [];
+        const pData = pRoot.result || pRoot.data || pRoot;
+        payslipsFromDb = pData.payslips || pRoot.payslips || (Array.isArray(pData) ? pData : []);
       }
 
       const templates = {
         Incharge: {
-          basic: 22000,
+          basic: 10000,
           earnings: [
-            { component: "Basic Salary", amount: 22000 },
-            { component: "House Rent Allowance (HRA)", amount: 8800 },
-            { component: "Field Site Allowance", amount: 3500 },
-            { component: "Conveyance Allowance", amount: 2000 },
-            { component: "Daily Field Allowance", amount: 1500 },
+            { component: "Basic Salary", amount: 10000 },
+            { component: "House Rent Allowance (HRA)", amount: 2000 },
           ],
           deductions: [
-            { component: "Provident Fund (PF)", amount: 1760 },
+            { component: "Provident Fund (PF)", amount: 1800 },
             { component: "Professional Tax (PT)", amount: 200 },
             { component: "TDS / Tax", amount: 1000 },
           ],
@@ -175,6 +184,80 @@ export default function Payslips() {
       const pastelBgs = ["#bfdbfe", "#e2e8f0", "#dbeafe", "#dcfce7", "#ccfbf1", "#e0e7ff", "#f3e8ff", "#ffedd5"];
       const pastelColors = ["#1d4ed8", "#475569", "#2563eb", "#15803d", "#0f766e", "#4338ca", "#7e22ce", "#c2410c"];
 
+      const periodDetails = getMonthPeriodDetails(monthStr);
+      const totalCalendarDays = periodDetails.totalDays;
+
+      // Scenario A: Persisted Run exists from MongoDB
+      if (currentRun && Array.isArray(currentRun.employees) && currentRun.employees.length > 0) {
+        const runSlips = currentRun.employees.map((row, idx) => {
+          const emp = row.employee || {};
+          const name = `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || emp.name || row.employeeName || "Employee";
+          const empRole = normalizeRole(emp.role || row.department, emp.department);
+          const empId = emp.employeeId || row.empId || `E${String(idx + 1).padStart(4, "0")}`;
+          const initials = `${emp.firstName?.[0] || name[0] || "E"}${emp.lastName?.[0] || ""}`.toUpperCase();
+
+          const earnings = Array.isArray(row.earnings) && row.earnings.length > 0
+            ? row.earnings.map((e) => ({ component: e.name || e.component, amount: Number(e.amount) || 0 }))
+            : [
+                { component: "Basic Salary", amount: Number(row.basicSalary || 10000) },
+                { component: "House Rent Allowance (HRA)", amount: Number(row.allowances || 2000) },
+              ];
+
+          const deductions = Array.isArray(row.deductions) && row.deductions.length > 0
+            ? row.deductions.map((d) => ({ component: d.name || d.component, amount: Number(d.amount) || 0 }))
+            : [
+                { component: "Provident Fund (PF)", amount: 1800 },
+                { component: "Professional Tax (PT)", amount: 200 },
+                { component: "TDS / Tax", amount: 1000 },
+              ];
+
+          const att = row.attendance || attendanceSummary[String(emp._id || row.employee)] || {
+            totalDays: totalCalendarDays,
+            presentDays: row.presentDays !== undefined ? row.presentDays : 0,
+            absentDays: row.absentDays !== undefined ? row.absentDays : 13,
+            leavePaid: 0,
+            leaveUnpaid: 0,
+            holidays: 0,
+          };
+
+          return {
+            id: row._id || `run-${idx + 1}`,
+            _id: emp._id || row.employee,
+            name,
+            employeeName: name,
+            empId,
+            employeeId: empId,
+            department: row.department || emp.department || "Solar Technical & Installation",
+            designation: row.designation || emp.designation || "Technical Incharge",
+            role: emp.role || empRole,
+            month: monthStr,
+            payPeriod: periodDetails.payPeriod,
+            joiningDate: emp.joiningDate || (emp.createdAt ? new Date(emp.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "03 Oct 2026"),
+            bankName: emp.bankName || row.bankName || "State Bank of India",
+            accountNo: emp.accountNumber || row.accountMasked || "XXXX XXXX 7890",
+            ifscCode: emp.ifsc || "SBIN0001234",
+            pan: emp.pan || row.pan || "ABCPD1234F",
+            basicSalary: Number(row.basicSalary) || 10000,
+            basic: Number(row.basicSalary) || 10000,
+            gross: Number(row.grossSalary) || 12000,
+            deductions: Number(row.totalDeductions) || 3000,
+            netPay: Number(row.netSalary) || 9000,
+            status: currentRun.status === "PAID" ? SLIP_STATUS.PAID : SLIP_STATUS.GENERATED,
+            finalized: true,
+            earnings,
+            deductionDetails: deductions,
+            attendance: att,
+            avatarBg: pastelBgs[idx % pastelBgs.length],
+            avatarColor: pastelColors[idx % pastelColors.length],
+            initials,
+          };
+        });
+
+        setDbSlips(runSlips);
+        return;
+      }
+
+      // Scenario B: Derive from real users + real attendanceSummary + real salary structures
       const combinedSlips = users.map((u, idx) => {
         const name = `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email?.split("@")[0] || "Employee";
         const empRole = normalizeRole(u.role, u.department);
@@ -182,11 +265,12 @@ export default function Payslips() {
         const initials = `${u.firstName?.[0] || name[0] || "E"}${u.lastName?.[0] || ""}`.toUpperCase();
 
         // Check if DB custom structure exists
-        const userStruct = structures.find((s) => String(s.employee?._id || s.employee) === String(u._id))?.structure;
+        const userStruct = structures.find((s) => String(s.employee?._id || s.employee || s.user?._id || s.user) === String(u._id))?.structure
+          || structures.find((s) => String(s.employee?._id || s.employee || s.user?._id || s.user) === String(u._id));
 
         const defaultTemplate = templates[empRole] || templates.Incharge;
 
-        let basicSalary = userStruct?.basicSalary || defaultTemplate.basic;
+        let basicSalary = Number(userStruct?.basicSalary || defaultTemplate.basic);
         let earnings = userStruct?.earnings?.length > 0
           ? userStruct.earnings.map((e) => ({ component: e.name || e.component, amount: Number(e.amount) || 0 }))
           : defaultTemplate.earnings;
@@ -196,7 +280,45 @@ export default function Payslips() {
           : defaultTemplate.deductions;
 
         const gross = earnings.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-        const totalDeductions = deductions.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+
+        // Fetch real attendance from MongoDB attendance summary
+        const realAtt = attendanceSummary[String(u._id)] || attendanceSummary[u.employeeId] || null;
+        let attObj;
+        if (realAtt) {
+          attObj = {
+            totalDays: realAtt.totalDays || totalCalendarDays,
+            presentDays: realAtt.presentDays ?? 0,
+            absentDays: realAtt.absentDays ?? 0,
+            leavePaid: realAtt.leavePaid ?? 0,
+            leaveUnpaid: realAtt.leaveUnpaid ?? 0,
+            holidays: realAtt.holidays ?? 0,
+          };
+        } else {
+          // If viewing current month, reconcile elapsed days
+          const now = new Date();
+          const isCurrentMonth = monthName.toLowerCase().startsWith(now.toLocaleString("en-US", { month: "short" }).toLowerCase()) && Number(yearVal) === now.getFullYear();
+          const elapsed = isCurrentMonth ? Math.min(now.getDate(), totalCalendarDays) : totalCalendarDays;
+          attObj = {
+            totalDays: totalCalendarDays,
+            presentDays: 0,
+            absentDays: elapsed,
+            leavePaid: 0,
+            leaveUnpaid: 0,
+            holidays: 0,
+          };
+        }
+
+        // Real Loss of Pay (LOP) deduction
+        const lopAmount = attObj.absentDays > 0 ? Number(((gross / (attObj.totalDays || 30)) * attObj.absentDays).toFixed(2)) : 0;
+        const deductionsWithLop = [...deductions];
+        if (lopAmount > 0 && !deductionsWithLop.some((d) => (d.component || d.name || "").toLowerCase().includes("lop") || (d.component || d.name || "").toLowerCase().includes("loss of pay"))) {
+          deductionsWithLop.push({
+            component: `Loss of Pay (LOP) - ${attObj.absentDays} Day${attObj.absentDays > 1 ? "s" : ""}`,
+            amount: lopAmount,
+          });
+        }
+
+        const totalDeductions = deductionsWithLop.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
         const netPay = Math.max(0, gross - totalDeductions);
 
         return {
@@ -210,8 +332,8 @@ export default function Payslips() {
           designation: u.designation || u.role || (empRole === "Incharge" ? "Technical Incharge" : empRole),
           role: u.role || empRole,
           month: monthStr,
-          payPeriod: getMonthPeriodDetails(monthStr).payPeriod,
-          joiningDate: u.joiningDate || (u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "3 Oct 2026"),
+          payPeriod: periodDetails.payPeriod,
+          joiningDate: u.joiningDate || (u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "03 Oct 2026"),
           bankName: u.bankName || "State Bank of India",
           accountNo: u.accountNumber || "XXXX XXXX 7890",
           ifscCode: u.ifsc || "SBIN0001234",
@@ -224,15 +346,8 @@ export default function Payslips() {
           status: SLIP_STATUS.GENERATED,
           finalized: true,
           earnings,
-          deductionDetails: deductions,
-          attendance: {
-            totalDays: 31,
-            presentDays: 30,
-            absentDays: 1,
-            leavePaid: 0,
-            leaveUnpaid: 0,
-            holidays: 0,
-          },
+          deductionDetails: deductionsWithLop,
+          attendance: attObj,
           avatarBg: pastelBgs[idx % pastelBgs.length],
           avatarColor: pastelColors[idx % pastelColors.length],
           initials,

@@ -1,7 +1,7 @@
 const publicBase = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
-const logoLightPath = `${publicBase}/solar360-logo-light.png?v=20261003_v2`;
-const logoDarkPath = `${publicBase}/solar360-logo-dark.png?v=20261003_v2`;
-const logoPath = `${publicBase}/solar360-logo-clean.png?v=20261003_v2`;
+const logoLightPath = `${publicBase}/solar360-logo-light.png?v=20261111_vanurtech`;
+const logoDarkPath = `${publicBase}/solar360-logo-dark.png?v=20261111_vanurtech`;
+const logoPath = `${publicBase}/solar360-logo-clean.png?v=20261111_vanurtech`;
 
 export const solar360LogoUri = logoPath;
 export const solar360LogoFallbackUri = logoPath;

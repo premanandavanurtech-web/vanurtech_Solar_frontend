@@ -3,9 +3,19 @@ export const getProjectStage = (project = {}) => {
 
   const isBankLoanType = !project.paymentType || project.paymentType === "Bank Loan";
 
+  const registrationStatus = String(project.registrationStatus || "").toLowerCase();
+  const isRegistrationDone =
+    ["approval", "completed", "approved", "done"].includes(registrationStatus) ||
+    Boolean(project.dateOfRegistration && (project.registrationNumber || project.applicationNumber));
+
   // If explicit stage is in projectStage / currentStage (and not the initial lead_converted placeholder)
   const directStage = String(project.currentStage || project.projectStage || "").toLowerCase();
   if (directStage && directStage !== "lead_converted" && directStage !== "visit") {
+    // If registration is NOT complete, a project cannot jump to document or payment
+    if (!isRegistrationDone && ["document", "payment", "loan_pending", "disbursement"].includes(directStage)) {
+      return "registration";
+    }
+
     if ([
       "ready_handover", "handover",
       "subsidy_received", "subsidy_redeemed", "discom_approval", "project_commissioning",
@@ -21,12 +31,27 @@ export const getProjectStage = (project = {}) => {
 
   const inst = String(project.installationStatus || "").toLowerCase();
   const leadStatus = String(project.status || "").toLowerCase().trim();
-  const registrationStatus = String(project.registrationStatus || "").toLowerCase();
   const bankPendingStatus = String(project.bankAtPendingStatus || "").toLowerCase();
   const disbursementStatus = String(project.disbursementStatus || "").toLowerCase();
   const loanStatus = String(project.loanStatus || "").toLowerCase();
   const paymentStatus = String(project.paymentStatus || "").toLowerCase();
   const docStatus = String(project.documentStatus || "").toLowerCase();
+
+  // If the project is converted and DISCOM Registration has not been completed,
+  // it must stay in Stage 02: registration (never skip to document or later).
+  const isConvertedProject = Boolean(
+    project.isProject ||
+    project.projectConvertedAt ||
+    project.projectCode ||
+    leadStatus === "project converted" ||
+    leadStatus === "registration" ||
+    leadStatus === "converted" ||
+    directStage === "registration"
+  );
+
+  if (isConvertedProject && !isRegistrationDone) {
+    return "registration";
+  }
 
   // ── Stage 19: Handover / Ready Handover ──
   if (
@@ -198,18 +223,21 @@ export const getProjectStage = (project = {}) => {
     return "payment";
   }
 
-  // ── Stage 2: Document Submission ──
+  // ── Stage 2: Document Submission (Stage 03 in Project Workflow) ──
+  // DISCOM Registration (Stage 02) must be completed before entering Document Submission
   if (
-    leadStatus === "document submission" ||
-    leadStatus === "document" ||
-    ["submitted", "approved", "completed", "verified"].includes(docStatus) ||
-    Boolean(project.documentSubmissionDate)
+    isRegistrationDone &&
+    (leadStatus === "document submission" ||
+      leadStatus === "document" ||
+      ["submitted", "approved", "completed", "verified"].includes(docStatus) ||
+      Boolean(project.documentSubmissionDate))
   ) {
     return "document";
   }
 
-  // ── Stage 1: DISCOM Registration ──
+  // ── Stage 1: DISCOM Registration (Stage 02 in Project Workflow) ──
   if (
+    isConvertedProject ||
     leadStatus === "registration" ||
     ["approval", "completed", "approved", "inprogress"].includes(registrationStatus) ||
     Boolean(project.dateOfRegistration) ||

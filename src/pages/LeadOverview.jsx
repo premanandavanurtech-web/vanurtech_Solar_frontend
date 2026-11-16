@@ -613,7 +613,7 @@ const MobileFilterDrawer = ({
   const toggleSection = (section) => setExpandedSection(expandedSection === section ? null : section);
 
   return (
-    <SwipeableDrawer anchor="bottom" open={open} onClose={onClose} onOpen={() => {}}
+    <SwipeableDrawer anchor="bottom" open={open} onClose={onClose} onOpen={() => { }}
       disableSwipeToOpen={false}
       PaperProps={{
         sx: {
@@ -637,60 +637,68 @@ const MobileFilterDrawer = ({
         <Box sx={{ maxHeight: "calc(90vh - 120px)", overflow: "auto", p: 3 }}>
           <Stack spacing={2.5}>
             {[
-              { key: "search", label: "Search", icon: <Search sx={{ color: PRIMARY_COLOR, fontSize: 20 }} />, content: (
-                <TextField fullWidth size="small" placeholder="Search by name, email, phone..." value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><Search sx={{ color: "text.secondary", fontSize: 20 }} /></InputAdornment>,
-                    endAdornment: searchQuery && <InputAdornment position="end"><IconButton size="small" onClick={() => setSearchQuery("")}><Close fontSize="small" /></IconButton></InputAdornment> }}
-                  sx={{
-                    "& .MuiOutlinedInput-root": {
-                      borderRadius: 999,
-                      bgcolor: isDark ? "#172338" : "#fff",
-                      color: isDark ? "#f8fafc" : "#1e293b",
-                      "& input": { color: isDark ? "#f8fafc" : "#1e293b" },
-                      "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)" },
-                      transition: "box-shadow .2s ease, border-color .2s ease",
-                      "&.Mui-focused": { boxShadow: FOCUS_RING },
-                    },
-                  }} />
-              )},
-              { key: "period", label: "Time Period", icon: <DateRange sx={{ color: PRIMARY_COLOR, fontSize: 20 }} />, content: (
-                <Grid container spacing={1}>
-                  {PERIOD_OPTIONS.map((option) => (
-                    <Grid item xs={6} key={option.value}>
-                      <Button fullWidth variant="text" onClick={() => setPeriod(option.value)} startIcon={option.icon} size="small"
-                        sx={{
-                          borderRadius: 999,
-                          border: `1px solid ${period === option.value ? "transparent" : isDark ? "rgba(255,255,255,0.1)" : alpha(PRIMARY_COLOR, 0.16)}`,
-                          background: period === option.value ? GRADIENT_BLUE : isDark ? "#172338" : "#fff",
-                          color: period === option.value ? "#fff" : isDark ? "#94a3b8" : PRIMARY_COLOR,
-                          boxShadow: period === option.value ? "0 12px 24px rgba(37,99,235,0.18)" : "none",
-                        }}>
-                        {option.label}
-                      </Button>
-                    </Grid>
-                  ))}
-                </Grid>
-              )},
-              { key: "status", label: "Lead Status", icon: <FilterAlt sx={{ color: PRIMARY_COLOR, fontSize: 20 }} />, content: (
-                <FormControl fullWidth size="small">
-                  <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} displayEmpty
+              {
+                key: "search", label: "Search", icon: <Search sx={{ color: PRIMARY_COLOR, fontSize: 20 }} />, content: (
+                  <TextField fullWidth size="small" placeholder="Search by name, email, phone..." value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start"><Search sx={{ color: "text.secondary", fontSize: 20 }} /></InputAdornment>,
+                      endAdornment: searchQuery && <InputAdornment position="end"><IconButton size="small" onClick={() => setSearchQuery("")}><Close fontSize="small" /></IconButton></InputAdornment>
+                    }}
                     sx={{
-                      borderRadius: 2,
-                      bgcolor: isDark ? "#172338" : "#fff",
-                      color: isDark ? "#f8fafc" : "#1e293b",
-                      "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)" },
-                      "& .MuiSelect-icon": { color: isDark ? "#94a3b8" : "inherit" },
-                    }}>
-                    <MenuItem value="all">All Statuses</MenuItem>
-                    {LEAD_STATUS_OPTIONS.map((status) => (
-                      <MenuItem key={status} value={status}>
-                        <Stack direction="row" alignItems="center" spacing={1}>{getStatusColor(status).icon}<span>{status}</span></Stack>
-                      </MenuItem>
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: 999,
+                        bgcolor: isDark ? "#172338" : "#fff",
+                        color: isDark ? "#f8fafc" : "#1e293b",
+                        "& input": { color: isDark ? "#f8fafc" : "#1e293b" },
+                        "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)" },
+                        transition: "box-shadow .2s ease, border-color .2s ease",
+                        "&.Mui-focused": { boxShadow: FOCUS_RING },
+                      },
+                    }} />
+                )
+              },
+              {
+                key: "period", label: "Time Period", icon: <DateRange sx={{ color: PRIMARY_COLOR, fontSize: 20 }} />, content: (
+                  <Grid container spacing={1}>
+                    {PERIOD_OPTIONS.map((option) => (
+                      <Grid item xs={6} key={option.value}>
+                        <Button fullWidth variant="text" onClick={() => setPeriod(option.value)} startIcon={option.icon} size="small"
+                          sx={{
+                            borderRadius: 999,
+                            border: `1px solid ${period === option.value ? "transparent" : isDark ? "rgba(255,255,255,0.1)" : alpha(PRIMARY_COLOR, 0.16)}`,
+                            background: period === option.value ? GRADIENT_BLUE : isDark ? "#172338" : "#fff",
+                            color: period === option.value ? "#fff" : isDark ? "#94a3b8" : PRIMARY_COLOR,
+                            boxShadow: period === option.value ? "0 12px 24px rgba(37,99,235,0.18)" : "none",
+                          }}>
+                          {option.label}
+                        </Button>
+                      </Grid>
                     ))}
-                  </Select>
-                </FormControl>
-              )},
+                  </Grid>
+                )
+              },
+              {
+                key: "status", label: "Lead Status", icon: <FilterAlt sx={{ color: PRIMARY_COLOR, fontSize: 20 }} />, content: (
+                  <FormControl fullWidth size="small">
+                    <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} displayEmpty
+                      sx={{
+                        borderRadius: 2,
+                        bgcolor: isDark ? "#172338" : "#fff",
+                        color: isDark ? "#f8fafc" : "#1e293b",
+                        "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)" },
+                        "& .MuiSelect-icon": { color: isDark ? "#94a3b8" : "inherit" },
+                      }}>
+                      <MenuItem value="all">All Statuses</MenuItem>
+                      {LEAD_STATUS_OPTIONS.map((status) => (
+                        <MenuItem key={status} value={status}>
+                          <Stack direction="row" alignItems="center" spacing={1}>{getStatusColor(status).icon}<span>{status}</span></Stack>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )
+              },
             ].map(({ key, label, icon, content }) => (
               <Paper key={key} elevation={0} sx={{ border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${alpha(PRIMARY_COLOR, 0.1)}`, borderRadius: 2, overflow: "hidden", bgcolor: isDark ? "#111c30" : "inherit" }}>
                 <Box sx={{ p: 2, bgcolor: isDark ? "#172338" : alpha(PRIMARY_COLOR, 0.02), display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => toggleSection(key)}>
@@ -915,17 +923,11 @@ const LeadCard = ({
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
-<<<<<<< HEAD
   const [anchorEl, setAnchorEl] = useState(null);
   const openMenu = Boolean(anchorEl);
-=======
-  const [expanded, setExpanded] = useState(false);
+
   const displayStatus = getLeadDisplayStatus(lead);
   const statusColor = getStatusColor(displayStatus);
-  const initials = `${lead.firstName?.[0] || ""}${lead.lastName?.[0] || ""}`;
->>>>>>> origin/dipak
-
-  const statusColor = getStatusColor(lead.status);
   const initials = `${lead.firstName?.[0] || ""}${lead.lastName?.[0] || ""}`.toUpperCase() || "L";
   const assignedPerson = getAssignedPerson(lead);
 
@@ -1079,8 +1081,8 @@ const LeadCard = ({
             sx={{
               background: isDark
                 ? (lead.status === "Missed Leads"
-                    ? "rgba(239, 68, 68, 0.18)"
-                    : "rgba(37, 99, 235, 0.18)")
+                  ? "rgba(239, 68, 68, 0.18)"
+                  : "rgba(37, 99, 235, 0.18)")
                 : statusColor.bg,
               color: isDark
                 ? (lead.status === "Missed Leads" ? "#fca5a5" : "#93c5fd")
@@ -1089,13 +1091,12 @@ const LeadCard = ({
               height: 25,
               fontSize: "0.72rem",
               borderRadius: "8px",
-              border: `1px solid ${
-                isDark
-                  ? (lead.status === "Missed Leads"
-                      ? "rgba(239, 68, 68, 0.35)"
-                      : "rgba(59, 130, 246, 0.35)")
-                  : statusColor.border
-              }`,
+              border: `1px solid ${isDark
+                ? (lead.status === "Missed Leads"
+                  ? "rgba(239, 68, 68, 0.35)"
+                  : "rgba(59, 130, 246, 0.35)")
+                : statusColor.border
+                }`,
               "& .MuiChip-icon": {
                 fontSize: 14,
                 color: isDark
@@ -1121,7 +1122,6 @@ const LeadCard = ({
             </Typography>
           </Stack>
         </Box>
-<<<<<<< HEAD
 
         {/* Contact Info (Phone & Email) */}
         <Stack spacing={1.25} sx={{ mb: 2 }}>
@@ -1269,31 +1269,6 @@ const LeadCard = ({
                   <IconButton
                     size="small"
                     onClick={() => onAssign?.(lead)}
-=======
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          <Chip label={displayStatus} icon={statusColor.icon} size="small" sx={{ background: isDark ? (displayStatus === "Missed Leads" ? "rgba(239, 68, 68, 0.2)" : "rgba(37, 99, 235, 0.2)") : statusColor.bg, color: isDark ? (displayStatus === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color, fontWeight: 700, height: 24, fontSize: "0.7rem", border: `1px solid ${isDark ? (displayStatus === "Missed Leads" ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.4)") : statusColor.border}`, "& .MuiChip-icon": { fontSize: 14, color: isDark ? (displayStatus === "Missed Leads" ? "#fca5a5" : "#93c5fd") : statusColor.color } }} />
-        </Box>
-        <Collapse in={expanded}>
-          <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : alpha(PRIMARY_COLOR, 0.1)}` }}>
-            {(() => {
-              const assignedPerson = getAssignedPerson(lead);
-              return assignedPerson ? (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }} display="block">Assigned To</Typography>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Avatar sx={{ width: 24, height: 24, fontSize: 12, background: GRADIENT_BLUE, color: "#fff" }}>{assignedPerson.initial}</Avatar>
-                    <Typography variant="body2" sx={{ color: isDark ? "#f8fafc" : "inherit" }}>{assignedPerson.name}</Typography>
-                    <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }}>({assignedPerson.role})</Typography>
-                  </Box>
-                </Box>
-              ) : permissions.assign ? (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "text.secondary" }} display="block">Assigned To</Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => onAssign(lead)}
->>>>>>> origin/dipak
                     sx={{
                       color: isDark ? "#60a5fa" : PRIMARY_COLOR,
                       p: 0.5,
@@ -2194,7 +2169,7 @@ export const EditLeadModal = React.memo(({ open, onClose, lead, onSave, userRole
 EditLeadModal.displayName = "EditLeadModal";
 
 // ---- ASSIGN LEAD MODAL ----
-const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, isBulkAssign = false, bulkLeads = [], showSnackbar }) => {
+export const AssignLeadModal = React.memo(({ open, onClose, lead, onAssign, userRole, isBulkAssign = false, bulkLeads = [], showSnackbar }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -2672,10 +2647,10 @@ const EMPTY_PIPELINE_COUNTS = {
 const hasLeadDocuments = (lead = {}) =>
   Boolean(
     lead.uploadDocument?.url ||
-      lead.aadhaar?.url ||
-      lead.panCard?.url ||
-      lead.passbook?.url ||
-      (Array.isArray(lead.otherDocuments) && lead.otherDocuments.some((doc) => doc?.url))
+    lead.aadhaar?.url ||
+    lead.panCard?.url ||
+    lead.passbook?.url ||
+    (Array.isArray(lead.otherDocuments) && lead.otherDocuments.some((doc) => doc?.url))
   );
 
 const hasSiteSurveyData = (lead = {}) => {
@@ -2683,10 +2658,10 @@ const hasSiteSurveyData = (lead = {}) => {
   if (!siteSurvey || typeof siteSurvey !== "object") return false;
   return Boolean(
     siteSurvey.savedAt ||
-      siteSurvey.status ||
-      siteSurvey.general ||
-      siteSurvey.locationName ||
-      (Array.isArray(siteSurvey.photos) && siteSurvey.photos.length > 0)
+    siteSurvey.status ||
+    siteSurvey.general ||
+    siteSurvey.locationName ||
+    (Array.isArray(siteSurvey.photos) && siteSurvey.photos.length > 0)
   );
 };
 
@@ -2930,7 +2905,7 @@ const LeadOverview = () => {
           try {
             const followUpData = await fetchAPI(`/lead/getAll?page=1&limit=1&followUpDue=today&_ts=${ts}`);
             if (followUpData?.success) followUpToday = followUpData.result?.pagination?.total || 0;
-          } catch {}
+          } catch { }
         }
 
         setTodayFollowUpLeads(followUpLeads);
@@ -3057,22 +3032,22 @@ const LeadOverview = () => {
   const handleClearFiltersMobile = useCallback(() => { setSearchTerm(""); setStatusFilter("all"); setQuickFilter(""); setPeriod("All"); }, []);
 
   const handleViewTodayFollowUps = useCallback(() => {
-  if (todayFollowUpLeads.length === 1) {
-    const lead = todayFollowUpLeads[0];
-    navigate(`/all-leads/${lead._id}`, {
-      state: { lead, initialTab: "reminders" },
-    });
-    return;
-  }
+    if (todayFollowUpLeads.length === 1) {
+      const lead = todayFollowUpLeads[0];
+      navigate(`/all-leads/${lead._id}`, {
+        state: { lead, initialTab: "reminders" },
+      });
+      return;
+    }
 
-  setSearchTerm("");
-  setStatusFilter("all");
-  setQuickFilter("followUpToday");
-  setPeriod("All");
-  setPage(0);
-  setSelectedLeads([]);
-  setSelectAll(false);
-}, [navigate, todayFollowUpLeads]);
+    setSearchTerm("");
+    setStatusFilter("all");
+    setQuickFilter("followUpToday");
+    setPeriod("All");
+    setPage(0);
+    setSelectedLeads([]);
+    setSelectAll(false);
+  }, [navigate, todayFollowUpLeads]);
 
   const handleViewNewLeads = useCallback(() => {
     setSearchTerm("");
@@ -3143,9 +3118,15 @@ const LeadOverview = () => {
         body: JSON.stringify({
           isProject: true,
           projectType: projectDetails.projectType,
+          status: "Registration",
+          projectStage: "registration",
+          currentStage: "registration",
+          registrationStatus: "inProgress",
+          projectConvertedAt: new Date().toISOString(),
           ...(quotationCost > 0 && {
             projectSaleValue: quotationCost,
             finalPaymentCost: quotationCost,
+            finalPaymentDue: quotationCost,
           }),
         }),
       });
@@ -3680,258 +3661,276 @@ const LeadOverview = () => {
           </Stack>
         </Box>
       </Paper>
-    {/* ===== DESKTOP FILTERS ===== */}
-{!isMobile && (
-  <Card sx={{ mb: 3, borderRadius: 4, bgcolor: isDark ? "#0b101c" : "#fff", border: isDark ? "1px solid rgba(59, 130, 246, 0.15)" : `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`, boxShadow: "none" }}>
-    <CardContent sx={{ p: "16px 20px !important" }}>
+      {/* ===== DESKTOP FILTERS ===== */}
+      {!isMobile && (
+        <Card sx={{ mb: 3, borderRadius: 4, bgcolor: isDark ? "#0b101c" : "#fff", border: isDark ? "1px solid rgba(59, 130, 246, 0.15)" : `1px solid ${alpha(PRIMARY_COLOR, 0.08)}`, boxShadow: "none" }}>
+          <CardContent sx={{ p: "16px 20px !important" }}>
 
-      {/* Row 1: Search · Period pills · Status select · View toggle */}
-      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+            {/* Row 1: Search · Period pills · Status select · View toggle */}
+            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
 
-        {/* Search */}
-        <TextField
-          placeholder="Search leads by name, email, phone…"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          size="small"
-          sx={{
-            flex: 1, minWidth: 220,
-            "& .MuiOutlinedInput-root": {
-              borderRadius: 999,
-              bgcolor: isDark ? "#0e1628" : alpha("#64748b", 0.06),
-              color: isDark ? "#f8fafc" : "inherit",
-              "& fieldset": { borderColor: isDark ? "rgba(59, 130, 246, 0.2)" : alpha(PRIMARY_COLOR, 0.12) },
-              "&:hover fieldset": { borderColor: isDark ? "#2563eb" : alpha(PRIMARY_COLOR, 0.3) },
-              "&.Mui-focused fieldset": { borderColor: "#2563eb", borderWidth: 1 },
-            },
-          }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search sx={{ fontSize: 18, color: isDark ? "#64748b" : "text.secondary" }} />
-              </InputAdornment>
-            ),
-            endAdornment: searchTerm && (
-              <InputAdornment position="end">
-                <IconButton size="small" onClick={() => setSearchTerm("")} edge="end">
-                  <Close fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
+              {/* Search */}
+              <TextField
+                placeholder="Search leads by name, email, phone…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                size="small"
+                sx={{
+                  flex: 1, minWidth: 220,
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 999,
+                    bgcolor: isDark ? "#0e1628" : alpha("#64748b", 0.06),
+                    color: isDark ? "#f8fafc" : "inherit",
+                    "& fieldset": { borderColor: isDark ? "rgba(59, 130, 246, 0.2)" : alpha(PRIMARY_COLOR, 0.12) },
+                    "&:hover fieldset": { borderColor: isDark ? "#2563eb" : alpha(PRIMARY_COLOR, 0.3) },
+                    "&.Mui-focused fieldset": { borderColor: "#2563eb", borderWidth: 1 },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search sx={{ fontSize: 18, color: isDark ? "#64748b" : "text.secondary" }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchTerm && (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setSearchTerm("")} edge="end">
+                        <Close fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
 
-        {/* Period pills */}
-        <Stack direction="row" spacing={0.75}>
-          {PERIOD_OPTIONS.map((opt) => (
-            <Button
-              key={opt.value}
-              size="small"
-              onClick={() => { setPeriod(opt.value); setPage(0); }}
-              sx={{
-                borderRadius: 999,
-                px: 1.75,
-                height: 34,
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                textTransform: "none",
-                border: `1px solid ${period === opt.value ? "transparent" : isDark ? "rgba(59, 130, 246, 0.2)" : alpha(PRIMARY_COLOR, 0.14)}`,
-                background: period === opt.value ? GRADIENT_BLUE : (isDark ? "#0e1628" : alpha("#64748b", 0.06)),
-                color: period === opt.value ? "#fff" : (isDark ? "#94a3b8" : PRIMARY_COLOR),
-                boxShadow: "none",
-                "&:hover": {
-                  background: period === opt.value ? GRADIENT_BLUE : (isDark ? "rgba(59, 130, 246, 0.15)" : alpha(PRIMARY_COLOR, 0.08)),
-                  boxShadow: "none",
-                },
-              }}
-            >
-              {opt.label}
-            </Button>
-          ))}
-        </Stack>
+              {/* Period pills */}
+              <Stack direction="row" spacing={0.75}>
+                {PERIOD_OPTIONS.map((opt) => (
+                  <Button
+                    key={opt.value}
+                    size="small"
+                    onClick={() => { setPeriod(opt.value); setPage(0); }}
+                    sx={{
+                      borderRadius: 999,
+                      px: 1.75,
+                      height: 34,
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      textTransform: "none",
+                      border: `1px solid ${period === opt.value ? "transparent" : isDark ? "rgba(59, 130, 246, 0.2)" : alpha(PRIMARY_COLOR, 0.14)}`,
+                      background: period === opt.value ? GRADIENT_BLUE : (isDark ? "#0e1628" : alpha("#64748b", 0.06)),
+                      color: period === opt.value ? "#fff" : (isDark ? "#94a3b8" : PRIMARY_COLOR),
+                      boxShadow: "none",
+                      "&:hover": {
+                        background: period === opt.value ? GRADIENT_BLUE : (isDark ? "rgba(59, 130, 246, 0.15)" : alpha(PRIMARY_COLOR, 0.08)),
+                        boxShadow: "none",
+                      },
+                    }}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </Stack>
 
-        {/* Status select */}
-        <FormControl size="small" sx={{ minWidth: 170 }}>
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            displayEmpty
-            sx={{
-              borderRadius: 999,
-              bgcolor: isDark ? "#0e1628" : alpha("#64748b", 0.06),
-              color: isDark ? "#f8fafc" : "inherit",
-              fontSize: "0.8rem",
-              "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(59, 130, 246, 0.2)" : alpha(PRIMARY_COLOR, 0.12) },
-              "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "#2563eb" : alpha(PRIMARY_COLOR, 0.3) },
-              "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#2563eb", borderWidth: 1 },
-            }}
-          >
-            <MenuItem value="all">All statuses</MenuItem>
-            {LEAD_STATUS_OPTIONS.map((s) => (
-              <MenuItem key={s} value={s}>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Box sx={{ color: getStatusColor(s).color, display: "flex", fontSize: 16 }}>
-                    {getStatusColor(s).icon}
-                  </Box>
-                  {s}
-                </Box>
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+              {/* Status select */}
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  displayEmpty
+                  sx={{
+                    borderRadius: 999,
+                    bgcolor: isDark ? "#0e1628" : alpha("#64748b", 0.06),
+                    color: isDark ? "#f8fafc" : "inherit",
+                    fontSize: "0.8rem",
+                    "& .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "rgba(59, 130, 246, 0.2)" : alpha(PRIMARY_COLOR, 0.12) },
+                    "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: isDark ? "#2563eb" : alpha(PRIMARY_COLOR, 0.3) },
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#2563eb", borderWidth: 1 },
+                  }}
+                >
+                  <MenuItem value="all">All statuses</MenuItem>
+                  {LEAD_STATUS_OPTIONS.map((s) => (
+                    <MenuItem key={s} value={s}>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Box sx={{ color: getStatusColor(s).color, display: "flex", fontSize: 16 }}>
+                          {getStatusColor(s).icon}
+                        </Box>
+                        {s}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-        {/* View toggle + refresh */}
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          <Tooltip title="Table view">
-            <IconButton
-              size="small"
-              onClick={() => setViewMode("table")}
-              sx={{
-                width: 34, height: 34, borderRadius: 2,
-                bgcolor: viewMode === "table" ? alpha(PRIMARY_COLOR, 0.1) : alpha("#64748b", 0.06),
-                color: viewMode === "table" ? PRIMARY_COLOR : "text.secondary",
-                border: `0.5px solid ${viewMode === "table" ? alpha(PRIMARY_COLOR, 0.2) : alpha("#64748b", 0.12)}`,
-              }}
-            >
-              <TableChart sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Grid view">
-            <IconButton
-              size="small"
-              onClick={() => setViewMode("grid")}
-              sx={{
-                width: 34, height: 34, borderRadius: 2,
-                bgcolor: viewMode === "grid" ? alpha(PRIMARY_COLOR, 0.1) : alpha("#64748b", 0.06),
-                color: viewMode === "grid" ? PRIMARY_COLOR : "text.secondary",
-                border: `0.5px solid ${viewMode === "grid" ? alpha(PRIMARY_COLOR, 0.2) : alpha("#64748b", 0.12)}`,
-              }}
-            >
-              <GridView sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-          <Box sx={{ width: "1px", height: 24, bgcolor: alpha("#64748b", 0.15), mx: 0.5 }} />
-          <Tooltip title="Refresh">
-            <IconButton size="small" onClick={fetchLeads}
-              sx={{ width: 34, height: 34, borderRadius: 2, bgcolor: alpha("#64748b", 0.06), border: `0.5px solid ${alpha("#64748b", 0.12)}` }}>
-              <Refresh sx={{ fontSize: 18, color: "text.secondary" }} />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      </Stack>
+              {/* View toggle + refresh */}
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <Tooltip title="Table view">
+                  <IconButton
+                    size="small"
+                    onClick={() => setViewMode("table")}
+                    sx={{
+                      width: 34, height: 34, borderRadius: 2,
+                      bgcolor: viewMode === "table" ? alpha(PRIMARY_COLOR, 0.1) : alpha("#64748b", 0.06),
+                      color: viewMode === "table" ? PRIMARY_COLOR : "text.secondary",
+                      border: `0.5px solid ${viewMode === "table" ? alpha(PRIMARY_COLOR, 0.2) : alpha("#64748b", 0.12)}`,
+                    }}
+                  >
+                    <TableChart sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Grid view">
+                  <IconButton
+                    size="small"
+                    onClick={() => setViewMode("grid")}
+                    sx={{
+                      width: 34, height: 34, borderRadius: 2,
+                      bgcolor: viewMode === "grid" ? alpha(PRIMARY_COLOR, 0.1) : alpha("#64748b", 0.06),
+                      color: viewMode === "grid" ? PRIMARY_COLOR : "text.secondary",
+                      border: `0.5px solid ${viewMode === "grid" ? alpha(PRIMARY_COLOR, 0.2) : alpha("#64748b", 0.12)}`,
+                    }}
+                  >
+                    <GridView sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+                <Box sx={{ width: "1px", height: 24, bgcolor: alpha("#64748b", 0.15), mx: 0.5 }} />
+                <Tooltip title="Refresh">
+                  <IconButton size="small" onClick={fetchLeads}
+                    sx={{ width: 34, height: 34, borderRadius: 2, bgcolor: alpha("#64748b", 0.06), border: `0.5px solid ${alpha("#64748b", 0.12)}` }}>
+                    <Refresh sx={{ fontSize: 18, color: "text.secondary" }} />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            </Stack>
 
-      {/* Row 2: Active filter chips */}
-      {activeFilterCount > 0 && (
-        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap"
-          sx={{ mt: 1.5, pt: 1.5, borderTop: `0.5px solid ${alpha("#64748b", 0.1)}` }}>
-          <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
-            Filters:
-          </Typography>
-          {searchTerm && (
-            <Chip
-              label={`Search: ${searchTerm}`}
-              size="small"
-              onDelete={() => setSearchTerm("")}
-              sx={{ height: 26, fontSize: "0.72rem", bgcolor: "#eff6ff", color: PRIMARY_COLOR,
-                border: `0.5px solid ${alpha(PRIMARY_COLOR, 0.2)}`, "& .MuiChip-deleteIcon": { color: alpha(PRIMARY_COLOR, 0.5) } }}
-            />
-          )}
-          {statusFilter !== "all" && (
-            <Chip
-              label={`Status: ${statusFilter}`}
-              size="small"
-              onDelete={() => setStatusFilter("all")}
-              sx={{ height: 26, fontSize: "0.72rem", bgcolor: "#eff6ff", color: PRIMARY_COLOR,
-                border: `0.5px solid ${alpha(PRIMARY_COLOR, 0.2)}`, "& .MuiChip-deleteIcon": { color: alpha(PRIMARY_COLOR, 0.5) } }}
-            />
-          )}
-          {period !== "All" && (
-            <Chip
-              label={`Period: ${period}`}
-              size="small"
-              onDelete={() => setPeriod("All")}
-              sx={{ height: 26, fontSize: "0.72rem", bgcolor: "#eff6ff", color: PRIMARY_COLOR,
-                border: `0.5px solid ${alpha(PRIMARY_COLOR, 0.2)}`, "& .MuiChip-deleteIcon": { color: alpha(PRIMARY_COLOR, 0.5) } }}
-            />
-          )}
-          {quickFilter === "followUpToday" && (
-            <Chip
-              label="Follow-up: Today"
-              size="small"
-              onDelete={() => setQuickFilter("")}
-              sx={{ height: 26, fontSize: "0.72rem", bgcolor: "#fff7ed", color: "#c2410c",
-                border: `0.5px solid ${alpha("#f97316", 0.25)}`, "& .MuiChip-deleteIcon": { color: alpha("#c2410c", 0.5) } }}
-            />
-          )}
-          {selectedPipelineStage && (
-            <Chip
-              label={`Pipeline: ${selectedPipelineStage.label}`}
-              size="small"
-              onDelete={() => setQuickFilter("")}
-              sx={{ height: 26, fontSize: "0.72rem", bgcolor: "#eff6ff", color: PRIMARY_COLOR,
-                border: `0.5px solid ${alpha(PRIMARY_COLOR, 0.2)}`, "& .MuiChip-deleteIcon": { color: alpha(PRIMARY_COLOR, 0.5) } }}
-            />
-          )}
-          <Chip
-            label="Clear all"
-            size="small"
-            variant="outlined"
-            onClick={handleResetFilters}
-            sx={{ height: 26, fontSize: "0.72rem", borderColor: alpha(PRIMARY_COLOR, 0.3), color: PRIMARY_COLOR,
-              cursor: "pointer", "&:hover": { bgcolor: alpha(PRIMARY_COLOR, 0.05) } }}
-          />
-        </Stack>
+            {/* Row 2: Active filter chips */}
+            {activeFilterCount > 0 && (
+              <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap"
+                sx={{ mt: 1.5, pt: 1.5, borderTop: `0.5px solid ${alpha("#64748b", 0.1)}` }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                  Filters:
+                </Typography>
+                {searchTerm && (
+                  <Chip
+                    label={`Search: ${searchTerm}`}
+                    size="small"
+                    onDelete={() => setSearchTerm("")}
+                    sx={{
+                      height: 26, fontSize: "0.72rem", bgcolor: "#eff6ff", color: PRIMARY_COLOR,
+                      border: `0.5px solid ${alpha(PRIMARY_COLOR, 0.2)}`, "& .MuiChip-deleteIcon": { color: alpha(PRIMARY_COLOR, 0.5) }
+                    }}
+                  />
+                )}
+                {statusFilter !== "all" && (
+                  <Chip
+                    label={`Status: ${statusFilter}`}
+                    size="small"
+                    onDelete={() => setStatusFilter("all")}
+                    sx={{
+                      height: 26, fontSize: "0.72rem", bgcolor: "#eff6ff", color: PRIMARY_COLOR,
+                      border: `0.5px solid ${alpha(PRIMARY_COLOR, 0.2)}`, "& .MuiChip-deleteIcon": { color: alpha(PRIMARY_COLOR, 0.5) }
+                    }}
+                  />
+                )}
+                {period !== "All" && (
+                  <Chip
+                    label={`Period: ${period}`}
+                    size="small"
+                    onDelete={() => setPeriod("All")}
+                    sx={{
+                      height: 26, fontSize: "0.72rem", bgcolor: "#eff6ff", color: PRIMARY_COLOR,
+                      border: `0.5px solid ${alpha(PRIMARY_COLOR, 0.2)}`, "& .MuiChip-deleteIcon": { color: alpha(PRIMARY_COLOR, 0.5) }
+                    }}
+                  />
+                )}
+                {quickFilter === "followUpToday" && (
+                  <Chip
+                    label="Follow-up: Today"
+                    size="small"
+                    onDelete={() => setQuickFilter("")}
+                    sx={{
+                      height: 26, fontSize: "0.72rem", bgcolor: "#fff7ed", color: "#c2410c",
+                      border: `0.5px solid ${alpha("#f97316", 0.25)}`, "& .MuiChip-deleteIcon": { color: alpha("#c2410c", 0.5) }
+                    }}
+                  />
+                )}
+                {selectedPipelineStage && (
+                  <Chip
+                    label={`Pipeline: ${selectedPipelineStage.label}`}
+                    size="small"
+                    onDelete={() => setQuickFilter("")}
+                    sx={{
+                      height: 26, fontSize: "0.72rem", bgcolor: "#eff6ff", color: PRIMARY_COLOR,
+                      border: `0.5px solid ${alpha(PRIMARY_COLOR, 0.2)}`, "& .MuiChip-deleteIcon": { color: alpha(PRIMARY_COLOR, 0.5) }
+                    }}
+                  />
+                )}
+                <Chip
+                  label="Clear all"
+                  size="small"
+                  variant="outlined"
+                  onClick={handleResetFilters}
+                  sx={{
+                    height: 26, fontSize: "0.72rem", borderColor: alpha(PRIMARY_COLOR, 0.3), color: PRIMARY_COLOR,
+                    cursor: "pointer", "&:hover": { bgcolor: alpha(PRIMARY_COLOR, 0.05) }
+                  }}
+                />
+              </Stack>
+            )}
+
+            {/* Row 3: Bulk action bar */}
+            {selectedCount > 0 && (
+              <Box sx={{
+                mt: 1.5, px: 2, py: 1.25, borderRadius: 2,
+                bgcolor: "#eff6ff",
+                border: `1px solid ${alpha(PRIMARY_COLOR, 0.14)}`,
+                display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1.5,
+              }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="body2" fontWeight={600} color={PRIMARY_COLOR}>
+                    {selectedCount} lead{selectedCount !== 1 ? "s" : ""} selected
+                  </Typography>
+                  <Button size="small" onClick={handleClearSelection} startIcon={<Clear sx={{ fontSize: 14 }} />}
+                    sx={{ color: "text.secondary", minWidth: 0, textTransform: "none", fontSize: "0.75rem" }}>
+                    Clear
+                  </Button>
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  {permissions.assign && (
+                    <Button size="small" variant="outlined" startIcon={<AssignmentInd sx={{ fontSize: 15 }} />}
+                      onClick={openBulkAssignDialog}
+                      sx={{
+                        height: 30, fontSize: "0.75rem", borderRadius: 1.5, borderColor: alpha(PRIMARY_COLOR, 0.3),
+                        color: PRIMARY_COLOR, textTransform: "none", "&:hover": { borderColor: PRIMARY_COLOR }
+                      }}>
+                      Assign selected
+                    </Button>
+                  )}
+                  {permissions.export && (
+                    <Button size="small" variant="outlined" startIcon={<Send sx={{ fontSize: 15 }} />}
+                      onClick={handleExport}
+                      sx={{
+                        height: 30, fontSize: "0.75rem", borderRadius: 1.5, borderColor: alpha(PRIMARY_COLOR, 0.3),
+                        color: PRIMARY_COLOR, textTransform: "none", "&:hover": { borderColor: PRIMARY_COLOR }
+                      }}>
+                      Export
+                    </Button>
+                  )}
+                  {permissions.delete && (
+                    <Button size="small" variant="outlined" startIcon={<Delete sx={{ fontSize: 15 }} />}
+                      onClick={openDeleteDialog}
+                      sx={{
+                        height: 30, fontSize: "0.75rem", borderRadius: 1.5, borderColor: alpha("#ef4444", 0.3),
+                        color: "#dc2626", textTransform: "none", "&:hover": { borderColor: "#ef4444", bgcolor: alpha("#ef4444", 0.04) }
+                      }}>
+                      Delete selected
+                    </Button>
+                  )}
+                </Stack>
+              </Box>
+            )}
+
+          </CardContent>
+        </Card>
       )}
-
-      {/* Row 3: Bulk action bar */}
-      {selectedCount > 0 && (
-        <Box sx={{
-          mt: 1.5, px: 2, py: 1.25, borderRadius: 2,
-          bgcolor: "#eff6ff",
-          border: `1px solid ${alpha(PRIMARY_COLOR, 0.14)}`,
-          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1.5,
-        }}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="body2" fontWeight={600} color={PRIMARY_COLOR}>
-              {selectedCount} lead{selectedCount !== 1 ? "s" : ""} selected
-            </Typography>
-            <Button size="small" onClick={handleClearSelection} startIcon={<Clear sx={{ fontSize: 14 }} />}
-              sx={{ color: "text.secondary", minWidth: 0, textTransform: "none", fontSize: "0.75rem" }}>
-              Clear
-            </Button>
-          </Stack>
-          <Stack direction="row" spacing={1}>
-            {permissions.assign && (
-              <Button size="small" variant="outlined" startIcon={<AssignmentInd sx={{ fontSize: 15 }} />}
-                onClick={openBulkAssignDialog}
-                sx={{ height: 30, fontSize: "0.75rem", borderRadius: 1.5, borderColor: alpha(PRIMARY_COLOR, 0.3),
-                  color: PRIMARY_COLOR, textTransform: "none", "&:hover": { borderColor: PRIMARY_COLOR } }}>
-                Assign selected
-              </Button>
-            )}
-            {permissions.export && (
-              <Button size="small" variant="outlined" startIcon={<Send sx={{ fontSize: 15 }} />}
-                onClick={handleExport}
-                sx={{ height: 30, fontSize: "0.75rem", borderRadius: 1.5, borderColor: alpha(PRIMARY_COLOR, 0.3),
-                  color: PRIMARY_COLOR, textTransform: "none", "&:hover": { borderColor: PRIMARY_COLOR } }}>
-                Export
-              </Button>
-            )}
-            {permissions.delete && (
-              <Button size="small" variant="outlined" startIcon={<Delete sx={{ fontSize: 15 }} />}
-                onClick={openDeleteDialog}
-                sx={{ height: 30, fontSize: "0.75rem", borderRadius: 1.5, borderColor: alpha("#ef4444", 0.3),
-                  color: "#dc2626", textTransform: "none", "&:hover": { borderColor: "#ef4444", bgcolor: alpha("#ef4444", 0.04) } }}>
-                Delete selected
-              </Button>
-            )}
-          </Stack>
-        </Box>
-      )}
-
-    </CardContent>
-  </Card>
-)}
 
       {/* Mobile Search */}
       {isMobile && (
@@ -3979,7 +3978,7 @@ const LeadOverview = () => {
                 <TableBody>
                   {loading ? <TableRow><TableCell colSpan={7}><LoadingSkeleton count={rowsPerPage} /></TableCell></TableRow>
                     : leads.length === 0 ? <TableRow><TableCell colSpan={7}><EmptyState title={hasFilters ? "No matching leads found" : "No leads yet"} description={hasFilters ? "Try adjusting your filters" : "Get started by creating your first lead"} icon={hasFilters ? Search : Person} action={hasFilters && <Button onClick={handleResetFilters} variant="outlined" sx={{ borderColor: PRIMARY_COLOR, color: PRIMARY_COLOR }}>Clear Filters</Button>} /></TableCell></TableRow>
-                    : leads.map(renderTableRow)}
+                      : leads.map(renderTableRow)}
                 </TableBody>
               </Table>
             </TableContainer>

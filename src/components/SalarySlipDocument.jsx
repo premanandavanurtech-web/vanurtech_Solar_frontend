@@ -171,7 +171,8 @@ export const SalarySlipView = React.forwardRef(function SalarySlipView({ slipDat
   const designation = slipData.designation || slipData.role || "Technical Incharge";
   const department = slipData.department || "Technical";
   const employmentType = slipData.employmentType || "Full-time";
-  const joiningDate = slipData.joiningDate || slipData.dateOfJoining || "6 Aug 2026";
+  const rawJoin = slipData.joiningDate || slipData.dateOfJoining;
+  const joiningDate = (rawJoin && rawJoin !== "—") ? rawJoin : (slipData.user?.createdAt ? new Date(slipData.user.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "03 Oct 2026");
   const payPeriod = slipData.payPeriod || periodInfo.payPeriod;
   const rawBank = slipData.bankName || slipData.bank || "State Bank of India";
   const bankName = rawBank.includes("(") ? rawBank.split("(")[0].trim() : rawBank;
@@ -182,12 +183,15 @@ export const SalarySlipView = React.forwardRef(function SalarySlipView({ slipDat
 
   // Real Attendance details starting from 1st of month
   const rawAtt = slipData.attendance || {};
-  const totalDays = rawAtt.totalDays || slipData.totalDays || periodInfo.totalDays;
-  const absentDays = rawAtt.absentDays !== undefined ? rawAtt.absentDays : (slipData.absentDays !== undefined ? slipData.absentDays : 1);
-  const presentDays = rawAtt.presentDays !== undefined ? rawAtt.presentDays : (slipData.presentDays !== undefined ? slipData.presentDays : Math.max(0, totalDays - absentDays));
-  const leavePaid = rawAtt.leavePaid || slipData.leavePaid || 0;
-  const leaveUnpaid = rawAtt.leaveUnpaid || slipData.leaveUnpaid || 0;
-  const holidays = rawAtt.holidays || slipData.holidays || 0;
+  // Always use exact calendar total days for this pay period month (e.g. 30 for Nov, 31 for Oct)
+  const totalDays = periodInfo.totalDays || rawAtt.totalDays || slipData.totalDays || 30;
+  const absentDays = Math.max(0, Math.min(totalDays, Number(rawAtt.absentDays !== undefined ? rawAtt.absentDays : (slipData.absentDays !== undefined ? slipData.absentDays : (slipData.lopDays || 0)))));
+  const rawPresent = rawAtt.presentDays !== undefined ? rawAtt.presentDays : (slipData.presentDays !== undefined ? slipData.presentDays : (totalDays - absentDays));
+  // Present days can NEVER exceed total days or (total days - absent days)
+  const presentDays = Math.max(0, Math.min(totalDays - absentDays, Number(rawPresent)));
+  const leavePaid = Number(rawAtt.leavePaid || slipData.leavePaid || 0);
+  const leaveUnpaid = Number(rawAtt.leaveUnpaid || slipData.leaveUnpaid || 0);
+  const holidays = Number(rawAtt.holidays || slipData.holidays || 0);
 
   const attendance = {
     totalDays,
@@ -233,7 +237,7 @@ export const SalarySlipView = React.forwardRef(function SalarySlipView({ slipDat
   // Deductions Items
   const lopAmount = (slipData.lopAmount !== undefined) 
     ? slipData.lopAmount 
-    : (attendance.absentDays > 0 ? Number(((totalEarnings / (attendance.totalDays || 31)) * attendance.absentDays).toFixed(2)) : 0);
+    : (attendance.absentDays > 0 ? Number(((totalEarnings / (attendance.totalDays || 30)) * attendance.absentDays).toFixed(2)) : 0);
 
   let deductionsList = [];
   if (Array.isArray(slipData.deductions) && slipData.deductions.length > 0) {
@@ -251,8 +255,22 @@ export const SalarySlipView = React.forwardRef(function SalarySlipView({ slipDat
       { component: "Provident Fund (PF)", amount: Number(String(slipData.pf || 1800).replace(/,/g, "")) || 1800 },
       { component: "Professional Tax (PT)", amount: Number(String(slipData.pt || 200).replace(/,/g, "")) || 200 },
       { component: "TDS (Income Tax)", amount: Number(String(slipData.tds || 1000).replace(/,/g, "")) || 1000 },
-      ...(attendance.absentDays > 0 ? [{ component: `Loss of Pay (LOP) - ${attendance.absentDays} Day`, amount: lopAmount || 1354.84 }] : []),
     ];
+  }
+
+  // Ensure Loss of Pay (LOP) deduction is included if employee has absent days
+  if (
+    attendance.absentDays > 0 &&
+    lopAmount > 0 &&
+    !deductionsList.some((d) => {
+      const c = (d.component || "").toLowerCase();
+      return c.includes("loss of pay") || c.includes("lop");
+    })
+  ) {
+    deductionsList.push({
+      component: `Loss of Pay (LOP) - ${attendance.absentDays} Day${attendance.absentDays > 1 ? "s" : ""}`,
+      amount: lopAmount,
+    });
   }
 
   const totalDeductions = deductionsList.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);

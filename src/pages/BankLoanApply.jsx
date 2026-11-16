@@ -243,6 +243,22 @@ const ROLE_CONFIG = {
     color: PRIMARY,
     icon: <AdminPanelSettings sx={{ fontSize: 16 }} />,
   },
+  ZSM: {
+    label: "Operation Lead",
+    color: PRIMARY,
+    icon: <WorkspacePremium sx={{ fontSize: 16 }} />,
+  },
+  Incharge: {
+    label: "Incharge",
+    color: PRIMARY,
+    icon: <SupervisorAccount sx={{ fontSize: 16 }} />,
+  },
+  TEAM: {
+    label: "Team Member",
+    color: PRIMARY,
+    icon: <Groups sx={{ fontSize: 16 }} />,
+  },
+};
 
 const getUserPermissions = (userRole) => ({
   canView: true,

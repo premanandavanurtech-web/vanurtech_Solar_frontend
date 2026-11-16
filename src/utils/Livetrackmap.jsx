@@ -481,11 +481,7 @@ export default function LiveTrackingMap({
   visits          = [],
   preferVisitTrail = false,
   punchInPopupTrigger = 0,
-<<<<<<< HEAD
   trips           = [],
-=======
-  activeTrip       = null,
->>>>>>> origin/dipak
 }) {
   const mapDivRef  = useRef(null);
   const gMapRef    = useRef(null);
@@ -1979,18 +1975,8 @@ export default function LiveTrackingMap({
       const last = allPtsRef.current[allPtsRef.current.length - 1];
       if (last) {
         const dist = distMetres(last.lat, last.lng, data.lat, data.lng);
-<<<<<<< HEAD
         // Only append to GPS trail line if user has moved at least 25 meters outside stationary noise
         if (dist < 25 || dist > MAX_LIVE_SEGMENT_METRES) {
-=======
-        const minMoveRequired = routeMode === ROUTE_MODE_RAW
-          ? 3
-          : getEffectiveMoveThreshold(data.accuracy, last.accuracy);
-        if (dist < minMoveRequired || dist > MAX_LIVE_SEGMENT_METRES) {
-          if (liveMkRef.current && dist <= MAX_LIVE_SEGMENT_METRES) {
-            animateMarkerSmooth(liveMkRef.current, data.lat, data.lng, 600);
-          }
->>>>>>> origin/dipak
           return;
         }
       }

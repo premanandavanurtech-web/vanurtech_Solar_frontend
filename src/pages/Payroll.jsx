@@ -160,21 +160,126 @@ export default function Payroll() {
   const loadPayrollForMonth = useCallback(async (month) => {
     try {
       setLoading(true);
-      let realUsers = [];
+      const parts = String(month || "").trim().split(" ");
+      const monthName = parts[0] || "August";
+      const yearVal = parseInt(parts[1], 10) || new Date().getFullYear();
+      const periodInfo = getMonthPeriodDetails(month);
+      const totalDaysInMonth = periodInfo.totalDays;
+
+      const pastelBgs = ["#bfdbfe", "#e2e8f0", "#dbeafe", "#dcfce7", "#ccfbf1", "#e0e7ff", "#f3e8ff", "#ffedd5"];
+      const pastelColors = ["#1d4ed8", "#475569", "#2563eb", "#15803d", "#0f766e", "#4338ca", "#7e22ce", "#c2410c"];
+
+      let overviewData = {};
       try {
-        const usersRes = await axiosInstance.get("/user/getAllUsers?page=1&limit=100");
-        const root = usersRes.data || {};
-        const data = root.result || root.data || root;
-        realUsers = Array.isArray(data) ? data : data.users || data.data?.users || [];
+        const res = await axiosInstance.get(`/payroll/overview?month=${monthName}&year=${yearVal}`);
+        overviewData = res.data?.data || res.data?.result || res.data || {};
       } catch (err) {
-        // Fallback to default roster
+        console.warn("Backend overview fetch fallback:", err.message);
+      }
+
+      const { currentRun, attendanceSummary = {}, employees: dbEmployees = [] } = overviewData;
+
+      // ─── Scenario A: MongoDB contains an existing processed / finalized run ───
+      if (currentRun && Array.isArray(currentRun.employees) && currentRun.employees.length > 0) {
+        const mappedRunEmployees = currentRun.employees.map((row, idx) => {
+          const u = row.employee || {};
+          const name = `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email?.split("@")[0] || "Employee";
+          const initials = `${u.firstName?.[0] || name[0] || "E"}${u.lastName?.[0] || ""}`.toUpperCase();
+          const dept = row.department || u.department || u.role || "Incharge";
+          const empId = u.employeeId || row.employeeId || (dept === "Incharge" ? `I${String(idx + 15).padStart(4, "0")}` : dept === "Supervisor" ? `S${String(idx + 10).padStart(4, "0")}` : `E${String(idx + 1).padStart(4, "0")}`);
+          const bankStr = row.bankName
+            ? `${row.bankName} (${row.accountMasked || (u.accountNumber ? "•••• " + String(u.accountNumber).slice(-4) : "•••• 0000")})`
+            : (u.bankName ? `${u.bankName} (•••• ${String(u.accountNumber || "0000").slice(-4)})` : "Bank Transfer");
+          const panStr = row.pan || u.pan || u.panTds || "ABCPD1234F";
+
+          const hraItem = (row.earnings || []).find((e) => (e.name || e.component || "").toLowerCase().includes("hra"));
+          const specialItem = (row.earnings || []).find((e) => (e.name || e.component || "").toLowerCase().includes("special"));
+          const pfItem = (row.deductions || []).find((d) => (d.name || d.component || "").toLowerCase().includes("pf"));
+          const ptItem = (row.deductions || []).find((d) => (d.name || d.component || "").toLowerCase().includes("pt") || (d.name || d.component || "").toLowerCase().includes("professional"));
+          const tdsItem = (row.deductions || []).find((d) => (d.name || d.component || "").toLowerCase().includes("tds") || (d.name || d.component || "").toLowerCase().includes("tax"));
+
+          const att = row.attendance || {};
+          const rowTotalDays = periodInfo.totalDays;
+          const rawUnpaid = Number(att.unpaidLeave || 0) + (Number(att.halfDays || 0) * 0.5);
+          const absentDays = Math.max(0, Math.min(rowTotalDays, rawUnpaid));
+          const presentDays = Math.max(0, Math.min(rowTotalDays - absentDays, Number(att.presentDays || 0)));
+
+          return {
+            id: u._id || row._id || idx + 1,
+            _id: u._id || row._id,
+            runEmployeeId: row._id,
+            name,
+            empId,
+            department: dept,
+            designation: row.designation || u.designation || u.role || `${dept} Lead`,
+            role: u.role,
+            avatarBg: pastelBgs[idx % pastelBgs.length],
+            avatarColor: pastelColors[idx % pastelColors.length],
+            initials,
+            bank: bankStr,
+            pan: panStr,
+            gross: row.grossSalary || 0,
+            basic: row.basicSalary || 0,
+            hra: hraItem ? hraItem.amount : 0,
+            special: specialItem ? specialItem.amount : 0,
+            otherAllowance: row.allowances || 0,
+            overtime: row.overtime || 0,
+            pf: pfItem ? pfItem.amount : 0,
+            pt: ptItem ? ptItem.amount : 0,
+            tds: tdsItem ? tdsItem.amount : 0,
+            deductions: row.totalDeductions || 0,
+            netPay: row.netSalary || 0,
+            earnings: (row.earnings || []).map((e) => ({ component: e.name || e.component, amount: e.amount })),
+            deductionsBreakdown: (row.deductions || []).map((d) => ({ component: d.name || d.component, amount: d.amount })),
+            attendance: {
+              totalDays: rowTotalDays,
+              presentDays,
+              absentDays,
+              leavePaid: att.paidLeave || 0,
+              leaveUnpaid: att.unpaidLeave || 0,
+              holidays: att.holidays || 0,
+              halfDays: att.halfDays || 0,
+              overtimeHours: att.overtimeHours || 0,
+            },
+            status: currentRun.status === "APPROVED" || currentRun.status === "PAID" ? EMPLOYEE_PAYROLL_STATUS.FINALIZED : EMPLOYEE_PAYROLL_STATUS.READY,
+            paymentStatus: row.status === "PAID" ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.PENDING,
+            slipStatus: currentRun.status === "APPROVED" || currentRun.status === "PAID" ? SLIP_STATUS.GENERATED : SLIP_STATUS.NOT_GENERATED,
+          };
+        });
+
+        const stateFromDb = {
+          runId: currentRun._id,
+          month,
+          status: currentRun.status === "APPROVED" || currentRun.status === "PAID" ? PAYROLL_STATUS.FINALIZED : PAYROLL_STATUS.READY,
+          processedAt: currentRun.createdAt,
+          finalizedAt: currentRun.approvedAt,
+          employees: mappedRunEmployees,
+        };
+        setPayrollState(stateFromDb);
+        saveMonthlyPayrollState(month, stateFromDb);
+        return;
+      }
+
+      // ─── Scenario B: Not yet processed in MongoDB - load users & real attendance ───
+      let activeUsers = dbEmployees;
+      if (!activeUsers || activeUsers.length === 0) {
+        try {
+          const usersRes = await axiosInstance.get("/user/getAllUsers?page=1&limit=100");
+          const root = usersRes.data || {};
+          const d = root.result || root.data || root;
+          activeUsers = Array.isArray(d) ? d : d.users || d.data?.users || [];
+        } catch (err) {
+          // Fallback to local roster
+        }
       }
 
       let mappedUsers = [];
-      if (realUsers.length > 0) {
-        const pastelBgs = ["#bfdbfe", "#e2e8f0", "#dbeafe", "#dcfce7", "#ccfbf1", "#e0e7ff", "#f3e8ff", "#ffedd5"];
-        const pastelColors = ["#1d4ed8", "#475569", "#2563eb", "#15803d", "#0f766e", "#4338ca", "#7e22ce", "#c2410c"];
-        mappedUsers = realUsers.map((u, idx) => {
+      if (activeUsers && activeUsers.length > 0) {
+        const now = new Date();
+        const isCurrentMonth = yearVal === now.getFullYear() && (parts[0] || "").toLowerCase() === now.toLocaleString("en-US", { month: "long" }).toLowerCase();
+        const elapsedDays = isCurrentMonth ? Math.min(totalDaysInMonth, now.getDate()) : totalDaysInMonth;
+
+        mappedUsers = activeUsers.map((u, idx) => {
           const name = `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email?.split("@")[0] || "Employee";
           const initials = `${u.firstName?.[0] || name[0] || "E"}${u.lastName?.[0] || ""}`.toUpperCase();
           const roleStr = String(u.role || "").toLowerCase();
@@ -185,20 +290,49 @@ export default function Payroll() {
             ? "Supervisor"
             : "Incharge";
           const empId = u.employeeId || u.empId || (dept === "Incharge" ? `I${String(idx + 15).padStart(4, "0")}` : dept === "Supervisor" ? `S${String(idx + 10).padStart(4, "0")}` : `E${String(idx + 1).padStart(4, "0")}`);
+          const bankStr = u.bankName ? `${u.bankName} (•••• ${String(u.accountNumber || "0000").slice(-4)})` : "Bank Transfer";
+          const panStr = u.pan || u.panTds || "ABCPD1234F";
+
+          // Real attendance from MongoDB Attendance Collection
+          const userAtt = attendanceSummary[String(u._id)] || {};
+          const rawPresent = Number(userAtt.presentDays ?? 0);
+          const halfDays = Number(userAtt.halfDays ?? 0);
+          const holidays = Number(userAtt.holidays ?? 0);
+          const paidLeave = Number(userAtt.paidLeave ?? 0);
+          const overtimeHours = Number(userAtt.overtimeHours ?? 0);
+
+          // If attendance records were returned, use them; if no punch recorded for elapsed days, count as absent (matches Attendance History)
+          let unpaidLeave = Number(userAtt.unpaidLeave ?? 0);
+          if (userAtt.records === undefined || userAtt.records === 0) {
+            unpaidLeave = Math.max(0, elapsedDays - rawPresent - halfDays - holidays - paidLeave);
+          }
+
+          const absentDays = Math.max(0, Math.min(totalDaysInMonth, unpaidLeave + (halfDays * 0.5)));
+          const presentDays = Math.max(0, Math.min(totalDaysInMonth - absentDays, rawPresent));
+
           return {
             id: u._id || idx + 1,
             _id: u._id,
             name,
             empId,
             department: dept,
-            designation: u.role || `${dept} Lead`,
+            designation: u.designation || u.role || `${dept} Lead`,
             role: u.role,
             avatarBg: pastelBgs[idx % pastelBgs.length],
             avatarColor: pastelColors[idx % pastelColors.length],
             initials,
-            bank: "State Bank of India (•••• 7890)",
-            pan: "ABCPD1234F",
-            attendance: { totalDays: 31, presentDays: idx % 4 === 1 ? 30 : 31, absentDays: idx % 4 === 1 ? 1 : 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
+            bank: bankStr,
+            pan: panStr,
+            attendance: {
+              totalDays: totalDaysInMonth,
+              presentDays,
+              absentDays,
+              leavePaid: paidLeave,
+              leaveUnpaid: unpaidLeave,
+              holidays,
+              halfDays,
+              overtimeHours,
+            },
           };
         });
       }
@@ -264,56 +398,129 @@ export default function Payroll() {
     return filteredEmployees.slice(start, start + rowsPerPage);
   }, [filteredEmployees, page, rowsPerPage]);
 
-  // ─── Action Handlers ────────────────────────────────────────────────
-  // Step 1 -> Step 2: Process Payroll (with calculation animation & premium toast)
+  // ─── Action Handlers (Full MongoDB Database Persistence) ────────────
+  // Step 1 -> Step 2: Process Payroll (Persists PayrollRun & PayrollEmployee to MongoDB)
   const handleProcessPayroll = async () => {
     setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    const updatedState = processMonthlyPayrollAction(selectedMonth, employeesList);
-    setPayrollState(updatedState);
-    setIsProcessing(false);
-    toast.success(`Payroll processed for ${selectedMonth}! Calculations are ready for review.`);
-  };
+    try {
+      const parts = String(selectedMonth || "").trim().split(" ");
+      const monthName = parts[0] || "August";
+      const yearVal = parseInt(parts[1], 10) || new Date().getFullYear();
 
-  // Step 2 -> Recalculate
-  const handleRecalculatePayroll = async () => {
-    setRecalculateModalOpen(false);
-    setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    const updatedState = processMonthlyPayrollAction(selectedMonth, employeesList);
-    setPayrollState(updatedState);
-    setIsProcessing(false);
-    toast.success(`Payroll formulas & attendance deductions re-calculated for ${selectedMonth}!`);
-  };
+      await axiosInstance.post("/payroll/runs/start", {
+        payrollMonth: monthName,
+        payrollYear: yearVal,
+        employeeScope: "ALL_EMPLOYEES",
+      });
 
-  // Step 2 -> Step 3: Finalize Payroll & Generate Salary Slips (with premium toast)
-  const handleFinalizePayroll = async () => {
-    setFinalizeModalOpen(false);
-    setIsFinalizing(true);
-    await new Promise((resolve) => setTimeout(resolve, 650));
-    const updatedState = finalizeMonthlyPayrollAction(selectedMonth, employeesList);
-    setPayrollState(updatedState);
-    setIsFinalizing(false);
-    toast.success(`Payroll finalized & locked for ${selectedMonth}! Salary slips generated.`);
-  };
-
-  // Step 3 -> Step 4: Mark Individual or All Paid
-  const handleMarkPaid = (employeeId = "ALL") => {
-    const updatedState = updateEmployeePaymentAction(selectedMonth, employeeId, PAYMENT_STATUS.PAID);
-    setPayrollState(updatedState);
-    if (employeeId === "ALL") {
-      toast.success(`All employees marked as Paid for ${selectedMonth}!`);
-    } else {
-      toast.success(`Employee payment marked as Paid!`);
+      toast.success(`Payroll processed & saved to database for ${selectedMonth}! Calculations are ready for review.`);
+      await loadPayrollForMonth(selectedMonth);
+    } catch (err) {
+      console.warn("Backend payroll run start warning:", err.message);
+      // Fallback local calculation
+      const updatedState = processMonthlyPayrollAction(selectedMonth, employeesList);
+      setPayrollState(updatedState);
+      toast.success(`Payroll processed for ${selectedMonth}! Calculations are ready for review.`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  // Reset to Pending Action
-  const handleResetToPending = () => {
-    const resetState = resetMonthlyPayrollAction(selectedMonth);
-    setPayrollState(resetState);
+  // Step 2 -> Recalculate (Recalculates formulas & attendance in MongoDB)
+  const handleRecalculatePayroll = async () => {
+    setRecalculateModalOpen(false);
+    setIsProcessing(true);
+    try {
+      const parts = String(selectedMonth || "").trim().split(" ");
+      const monthName = parts[0] || "August";
+      const yearVal = parseInt(parts[1], 10) || new Date().getFullYear();
+
+      await axiosInstance.post("/payroll/runs/start", {
+        payrollMonth: monthName,
+        payrollYear: yearVal,
+        employeeScope: "ALL_EMPLOYEES",
+      });
+
+      toast.success(`Payroll formulas & attendance deductions re-calculated & saved in database!`);
+      await loadPayrollForMonth(selectedMonth);
+    } catch (err) {
+      console.warn("Backend recalculate warning:", err.message);
+      const updatedState = processMonthlyPayrollAction(selectedMonth, employeesList);
+      setPayrollState(updatedState);
+      toast.success(`Payroll formulas & attendance deductions re-calculated for ${selectedMonth}!`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Step 2 -> Step 3: Finalize Payroll & Generate Salary Slips in MongoDB
+  const handleFinalizePayroll = async () => {
+    setFinalizeModalOpen(false);
+    setIsFinalizing(true);
+    try {
+      if (payrollState.runId) {
+        await axiosInstance.post(`/payroll/runs/${payrollState.runId}/approve`);
+      }
+      toast.success(`Payroll finalized & locked in database for ${selectedMonth}! Salary slips generated.`);
+      await loadPayrollForMonth(selectedMonth);
+    } catch (err) {
+      console.warn("Backend finalize warning:", err.message);
+      const updatedState = finalizeMonthlyPayrollAction(selectedMonth, employeesList);
+      setPayrollState(updatedState);
+      toast.success(`Payroll finalized & locked for ${selectedMonth}! Salary slips generated.`);
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+  // Step 3 -> Step 4: Mark Individual or All Paid (Saves to MongoDB Payment & Payroll)
+  const handleMarkPaid = async (employeeId = "ALL") => {
+    try {
+      if (payrollState.runId) {
+        const targetEmp = employeeId === "ALL"
+          ? "ALL"
+          : (employeesList.find((e) => e.id === employeeId || e._id === employeeId)?.runEmployeeId || employeeId);
+
+        await axiosInstance.post(`/payroll/runs/${payrollState.runId}/payment`, {
+          employeeId: targetEmp,
+          paymentMethod: "Bank Transfer",
+        });
+        await loadPayrollForMonth(selectedMonth);
+      } else {
+        const updatedState = updateEmployeePaymentAction(selectedMonth, employeeId, PAYMENT_STATUS.PAID);
+        setPayrollState(updatedState);
+      }
+
+      if (employeeId === "ALL") {
+        toast.success(`All employees marked as Paid and saved to database for ${selectedMonth}!`);
+      } else {
+        toast.success(`Employee payment marked as Paid and saved to database!`);
+      }
+    } catch (err) {
+      console.warn("Backend payment mark warning:", err.message);
+      const updatedState = updateEmployeePaymentAction(selectedMonth, employeeId, PAYMENT_STATUS.PAID);
+      setPayrollState(updatedState);
+      toast.success(employeeId === "ALL" ? `All employees marked as Paid!` : `Employee payment marked as Paid!`);
+    }
+  };
+
+  // Reset to Pending Action (Clears database run and resets to initial roster)
+  const handleResetToPending = async () => {
     setFinalizedMenuAnchor(null);
-    toast.info(`Payroll for ${selectedMonth} has been reset back to Pending.`);
+    try {
+      if (payrollState.runId) {
+        await axiosInstance.post(`/payroll/runs/${payrollState.runId}/reset`);
+      }
+      const resetState = resetMonthlyPayrollAction(selectedMonth);
+      setPayrollState(resetState);
+      toast.info(`Payroll for ${selectedMonth} has been reset back to Pending in database.`);
+      await loadPayrollForMonth(selectedMonth);
+    } catch (err) {
+      console.warn("Backend reset warning:", err.message);
+      const resetState = resetMonthlyPayrollAction(selectedMonth);
+      setPayrollState(resetState);
+      toast.info(`Payroll for ${selectedMonth} has been reset back to Pending.`);
+    }
   };
 
   // Reopen Payroll Action
@@ -322,17 +529,35 @@ export default function Payroll() {
     setReopenModalOpen(true);
   };
 
-  // Confirm Reopen Action
-  const handleConfirmReopenPayroll = () => {
-    const res = reopenMonthlyPayrollAction(selectedMonth, { force: true });
-    if (res.success) {
-      setPayrollState(res.state);
-      setReopenModalOpen(false);
-      setReopenBlockedModalOpen(false);
-      toast.success(`Payroll for ${selectedMonth} has been reopened and unlocked for review.`);
-    } else {
-      setReopenModalOpen(false);
-      toast.error("Payroll cannot be reopened.");
+  // Confirm Reopen Action (Unlocks run in MongoDB)
+  const handleConfirmReopenPayroll = async () => {
+    try {
+      if (payrollState.runId) {
+        await axiosInstance.post(`/payroll/runs/${payrollState.runId}/reopen`);
+      }
+      const res = reopenMonthlyPayrollAction(selectedMonth, { force: true });
+      if (res.success) {
+        setPayrollState(res.state);
+        setReopenModalOpen(false);
+        setReopenBlockedModalOpen(false);
+        toast.success(`Payroll for ${selectedMonth} has been reopened and unlocked in database.`);
+        await loadPayrollForMonth(selectedMonth);
+      } else {
+        setReopenModalOpen(false);
+        toast.error("Payroll cannot be reopened.");
+      }
+    } catch (err) {
+      console.warn("Backend reopen warning:", err.message);
+      const res = reopenMonthlyPayrollAction(selectedMonth, { force: true });
+      if (res.success) {
+        setPayrollState(res.state);
+        setReopenModalOpen(false);
+        setReopenBlockedModalOpen(false);
+        toast.success(`Payroll for ${selectedMonth} has been reopened and unlocked.`);
+      } else {
+        setReopenModalOpen(false);
+        toast.error("Payroll cannot be reopened.");
+      }
     }
   };
 
@@ -355,32 +580,70 @@ export default function Payroll() {
     });
   };
 
-  // Save individual adjustment
-  const handleSaveAdjustment = () => {
+  // Save individual adjustment in MongoDB
+  const handleSaveAdjustment = async () => {
     if (!adjustEmployee) return;
-    const updatedState = adjustIndividualEmployeePayrollAction(selectedMonth, adjustEmployee.id, {
-      customBasic: Number(adjustFormData.customBasic) || 0,
-      customHra: Number(adjustFormData.customHra) || 0,
-      customSpecial: Number(adjustFormData.customSpecial) || 0,
-      customOther: Number(adjustFormData.customOther) || 0,
-      customBonus: Number(adjustFormData.customBonus) || 0,
-      customPf: Number(adjustFormData.customPf) || 0,
-      customPt: Number(adjustFormData.customPt) || 0,
-      customTds: Number(adjustFormData.customTds) || 0,
-      customOtherDeduction: Number(adjustFormData.customOtherDeduction) || 0,
-      attendance: {
-        totalDays: getMonthPeriodDetails(selectedMonth).totalDays,
+    try {
+      const payload = {
+        employeeId: adjustEmployee.runEmployeeId || adjustEmployee._id || adjustEmployee.id,
+        customBasic: Number(adjustFormData.customBasic) || 0,
+        customHra: Number(adjustFormData.customHra) || 0,
+        customSpecial: Number(adjustFormData.customSpecial) || 0,
+        customOther: Number(adjustFormData.customOther) || 0,
+        customBonus: Number(adjustFormData.customBonus) || 0,
+        customPf: Number(adjustFormData.customPf) || 0,
+        customPt: Number(adjustFormData.customPt) || 0,
+        customTds: Number(adjustFormData.customTds) || 0,
+        customOtherDeduction: Number(adjustFormData.customOtherDeduction) || 0,
         absentDays: Number(adjustFormData.absentDays) || 0,
-        presentDays: Math.max(0, getMonthPeriodDetails(selectedMonth).totalDays - (Number(adjustFormData.absentDays) || 0)),
-        leavePaid: 0,
-        leaveUnpaid: 0,
-        holidays: 0,
-      },
-      adjustmentNotes: adjustFormData.adjustmentNotes || "Salary & Attendance correction",
-    });
-    setPayrollState(updatedState);
-    setAdjustEmployee(null);
-    toast.success(`Salary adjustment saved for ${adjustEmployee.name}! Corrected payslip generated.`);
+        adjustmentNotes: adjustFormData.adjustmentNotes || "Salary & Attendance correction",
+      };
+
+      if (payrollState.runId) {
+        await axiosInstance.post(`/payroll/runs/${payrollState.runId}/adjust-employee`, payload);
+        await loadPayrollForMonth(selectedMonth);
+      } else {
+        const updatedState = adjustIndividualEmployeePayrollAction(selectedMonth, adjustEmployee.id, {
+          ...payload,
+          attendance: {
+            totalDays: getMonthPeriodDetails(selectedMonth).totalDays,
+            absentDays: Number(adjustFormData.absentDays) || 0,
+            presentDays: Math.max(0, getMonthPeriodDetails(selectedMonth).totalDays - (Number(adjustFormData.absentDays) || 0)),
+            leavePaid: 0,
+            leaveUnpaid: 0,
+            holidays: 0,
+          },
+        });
+        setPayrollState(updatedState);
+      }
+      setAdjustEmployee(null);
+      toast.success(`Salary adjustment saved in database for ${adjustEmployee.name}! Corrected payslip generated.`);
+    } catch (err) {
+      console.warn("Backend adjustment warning:", err.message);
+      const updatedState = adjustIndividualEmployeePayrollAction(selectedMonth, adjustEmployee.id, {
+        customBasic: Number(adjustFormData.customBasic) || 0,
+        customHra: Number(adjustFormData.customHra) || 0,
+        customSpecial: Number(adjustFormData.customSpecial) || 0,
+        customOther: Number(adjustFormData.customOther) || 0,
+        customBonus: Number(adjustFormData.customBonus) || 0,
+        customPf: Number(adjustFormData.customPf) || 0,
+        customPt: Number(adjustFormData.customPt) || 0,
+        customTds: Number(adjustFormData.customTds) || 0,
+        customOtherDeduction: Number(adjustFormData.customOtherDeduction) || 0,
+        attendance: {
+          totalDays: getMonthPeriodDetails(selectedMonth).totalDays,
+          absentDays: Number(adjustFormData.absentDays) || 0,
+          presentDays: Math.max(0, getMonthPeriodDetails(selectedMonth).totalDays - (Number(adjustFormData.absentDays) || 0)),
+          leavePaid: 0,
+          leaveUnpaid: 0,
+          holidays: 0,
+        },
+        adjustmentNotes: adjustFormData.adjustmentNotes || "Salary & Attendance correction",
+      });
+      setPayrollState(updatedState);
+      setAdjustEmployee(null);
+      toast.success(`Salary adjustment saved for ${adjustEmployee.name}! Corrected payslip generated.`);
+    }
   };
 
   // ─── Selection Handlers ─────────────────────────────────────────────

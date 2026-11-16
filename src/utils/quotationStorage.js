@@ -238,15 +238,8 @@ export const upsertQuotation = async (quotation) => {
 
 export const updateQuotationStatus = (quotationId, status) => {
   const currentQuotations = loadQuotationLibrary();
-<<<<<<< HEAD
-  const nextQuotations = currentQuotations.map((quotation) => {
-    if (quotation.id !== quotationId && quotation._id !== quotationId && quotation.quotationNumber !== quotationId) {
-      return quotation;
-    }
-=======
-  const targetQuotation = currentQuotations.find((q) => q.id === quotationId);
+  const targetQuotation = currentQuotations.find((q) => q.id === quotationId || q._id === quotationId || q.quotationNumber === quotationId);
   const targetLeadId = targetQuotation ? getQuotationLeadId(targetQuotation) : null;
->>>>>>> origin/dipak
 
   const nextQuotations = currentQuotations.map((quotation) => {
     if (quotation.id === quotationId) {

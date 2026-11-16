@@ -3,13 +3,17 @@ const normalizeOrigin = (value) => (value || "").trim().replace(/\/+$/, "");
 const resolveApiOrigin = () => {
   const envUrl = process.env.REACT_APP_API_URL;
   if (envUrl) return envUrl;
-  if (typeof window !== "undefined" && window.location) {
-    const host = window.location.hostname;
-    if (host && host !== "localhost" && host !== "127.0.0.1") {
-      // If accessed via LAN IP like 192.168.x.x from phone, route API to same host on port 9001
-      const port = process.env.REACT_APP_API_PORT || "9001";
-      const protocol = window.location.protocol || "http:";
-      return `${protocol}//${host}:${port}`;
+  if (typeof window !== "undefined") {
+    const storageUrl = localStorage.getItem("API_URL") || localStorage.getItem("REACT_APP_API_URL");
+    if (storageUrl) return storageUrl;
+    if (window.location) {
+      const host = window.location.hostname;
+      if (host && host !== "localhost" && host !== "127.0.0.1") {
+        // If accessed via LAN IP like 192.168.x.x from phone, route API to same host on port 9001
+        const port = process.env.REACT_APP_API_PORT || "9001";
+        const protocol = window.location.protocol || "http:";
+        return `${protocol}//${host}:${port}`;
+      }
     }
   }
   return "https://vanurtech-solar-backend-1.onrender.com";

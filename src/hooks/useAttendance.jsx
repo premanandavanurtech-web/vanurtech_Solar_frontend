@@ -1,5 +1,5 @@
 // hooks/useAttendance.js
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
 export const useAttendance = () => {
@@ -15,6 +15,7 @@ export const useAttendance = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const lastFiltersRef = useRef({});
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -49,6 +50,7 @@ export const useAttendance = () => {
   // Now we build a query string and pass it to fetchAPI.
   const fetchAttendances = useCallback(
     async (filters = {}) => {
+      lastFiltersRef.current = filters;
       setLoading(true);
       setError(null);
       try {
@@ -248,7 +250,7 @@ export const useAttendance = () => {
         });
         if (res?.success) {
           setSuccess(res.message || "Attendance updated successfully");
-          await fetchAttendances();
+          await fetchAttendances(lastFiltersRef.current);
           return { success: true, data: res.result };
         }
         return { success: false, error: res?.message || "Update failed" };
@@ -277,7 +279,7 @@ export const useAttendance = () => {
         const res = await fetchAPI(`/attendance/${id}`, { method: "DELETE" });
         if (res?.success) {
           setSuccess(res.message || "Attendance deleted");
-          await fetchAttendances();
+          await fetchAttendances(lastFiltersRef.current);
           return { success: true };
         }
         return { success: false, error: res?.message || "Delete failed" };

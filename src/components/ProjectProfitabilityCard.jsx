@@ -3,18 +3,12 @@ import {
   Box,
   Stack,
   Typography,
-<<<<<<< HEAD
-=======
   Grid,
->>>>>>> origin/dipak
   Paper,
   Chip,
   Button,
   IconButton,
-<<<<<<< HEAD
-=======
   TextField,
->>>>>>> origin/dipak
   Table,
   TableHead,
   TableRow,
@@ -25,11 +19,8 @@ import {
   useTheme,
   alpha,
   Alert,
-<<<<<<< HEAD
-=======
   Checkbox,
   InputAdornment,
->>>>>>> origin/dipak
   Snackbar,
   Dialog,
   DialogTitle,
@@ -39,16 +30,6 @@ import {
 import {
   Inventory2,
   Add,
-<<<<<<< HEAD
-  CheckCircle,
-  Refresh,
-  DeleteOutline,
-  InventoryOutlined,
-  WidgetsOutlined,
-  PaidOutlined,
-} from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
-=======
   Remove,
   CheckCircle,
   Search,
@@ -61,17 +42,13 @@ import { useNavigate } from "react-router-dom";
   LocalShippingOutlined,
   PaidOutlined,
 } from "@mui/icons-material";
->>>>>>> origin/dipak
 import axiosInstance from "../utils/axiosConfig";
 
 const BRAND = "#3B82F6";
 const INDIGO = "#6366F1";
 const SUCCESS = "#10B981";
 const DANGER = "#EF4444";
-<<<<<<< HEAD
-=======
 const WARNING = "#F59E0B";
->>>>>>> origin/dipak
 
 const formatCurrency = (amount) => {
   const num = Number(amount || 0);
@@ -89,29 +66,6 @@ export default function ProjectProfitabilityCard({
 }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
-<<<<<<< HEAD
-  const navigate = useNavigate();
-
-  // Data states
-  const [loading, setLoading] = useState(true);
-  const [issuedSummary, setIssuedSummary] = useState(null);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [toast, setToast] = useState({ open: false, message: "", severity: "success" });
-  const [cancellingIssueId, setCancellingIssueId] = useState(null);
-
-  // Return Dialog State
-  const [confirmReturnDialog, setConfirmReturnDialog] = useState({
-    open: false,
-    issueId: null,
-    itemName: "",
-    quantity: 0,
-    unit: "pcs",
-  });
-
-  const targetProjectId = leadOrProject?._id || projectId;
-
-  // 1. Fetch Issued Items for this Project
-=======
 
   // Data states
   const [loading, setLoading] = useState(true);
@@ -132,17 +86,11 @@ export default function ProjectProfitabilityCard({
   const customerId = leadOrProject?._id || projectId;
 
   // 1. Fetch Issued Items for this Project & Available Warehouse Inventory
->>>>>>> origin/dipak
   const fetchAllData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
     setErrorMsg("");
     try {
-<<<<<<< HEAD
-      const summaryRes = await axiosInstance.get(`/inventory/project-profitability/${projectId}`);
-      const sumData = summaryRes?.data?.result || summaryRes?.data || null;
-      setIssuedSummary(sumData);
-=======
       const [summaryRes, itemsRes] = await Promise.all([
         axiosInstance.get(`/inventory/project-profitability/${projectId}`),
         axiosInstance.get("/inventory/items?limit=500&active=true"),
@@ -154,7 +102,6 @@ export default function ProjectProfitabilityCard({
       const rawItems = itemsRes?.data?.result?.items || itemsRes?.data?.items || itemsRes?.data?.result || [];
       const itemsList = Array.isArray(rawItems) ? rawItems : [];
       setInventoryItems(itemsList);
->>>>>>> origin/dipak
     } catch (err) {
       console.error("Failed to fetch project inventory data", err);
       setErrorMsg("Failed to load inventory data.");
@@ -177,8 +124,6 @@ export default function ProjectProfitabilityCard({
     return issuedItems.reduce((sum, it) => sum + (Number(it.totalCost) || 0), 0);
   }, [issuedItems]);
 
-<<<<<<< HEAD
-=======
   const totalIssuedQty = useMemo(() => {
     return issuedItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
   }, [issuedItems]);
@@ -335,7 +280,6 @@ export default function ProjectProfitabilityCard({
     unit: "pcs",
   });
 
->>>>>>> origin/dipak
   const handleOpenReturnModal = (item) => {
     if (!item.issues || item.issues.length === 0) return;
     setConfirmReturnDialog({
@@ -358,10 +302,6 @@ export default function ProjectProfitabilityCard({
       });
       setToast({ open: true, message: "Material returned and stock restored to inventory successfully!", severity: "success" });
       await fetchAllData();
-<<<<<<< HEAD
-      if (onUpdate) onUpdate();
-=======
->>>>>>> origin/dipak
     } catch (err) {
       console.error("Failed to cancel issue", err);
       setToast({ open: true, message: err?.response?.data?.message || "Failed to return stock.", severity: "error" });
@@ -370,15 +310,6 @@ export default function ProjectProfitabilityCard({
     }
   };
 
-<<<<<<< HEAD
-  const handleNavigateToAddMaterials = () => {
-    navigate(`/projects/${targetProjectId}/issue-materials`, {
-      state: { project: leadOrProject },
-    });
-  };
-
-=======
->>>>>>> origin/dipak
   if (loading) {
     return (
       <Paper
@@ -419,11 +350,7 @@ export default function ProjectProfitabilityCard({
       </Snackbar>
 
       {/* ======================================================== */}
-<<<<<<< HEAD
-      {/* 📦 Equipment & Materials Issued to Project Card           */}
-=======
       {/* 📦 SECTION 1: Equipment & Materials Issued to Project     */}
->>>>>>> origin/dipak
       {/* ======================================================== */}
       <Paper
         elevation={0}
@@ -486,11 +413,7 @@ export default function ProjectProfitabilityCard({
             </Box>
           </Stack>
 
-<<<<<<< HEAD
-          <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
-=======
           <Stack direction="row" alignItems="center" spacing={1.5}>
->>>>>>> origin/dipak
             {issuedItems.length > 0 && (
               <Chip
                 icon={<PaidOutlined sx={{ fontSize: 16, color: "#10b981 !important" }} />}
@@ -523,46 +446,10 @@ export default function ProjectProfitabilityCard({
             >
               Refresh
             </Button>
-<<<<<<< HEAD
-            {/* Primary Action Button to redirect to Add Materials page */}
-            <Button
-              variant="contained"
-              startIcon={<Add sx={{ fontSize: 18 }} />}
-              size="small"
-              onClick={handleNavigateToAddMaterials}
-              sx={{
-                borderRadius: 2,
-                fontWeight: 800,
-                fontSize: "0.875rem",
-                textTransform: "none",
-                px: 2,
-                py: 0.75,
-                bgcolor: BRAND,
-                color: "#ffffff",
-                boxShadow: "0 4px 12px rgba(59,130,246,0.3)",
-                "&:hover": {
-                  bgcolor: "#2563eb",
-                  boxShadow: "0 6px 18px rgba(59,130,246,0.4)",
-                },
-              }}
-            >
-              Add materials to project
-            </Button>
-=======
->>>>>>> origin/dipak
           </Stack>
         </Box>
 
         {issuedItems.length === 0 ? (
-<<<<<<< HEAD
-          <Box sx={{ p: 6, textAlign: "center" }}>
-            <Box
-              sx={{
-                width: 60,
-                height: 60,
-                mx: "auto",
-                mb: 2,
-=======
           <Box sx={{ p: 5, textAlign: "center" }}>
             <Box
               sx={{
@@ -570,7 +457,6 @@ export default function ProjectProfitabilityCard({
                 height: 56,
                 mx: "auto",
                 mb: 1.5,
->>>>>>> origin/dipak
                 borderRadius: 3,
                 bgcolor: isDark ? "rgba(255,255,255,0.05)" : "#f1f5f9",
                 display: "grid",
@@ -578,38 +464,6 @@ export default function ProjectProfitabilityCard({
                 color: isDark ? "#64748b" : "#94a3b8",
               }}
             >
-<<<<<<< HEAD
-              <Inventory2 sx={{ fontSize: 30 }} />
-            </Box>
-            <Typography variant="h6" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", mb: 0.5 }}>
-              No Materials Issued to this Project Yet
-            </Typography>
-            <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", maxWidth: 480, mx: "auto", mb: 3 }}>
-              Select items from the warehouse inventory catalog, specify required quantities, and allocate them to this site.
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<Add sx={{ fontSize: 20 }} />}
-              onClick={handleNavigateToAddMaterials}
-              sx={{
-                borderRadius: 2.5,
-                fontWeight: 900,
-                fontSize: "0.95rem",
-                textTransform: "none",
-                px: 3.5,
-                py: 1.25,
-                bgcolor: BRAND,
-                color: "#ffffff",
-                boxShadow: "0 4px 16px rgba(59,130,246,0.35)",
-                "&:hover": {
-                  bgcolor: "#2563eb",
-                  boxShadow: "0 6px 22px rgba(59,130,246,0.45)",
-                },
-              }}
-            >
-              Add materials to project
-            </Button>
-=======
               <Inventory2 sx={{ fontSize: 28 }} />
             </Box>
             <Typography variant="body1" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", mb: 0.5 }}>
@@ -618,7 +472,6 @@ export default function ProjectProfitabilityCard({
             <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", maxWidth: 460, mx: "auto" }}>
               Select items from the inventory catalog below, specify required quantities, and click <strong>"Confirm & Issue to Project"</strong>.
             </Typography>
->>>>>>> origin/dipak
           </Box>
         ) : (
           <Box sx={{ overflowX: "auto" }}>
@@ -756,9 +609,6 @@ export default function ProjectProfitabilityCard({
         )}
       </Paper>
 
-<<<<<<< HEAD
-      {/* Return Material Confirmation Dialog */}
-=======
       {/* ======================================================== */}
       {/* 📥 SECTION 2: Select Items from Inventory to Issue       */}
       {/* ======================================================== */}
@@ -1153,7 +1003,6 @@ export default function ProjectProfitabilityCard({
       </Paper>
 
       {/* Modern Return / Delete Confirmation Dialog */}
->>>>>>> origin/dipak
       <Dialog
         open={confirmReturnDialog.open}
         onClose={() => setConfirmReturnDialog({ open: false, issueId: null, itemName: "", quantity: 0, unit: "pcs" })}

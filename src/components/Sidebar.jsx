@@ -115,19 +115,7 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
   // ── Menu items ─────────────────────────────────────────────────────────────
   const menuItems = useMemo(
     () => [
-<<<<<<< HEAD
-      { text: "Dashboard", icon: <Dashboard />, path: "/dashboard", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "Lead Funnel", icon: <AccountTree />, path: "/lead-funnel", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "All Leads", icon: <FilterAlt />, path: "/all-leads", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "Projects", icon: <TaskAlt />, path: "/projects", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "Total Visits", icon: <Groups />, path: "/total-visits", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "3D Design", icon: <ViewInAr />, path: "/3d-design", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "Inventory In", icon: <MoveToInboxOutlined />, path: "/inventory/items", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"] },
-      { text: "Inventory Out", icon: <OutboxOutlined />, path: "/inventory/out", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"] },
-      { text: "Add Quotation", icon: <RequestQuote />, path: "/quotation/create", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "All Quotes", icon: <RequestQuote />, path: "/all-quotes", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "Missed Leads", icon: <Warning />, path: "/missed-leads", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-=======
+
       { text: "Dashboard",       icon: <Dashboard />,         path: "/dashboard",              roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Lead Funnel",     icon: <AccountTree />,       path: "/lead-funnel",            roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "All Leads",       icon: <FilterAlt />,         path: "/all-leads",              roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
@@ -139,22 +127,13 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
       { text: "Add Quotation",   icon: <RequestQuote />,      path: "/quotation/create",       roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "All Quotes",      icon: <RequestQuote />,      path: "/all-quotes",             roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Missed Leads",    icon: <Warning />,           path: "/missed-leads",           roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
->>>>>>> origin/dipak
       {
         text: TEAM_ATTENDANCE_ROLES.includes(userRole) ? "Team Attendance" : "My Attendance",
         icon: <CalendarMonth />,
         path: TEAM_ATTENDANCE_ROLES.includes(userRole) ? "/team-attendance" : "/attendance",
         roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"],
       },
-<<<<<<< HEAD
-      { text: "Employees", icon: <AdminPanelSettings />, path: "/user-management", roles: ["Admin_panel", "ZSM", "Incharge"] },
-      { text: "Leave", icon: <EventBusy />, path: "/leave-management", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "Leave Types", icon: <Inventory2Outlined />, path: "/leave-types", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "Holiday Management", icon: <Celebration />, path: "/holiday-management", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM"] },
-      { text: "Payroll", icon: <Paid />, path: "/payroll", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"] },
-      { text: "Salary Structure", icon: <ReceiptLong />, path: "/payroll/salaries", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"] },
-      { text: "Salary Slips", icon: <AccountBalanceWallet />, path: "/payroll/payslips", roles: ["Admin_panel", "ZSM", "Incharge", "TEAM", "ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "INSTALLER"] },
-=======
+
       { text: "Leave",              icon: <EventBusy />,          path: "/leave-management",   roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Leave Types",        icon: <Inventory2Outlined />, path: "/leave-types",        roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Holiday Management", icon: <Celebration />,        path: "/holiday-management", roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
@@ -162,7 +141,6 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
       { text: "Salary Structure",   icon: <ReceiptLong />,        path: "/payroll/salaries",   roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
       { text: "Salary Slips",       icon: <AccountBalanceWallet />,path: "/payroll/payslips",   roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
       { text: "Employees",          icon: <AdminPanelSettings />, path: "/user-management",    roles: ["Admin_panel","ZSM","Incharge"] },
->>>>>>> origin/dipak
       {
         text: "Location Visit",
         icon: <LocationOnIcon />,
@@ -196,18 +174,7 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
   const menuSections = useMemo(
     () =>
       [
-<<<<<<< HEAD
-        { text: "Overview", icon: <Dashboard />, itemNames: ["Dashboard", "Lead Funnel"] },
-        { text: "Leads", icon: <FilterAlt />, itemNames: ["All Leads", "Missed Leads", "Import Leads"] },
-        { text: "Projects", icon: <TaskAlt />, itemNames: ["Projects", "Total Visits", "3D Design", "Add Quotation", "All Quotes"] },
-        { text: "Inventory", icon: <Inventory2Outlined />, itemNames: ["Inventory In", "Inventory Out"] },
-        { text: "Attendance", icon: <CalendarMonth />, itemNames: ["Team Attendance", "My Attendance", "Leave Types", "Holiday Management"] },
-        { text: "Salary", icon: <AccountBalanceWallet />, itemNames: ["Payroll", "Salary Structure", "Salary Slips"] },
-        { text: "HR", icon: <Groups />, itemNames: ["Employees", "Leave"] },
-        { text: "Team", icon: <Groups />, itemNames: ["Location Visit", "Expense"] },
-        { text: "Insights", icon: <Insights />, itemNames: ["Reports", "Installer Work Register", "Notifications"] },
-        { text: "Settings", icon: <SettingsIcon />, itemNames: ["Settings"] },
-=======
+
         { text: "Overview",    icon: <Dashboard />,    itemNames: ["Dashboard","Lead Funnel"] },
         { text: "Leads",       icon: <FilterAlt />,    itemNames: ["All Leads","Missed Leads","Import Leads"] },
         { text: "Projects",    icon: <TaskAlt />,      itemNames: ["Projects","Total Visits","3D Design","Add Quotation","All Quotes"] },
@@ -218,7 +185,7 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         { text: "Team",        icon: <Groups />,       itemNames: ["Location Visit","Expense"] },
         { text: "Insights",    icon: <Insights />,     itemNames: ["Reports","Installer Work Register","Notifications"] },
         { text: "Settings",    icon: <SettingsIcon />, itemNames: ["Settings"] },
->>>>>>> origin/dipak
+
       ]
         .map((section) => ({
           ...section,
@@ -527,17 +494,11 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
     >
       <Box
         sx={{
-<<<<<<< HEAD
-          width: effectiveCollapsed ? 38 : 42,
-          height: effectiveCollapsed ? 38 : 42,
-          borderRadius: "12px",
-          bgcolor: "#fff",
-=======
+
           width: effectiveCollapsed ? 36 : 42,
           height: effectiveCollapsed ? 36 : 42,
           borderRadius: "12px", 
           bgcolor: isDark ? "#000" : "#fff",
->>>>>>> origin/dipak
           display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0, overflow: "hidden",
           border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : borderCol}`,

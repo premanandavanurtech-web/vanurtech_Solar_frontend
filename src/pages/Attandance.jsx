@@ -168,7 +168,7 @@ export default function Attendance() {
   const { socketRef } = useSocket();
   const {
     attendances, loading, error, success, pagination, summary,
-    fetchAttendances, punchIn, punchOut, clearMessages,
+    fetchAttendances, punchIn, punchOut, updateAttendance, clearMessages,
   } = useAttendance();
   const geo = useGeo();
   const timer = useWorkTimer();
@@ -177,6 +177,7 @@ export default function Attendance() {
   const isTeam = userRole === "INSTALLER";
   const isManagerRole = MANAGER_ROLES.includes(userRole);
   const showPunchControls = !isAdminView && !isManagerRole;
+  const canManageAttendance = isManagerRole || isAdminView || ["ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR", "Admin_panel"].includes(userRole);
 
   const [todayAtt, setTodayAtt] = useState(null);
   useEffect(() => {
@@ -218,7 +219,25 @@ export default function Attendance() {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [exportAnchorEl, setExportAnchorEl] = useState(null);
   const [tablePage, setTablePage] = useState(1);
+  const [updatingDateKey, setUpdatingDateKey] = useState(null);
   const rowsPerPage = 8;
+  const userSwitchedMonthRef = useRef(false);
+
+  // If current month has 0 attendances but previous records exist, default to the latest attendance's month
+  useEffect(() => {
+    if (!userSwitchedMonthRef.current && attendances?.length > 0) {
+      const dates = attendances.map((a) => new Date(a.date || a.createdAt)).filter((d) => !isNaN(d.getTime()));
+      if (dates.length > 0) {
+        dates.sort((a, b) => b.getTime() - a.getTime());
+        const latest = dates[0];
+        const now = new Date();
+        const hasCurrentMonthRecord = dates.some(d => d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth());
+        if (!hasCurrentMonthRecord) {
+          setCurrentMonth(new Date(latest.getFullYear(), latest.getMonth(), 1));
+        }
+      }
+    }
+  }, [attendances]);
 
   const showSnack = useCallback((msg, sev = "success") => setSnackbar({ open: true, message: msg, severity: sev }), []);
 
@@ -266,62 +285,159 @@ export default function Attendance() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Combined Rows — unique per user
+  // Combined Rows — unique per user with all days of the selected month included
   const mergedRows = useMemo(() => {
-    let rows = (attendances || []).map((item) => {
-      const dateKey = format(new Date(item.date || item.createdAt), "yyyy-MM-dd");
-      const dateFormatted = fmtDate(item.date || item.createdAt);
-      const hasPunchIn = Boolean(item.punchIn?.time);
-      const punchInTime = item.punchIn?.time ? fmtTime(item.punchIn.time) : "—";
-      const punchOutTime = item.punchOut?.time ? fmtTime(item.punchOut.time) : item.punchIn?.time ? "Ongoing" : "—";
-      const hoursNum = Number(item.workHours || 0);
-      const h = Math.floor(hoursNum);
-      const m = Math.round((hoursNum - h) * 60);
-      const hours = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-
-      let status = "Absent";
-      if (hasPunchIn || item.status?.toLowerCase() === "present") {
-        status = "Present";
-      } else if (item.status?.toLowerCase() === "holiday") {
-        status = "Holiday";
-      } else if (item.status?.toLowerCase() === "leave") {
-        status = "Leave";
-      } else if (item.status?.toLowerCase() === "late") {
-        status = "Late";
+    const recordsMap = new Map();
+    (attendances || []).forEach((item) => {
+      const d = item.date || item.createdAt;
+      if (d) {
+        const key = format(new Date(d), "yyyy-MM-dd");
+        recordsMap.set(key, item);
       }
-
-      return {
-        dateKey,
-        dateFormatted,
-        punchInTime,
-        punchOutTime,
-        hours,
-        status,
-        hasPunchIn,
-        raw: item,
-      };
     });
 
     const now = new Date();
     const todayKey = format(now, "yyyy-MM-dd");
-    const hasTodayInRows = rows.some((r) => r.dateKey === todayKey);
 
-    // If this specific user is punched in today, ensure today's record is displayed
-    if (!hasTodayInRows && isTodayPunched && activePunchInTime) {
-      rows.unshift({
-        dateKey: todayKey,
-        dateFormatted: fmtDate(now),
-        punchInTime: activePunchInTime,
-        punchOutTime: activePunchOutTime ? activePunchOutTime : "Ongoing",
-        hours: "—",
-        status: "Present",
-        hasPunchIn: true,
+    if (isTodayPunched && activePunchInTime && !recordsMap.has(todayKey)) {
+      recordsMap.set(todayKey, {
+        date: todayKey,
+        punchIn: { time: todayAtt?.punchIn?.time || now.toISOString() },
+        punchOut: activePunchOutTime ? { time: todayAtt?.punchOut?.time || now.toISOString() } : null,
+        status: "present",
+        workHours: 0,
         raw: todayAtt || null,
       });
     }
 
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth(); // 0-11
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const todayY = now.getFullYear();
+    const todayM = now.getMonth();
+    const todayD = now.getDate();
+
+    const isCurrentMonthYear = year === todayY && month === todayM;
+    const isPastMonth = year < todayY || (year === todayY && month < todayM);
+
+    let maxDay = daysInMonth;
+    if (isCurrentMonthYear) {
+      maxDay = todayD;
+      recordsMap.forEach((item, dateKey) => {
+        const [y, m, d] = dateKey.split("-").map(Number);
+        if (y === year && m === month + 1 && d > maxDay) {
+          maxDay = Math.max(maxDay, d);
+        }
+      });
+    } else if (!isPastMonth) {
+      maxDay = 0;
+      recordsMap.forEach((item, dateKey) => {
+        const [y, m, d] = dateKey.split("-").map(Number);
+        if (y === year && m === month + 1) {
+          maxDay = Math.max(maxDay, d);
+        }
+      });
+      if (maxDay === 0) maxDay = daysInMonth;
+    }
+
+    const rows = [];
+    const processedKeys = new Set();
+
+    for (let d = 1; d <= maxDay; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      processedKeys.add(dateStr);
+
+      const cellDate = new Date(year, month, d);
+      const isSunday = cellDate.getDay() === 0;
+      const isToday = isCurrentMonthYear && d === todayD;
+      const item = recordsMap.get(dateStr);
+
+      if (item) {
+        const hasPunchIn = Boolean(item.punchIn?.time);
+        const punchInTime = item.punchIn?.time ? fmtTime(item.punchIn.time) : "—";
+        const punchOutTime = item.punchOut?.time
+          ? fmtTime(item.punchOut.time)
+          : item.punchIn?.time
+          ? (isToday && !item.punchOut?.time ? "Ongoing" : "—")
+          : "—";
+
+        const hoursNum = Number(item.workHours || 0);
+        const h = Math.floor(hoursNum);
+        const m = Math.round((hoursNum - h) * 60);
+        const hours = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+
+        let status = "Absent";
+        if (hasPunchIn || item.status?.toLowerCase() === "present") {
+          status = "Present";
+        } else if (item.status?.toLowerCase() === "holiday") {
+          status = "Holiday";
+        } else if (item.status?.toLowerCase() === "leave") {
+          status = "Leave";
+        } else if (item.status?.toLowerCase() === "late") {
+          status = "Late";
+        } else if (item.status?.toLowerCase() === "half-day") {
+          status = "Half-Day";
+        } else if (isSunday) {
+          status = "Holiday";
+        }
+
+        rows.push({
+          dateKey: dateStr,
+          dateFormatted: fmtDate(cellDate),
+          punchInTime,
+          punchOutTime,
+          hours,
+          status,
+          hasPunchIn,
+          raw: item,
+        });
+      } else {
+        const status = isSunday ? "Holiday" : "Absent";
+        rows.push({
+          dateKey: dateStr,
+          dateFormatted: fmtDate(cellDate),
+          punchInTime: "—",
+          punchOutTime: "—",
+          hours: "00:00",
+          status,
+          hasPunchIn: false,
+          raw: null,
+        });
+      }
+    }
+
+    if (period === "All") {
+      recordsMap.forEach((item, dateKey) => {
+        if (!processedKeys.has(dateKey)) {
+          const itemDate = new Date(item.date || item.createdAt);
+          const hasPunchIn = Boolean(item.punchIn?.time);
+          const punchInTime = item.punchIn?.time ? fmtTime(item.punchIn.time) : "—";
+          const punchOutTime = item.punchOut?.time ? fmtTime(item.punchOut.time) : item.punchIn?.time ? "Ongoing" : "—";
+          const hoursNum = Number(item.workHours || 0);
+          const h = Math.floor(hoursNum);
+          const m = Math.round((hoursNum - h) * 60);
+          const hours = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+          let status = item.status || "Present";
+          rows.push({
+            dateKey,
+            dateFormatted: fmtDate(itemDate),
+            punchInTime,
+            punchOutTime,
+            hours,
+            status,
+            hasPunchIn,
+            raw: item,
+          });
+          processedKeys.add(dateKey);
+        }
+      });
+    }
+
+    // Sort descending by date (latest date first)
+    rows.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
     return rows;
-  }, [attendances, isTodayPunched, activePunchInTime, activePunchOutTime, todayAtt]);
+  }, [attendances, currentMonth, period, isTodayPunched, activePunchInTime, activePunchOutTime, todayAtt]);
 
   // Filtered rows
   const filteredRows = useMemo(() => {
@@ -458,6 +574,32 @@ export default function Attendance() {
     setDetailsOpen(true);
   }, [displayName, displayRole, displayPhone, displayEmail, paramUserId, user, targetUserProfile]);
 
+  const handleCalendarCellClick = useCallback((cell) => {
+    if (!cell || !cell.isCurrent) return;
+    const clickedDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), cell.day);
+    setSelectedDate(clickedDate);
+
+    const dateStr = cell.dateKey || `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(cell.day).padStart(2, "0")}`;
+    const matchingRow = mergedRows.find((r) => r.dateKey === dateStr);
+
+    if (matchingRow) {
+      handleRowClick(matchingRow);
+    } else {
+      const cellDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), cell.day);
+      const isSunday = cellDate.getDay() === 0;
+      handleRowClick({
+        dateKey: dateStr,
+        dateFormatted: fmtDate(cellDate),
+        punchInTime: "—",
+        punchOutTime: "—",
+        hours: "00:00",
+        status: isSunday ? "Holiday" : (cell.status ? cell.status.charAt(0).toUpperCase() + cell.status.slice(1) : "Absent"),
+        hasPunchIn: false,
+        raw: null,
+      });
+    }
+  }, [currentMonth, mergedRows, handleRowClick]);
+
   const handleDeleteAttendance = useCallback(async (att) => {
     if (att?._id && !att._id.startsWith("record_")) {
       try {
@@ -476,6 +618,71 @@ export default function Attendance() {
   const handleEditAttendance = useCallback(async () => {
     await loadData();
   }, [loadData]);
+
+  const handleQuickMark = useCallback(async (row, targetStatus) => {
+    if (!row) return;
+    try {
+      setUpdatingDateKey(row.dateKey);
+      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(paramUserId);
+      const targetUid = targetUserProfile?._id || (isValidObjectId ? paramUserId : (user?._id || user?.id));
+      const isPresent = targetStatus === "present";
+
+      const punchInDate = new Date(`${row.dateKey}T09:30:00`);
+      const punchOutDate = new Date(`${row.dateKey}T18:00:00`);
+
+      const payload = {
+        userId: targetUid,
+        user: targetUid,
+        date: row.dateKey,
+        status: targetStatus,
+        workHours: isPresent ? 8.5 : 0,
+        overtime: 0,
+        punchIn: isPresent
+          ? {
+              time: punchInDate.toISOString(),
+              address: "Marked present by Admin",
+              location: { lat: 0, lng: 0 },
+              battery: { percentage: 100, isCharging: false },
+            }
+          : {
+              time: null,
+              address: "Marked absent by Admin",
+              location: { lat: 0, lng: 0 },
+              battery: { percentage: 0, isCharging: false },
+            },
+        punchOut: isPresent
+          ? {
+              time: punchOutDate.toISOString(),
+              address: "Marked present by Admin",
+              location: { lat: 0, lng: 0 },
+              battery: { percentage: 100, isCharging: false },
+            }
+          : {
+              time: null,
+              address: "Marked absent by Admin",
+              location: { lat: 0, lng: 0 },
+              battery: { percentage: 0, isCharging: false },
+            },
+        remarks: `Attendance marked ${targetStatus} by Admin`,
+      };
+
+      const recordId = (row.raw?._id && !String(row.raw._id).startsWith("record_"))
+        ? row.raw._id
+        : `record_${row.dateKey}`;
+
+      const res = await updateAttendance(recordId, payload);
+      if (res?.success) {
+        showSnack(`Marked ${row.dateFormatted} as ${targetStatus.toUpperCase()}`, "success");
+        await loadData();
+      } else {
+        showSnack(res?.error || "Failed to update attendance", "error");
+      }
+    } catch (err) {
+      showSnack(err?.message || "Failed to update attendance", "error");
+    } finally {
+      setUpdatingDateKey(null);
+    }
+  }, [paramUserId, targetUserProfile, user, updateAttendance, showSnack, loadData]);
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: COLOR.bg, color: COLOR.text, p: { xs: 1.5, md: 3 } }}>
@@ -894,10 +1101,26 @@ export default function Attendance() {
               </Box>
 
               <Stack direction="row" spacing={0.5}>
-                <IconButton size="small" onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))} sx={{ color: COLOR.textSub, border: `1px solid ${COLOR.border}`, borderRadius: "8px" }}>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    userSwitchedMonthRef.current = true;
+                    setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+                    setTablePage(1);
+                  }}
+                  sx={{ color: COLOR.textSub, border: `1px solid ${COLOR.border}`, borderRadius: "8px" }}
+                >
                   <ChevronLeft sx={{ fontSize: 16 }} />
                 </IconButton>
-                <IconButton size="small" onClick={() => setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))} sx={{ color: COLOR.textSub, border: `1px solid ${COLOR.border}`, borderRadius: "8px" }}>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    userSwitchedMonthRef.current = true;
+                    setCurrentMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+                    setTablePage(1);
+                  }}
+                  sx={{ color: COLOR.textSub, border: `1px solid ${COLOR.border}`, borderRadius: "8px" }}
+                >
                   <ChevronRight sx={{ fontSize: 16 }} />
                 </IconButton>
               </Stack>
@@ -933,7 +1156,7 @@ export default function Attendance() {
                 return (
                   <Box
                     key={`day-${cell.day}`}
-                    onClick={() => setSelectedDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), cell.day))}
+                    onClick={() => handleCalendarCellClick(cell)}
                     sx={{
                       height: 38,
                       borderRadius: "10px",
@@ -1056,7 +1279,7 @@ export default function Attendance() {
                     <AccessTime sx={{ fontSize: 16 }} />
                   </Box>
                   <Typography variant="subtitle1" fontWeight={800} sx={{ color: COLOR.text }}>
-                    Attendance Log
+                    Attendance Log — {currentMonth.toLocaleDateString("en-US", { month: "short", year: "numeric" })}
                   </Typography>
                 </Stack>
                 <Typography variant="caption" sx={{ color: COLOR.textMuted, fontSize: "0.72rem", display: "block", mt: 0.2 }}>
@@ -1101,7 +1324,7 @@ export default function Attendance() {
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: COLOR.bg }}>
-                    {["DATE", "PUNCH IN", "PUNCH OUT", "HOURS", "STATUS"].map((head) => (
+                    {["DATE", "PUNCH IN", "PUNCH OUT", "HOURS", "STATUS", "ACTION"].map((head) => (
                       <TableCell key={head} sx={{ color: COLOR.textMuted, fontWeight: 800, fontSize: "0.68rem", letterSpacing: "0.05em", py: 1.5, borderColor: COLOR.border }}>
                         {head}
                       </TableCell>
@@ -1113,14 +1336,14 @@ export default function Attendance() {
                   {loading ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
-                        <TableCell colSpan={5} sx={{ borderColor: COLOR.border, py: 1.5 }}>
+                        <TableCell colSpan={6} sx={{ borderColor: COLOR.border, py: 1.5 }}>
                           <Skeleton variant="text" width="100%" height={30} sx={{ bgcolor: "rgba(255,255,255,0.06)" }} />
                         </TableCell>
                       </TableRow>
                     ))
                   ) : paginatedRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} sx={{ textAlign: "center", py: 6, color: COLOR.textMuted, borderColor: COLOR.border }}>
+                      <TableCell colSpan={6} sx={{ textAlign: "center", py: 6, color: COLOR.textMuted, borderColor: COLOR.border }}>
                         No records match your filters.
                       </TableCell>
                     </TableRow>
@@ -1129,6 +1352,8 @@ export default function Attendance() {
                       const isPresent = row.status.toLowerCase() === "present";
                       const isAbsent = row.status.toLowerCase() === "absent";
                       const isLate = row.status.toLowerCase() === "late";
+                      const isHoliday = row.status.toLowerCase() === "holiday";
+                      const isLeave = row.status.toLowerCase() === "leave";
 
                       return (
                         <TableRow
@@ -1222,6 +1447,10 @@ export default function Attendance() {
                                   <CheckCircle sx={{ fontSize: "14px !important", color: `${COLOR.green} !important` }} />
                                 ) : isAbsent ? (
                                   <ErrorIcon sx={{ fontSize: "14px !important", color: `${COLOR.red} !important` }} />
+                                ) : isHoliday ? (
+                                  <CalendarToday sx={{ fontSize: "14px !important", color: `${COLOR.blue} !important` }} />
+                                ) : isLeave ? (
+                                  <Person sx={{ fontSize: "14px !important", color: "#c084fc !important" }} />
                                 ) : (
                                   <Warning sx={{ fontSize: "14px !important", color: `${COLOR.amber} !important` }} />
                                 )
@@ -1236,15 +1465,152 @@ export default function Attendance() {
                                   ? "rgba(16, 185, 129, 0.12)"
                                   : isAbsent
                                   ? "rgba(239, 68, 68, 0.12)"
+                                  : isHoliday
+                                  ? "rgba(59, 130, 246, 0.12)"
+                                  : isLeave
+                                  ? "rgba(168, 85, 247, 0.12)"
                                   : "rgba(245, 158, 11, 0.12)",
-                                color: isPresent ? COLOR.green : isAbsent ? COLOR.red : COLOR.amber,
+                                color: isPresent
+                                  ? COLOR.green
+                                  : isAbsent
+                                  ? COLOR.red
+                                  : isHoliday
+                                  ? COLOR.blue
+                                  : isLeave
+                                  ? "#c084fc"
+                                  : COLOR.amber,
                                 border: isPresent
                                   ? "1px solid rgba(16, 185, 129, 0.3)"
                                   : isAbsent
                                   ? "1px solid rgba(239, 68, 68, 0.3)"
+                                  : isHoliday
+                                  ? "1px solid rgba(59, 130, 246, 0.3)"
+                                  : isLeave
+                                  ? "1px solid rgba(168, 85, 247, 0.3)"
                                   : "1px solid rgba(245, 158, 11, 0.3)",
                               }}
                             />
+                          </TableCell>
+
+                          {/* Action Column */}
+                          <TableCell sx={{ borderColor: COLOR.border, py: 1.25 }} onClick={(e) => e.stopPropagation()}>
+                            {canManageAttendance ? (
+                              isAbsent ? (
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  disabled={updatingDateKey === row.dateKey}
+                                  onClick={() => handleQuickMark(row, "present")}
+                                  startIcon={
+                                    updatingDateKey === row.dateKey ? (
+                                      <CircularProgress size={12} color="inherit" />
+                                    ) : (
+                                      <CheckCircle sx={{ fontSize: 14 }} />
+                                    )
+                                  }
+                                  sx={{
+                                    bgcolor: COLOR.green,
+                                    color: "#fff",
+                                    fontSize: "0.72rem",
+                                    fontWeight: 800,
+                                    textTransform: "none",
+                                    borderRadius: "8px",
+                                    py: 0.4,
+                                    px: 1.4,
+                                    boxShadow: "0 2px 8px rgba(16, 185, 129, 0.25)",
+                                    "&:hover": { bgcolor: "#059669" },
+                                  }}
+                                >
+                                  {updatingDateKey === row.dateKey ? "Saving..." : "Mark Present"}
+                                </Button>
+                              ) : isPresent ? (
+                                <Stack direction="row" spacing={0.8} alignItems="center">
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    disabled={updatingDateKey === row.dateKey}
+                                    onClick={() => handleQuickMark(row, "absent")}
+                                    startIcon={
+                                      updatingDateKey === row.dateKey ? (
+                                        <CircularProgress size={12} color="inherit" />
+                                      ) : (
+                                        <Close sx={{ fontSize: 13 }} />
+                                      )
+                                    }
+                                    sx={{
+                                      color: COLOR.red,
+                                      borderColor: "rgba(239, 68, 68, 0.4)",
+                                      fontSize: "0.7rem",
+                                      fontWeight: 700,
+                                      textTransform: "none",
+                                      borderRadius: "8px",
+                                      py: 0.3,
+                                      px: 1,
+                                      "&:hover": {
+                                        borderColor: COLOR.red,
+                                        bgcolor: "rgba(239, 68, 68, 0.1)",
+                                      },
+                                    }}
+                                  >
+                                    {updatingDateKey === row.dateKey ? "Saving..." : "Mark Absent"}
+                                  </Button>
+                                  <Tooltip title="Edit punch hours or details">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleRowClick(row)}
+                                      sx={{
+                                        color: COLOR.textSub,
+                                        border: `1px solid ${COLOR.border}`,
+                                        borderRadius: "8px",
+                                        p: 0.5,
+                                        "&:hover": { color: COLOR.blue, borderColor: COLOR.blue, bgcolor: alpha(COLOR.blue, 0.1) },
+                                      }}
+                                    >
+                                      <AccessTime sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Stack>
+                              ) : (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={updatingDateKey === row.dateKey}
+                                  onClick={() => handleQuickMark(row, "present")}
+                                  startIcon={
+                                    updatingDateKey === row.dateKey ? (
+                                      <CircularProgress size={12} color="inherit" />
+                                    ) : (
+                                      <CheckCircle sx={{ fontSize: 14 }} />
+                                    )
+                                  }
+                                  sx={{
+                                    color: COLOR.green,
+                                    borderColor: "rgba(16, 185, 129, 0.4)",
+                                    fontSize: "0.7rem",
+                                    fontWeight: 700,
+                                    textTransform: "none",
+                                    borderRadius: "8px",
+                                    py: 0.3,
+                                    px: 1,
+                                    "&:hover": {
+                                      borderColor: COLOR.green,
+                                      bgcolor: "rgba(16, 185, 129, 0.1)",
+                                    },
+                                  }}
+                                >
+                                  {updatingDateKey === row.dateKey ? "Saving..." : "Mark Present"}
+                                </Button>
+                              )
+                            ) : (
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => handleRowClick(row)}
+                                sx={{ color: COLOR.textSub, fontSize: "0.72rem", textTransform: "none" }}
+                              >
+                                View
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

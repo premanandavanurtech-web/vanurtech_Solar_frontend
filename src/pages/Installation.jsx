@@ -286,6 +286,20 @@ const ROLE_CONFIG = {
   },
   ZSM: {
     label: "Operation Lead",
+    color: PRIMARY_COLOR,
+    icon: <WorkspacePremium sx={{ fontSize: 16 }} />,
+  },
+  Incharge: {
+    label: "Incharge",
+    color: PRIMARY_COLOR,
+    icon: <SupervisorAccount sx={{ fontSize: 16 }} />,
+  },
+  TEAM: {
+    label: "Team Member",
+    color: PRIMARY_COLOR,
+    icon: <Groups sx={{ fontSize: 16 }} />,
+  },
+};
 
 const getUserPermissions = (userRole) => ({
   canView: ["Admin_panel", "ZSM", "Incharge", "TEAM"].includes(userRole),

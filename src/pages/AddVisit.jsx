@@ -243,51 +243,6 @@ const makeInitialSurveyData = (lead, siteSurvey = null) => {
   const defaults = getStandardSurveyDefaults(lead);
 
   return {
-<<<<<<< HEAD
-    roofType: general.roofType || defaults.roofType,
-    roofMaterial: general.roofMaterial || defaults.roofMaterial,
-    roofCondition: general.roofCondition || defaults.roofCondition,
-    shadingIssues:
-      Array.isArray(general.shadingIssues) && general.shadingIssues.length
-        ? general.shadingIssues
-        : defaults.shadingIssues,
-    siteAccess: general.siteAccess || defaults.siteAccess,
-    existingElectricalLoad:
-      general.existingElectricalLoad !== undefined &&
-      general.existingElectricalLoad !== "" &&
-      general.existingElectricalLoad !== null
-        ? String(general.existingElectricalLoad)
-        : defaults.existingElectricalLoad,
-    mainDistributionBoardLocation:
-      general.mainDistributionBoardLocation || defaults.mainDistributionBoardLocation,
-    earthingAvailable: general.earthingAvailable || defaults.earthingAvailable,
-    phaseType: general.phaseType || defaults.phaseType,
-    recommendedPanelBrand:
-      general.recommendedPanelBrand || defaults.recommendedPanelBrand,
-    recommendedInverterBrand:
-      general.recommendedInverterBrand || defaults.recommendedInverterBrand,
-    inverterType: general.inverterType || defaults.inverterType,
-    availableRoofArea:
-      general.availableRoofArea !== undefined &&
-      general.availableRoofArea !== "" &&
-      general.availableRoofArea !== null
-        ? String(general.availableRoofArea)
-        : defaults.availableRoofArea,
-    usableRoofArea:
-      general.usableRoofArea !== undefined &&
-      general.usableRoofArea !== "" &&
-      general.usableRoofArea !== null
-        ? String(general.usableRoofArea)
-        : defaults.usableRoofArea,
-    distanceFromRoofToDb:
-      general.distanceFromRoofToDb !== undefined &&
-      general.distanceFromRoofToDb !== "" &&
-      general.distanceFromRoofToDb !== null
-        ? String(general.distanceFromRoofToDb)
-        : defaults.distanceFromRoofToDb,
-    customerExpectations:
-      general.customerExpectations || defaults.customerExpectations,
-=======
     roofType: general.roofType || "",
     roofMaterial: general.roofMaterial || "",
     roofCondition: general.roofCondition || "",
@@ -309,7 +264,7 @@ const makeInitialSurveyData = (lead, siteSurvey = null) => {
     usableRoofArea: general.usableRoofArea || "",
     distanceFromRoofToDb: general.distanceFromRoofToDb || "",
     customerExpectations: general.customerExpectations || "",
->>>>>>> origin/dipak
+
     specialRequirements: general.specialRequirements || "",
     challengesConcerns: general.challengesConcerns || "",
     locationName: getPreferredLocationLabel(lead, siteSurvey),
@@ -1292,14 +1247,7 @@ export default function VisitDetails({ onClose, onSave }) {
         if (!activeSurveyData.existingElectricalLoad) errs.existingElectricalLoad = "Required";
         if (!activeSurveyData.mainDistributionBoardLocation?.trim())
           errs.mainDistributionBoardLocation = "Required";
-<<<<<<< HEAD
-        if (!activeSurveyData.earthingAvailable) errs.earthingAvailable = "Required";
-        if (!activeSurveyData.phaseType) errs.phaseType = "Required";
-        if (!activeSurveyData.recommendedPanelBrand) errs.recommendedPanelBrand = "Required";
-        if (!activeSurveyData.recommendedInverterBrand) errs.recommendedInverterBrand = "Required";
-        if (!activeSurveyData.availableRoofArea) errs.availableRoofArea = "Required";
-        if (!activeSurveyData.usableRoofArea) errs.usableRoofArea = "Required";
-=======
+
         if (!surveyData.earthingAvailable) errs.earthingAvailable = "Required";
         if (!surveyData.phaseType) errs.phaseType = "Required";
         if (!surveyData.recommendedPanelBrand) errs.recommendedPanelBrand = "Required";
@@ -1312,7 +1260,6 @@ export default function VisitDetails({ onClose, onSave }) {
         }
         if (!surveyData.availableRoofArea) errs.availableRoofArea = "Required";
         if (!surveyData.usableRoofArea) errs.usableRoofArea = "Required";
->>>>>>> origin/dipak
       }
       if (step === 2) {
         if (!activeSurveyData.latitude || !activeSurveyData.longitude)
@@ -1352,27 +1299,6 @@ export default function VisitDetails({ onClose, onSave }) {
   const surveySummary = useMemo(() => {
     const lines = [
       "Site Survey Summary",
-<<<<<<< HEAD
-      `Roof Type: ${activeSurveyData.roofType || "-"}`,
-      `Roof Material: ${activeSurveyData.roofMaterial || "-"}`,
-      `Roof Condition: ${activeSurveyData.roofCondition || "-"}`,
-      `Shading Issues: ${activeSurveyData.shadingIssues?.length ? activeSurveyData.shadingIssues.join(", ") : "-"}`,
-      `Site Access: ${activeSurveyData.siteAccess || "-"}`,
-      `Existing Electrical Load (kW): ${activeSurveyData.existingElectricalLoad || "-"}`,
-      `Main Distribution Board Location: ${activeSurveyData.mainDistributionBoardLocation || "-"}`,
-      `Earthing Available: ${activeSurveyData.earthingAvailable || "-"}`,
-      `Phase Type: ${activeSurveyData.phaseType || "-"}`,
-      `Recommended Panel Brand: ${activeSurveyData.recommendedPanelBrand || "-"}`,
-      `Recommended Inverter Brand: ${activeSurveyData.recommendedInverterBrand || "-"}`,
-      `Inverter Type: ${activeSurveyData.inverterType || "-"}`,
-      `Available Roof Area (sq ft): ${activeSurveyData.availableRoofArea || "-"}`,
-      `Usable Roof Area (sq ft): ${activeSurveyData.usableRoofArea || "-"}`,
-      `Distance from Roof to DB (meters): ${activeSurveyData.distanceFromRoofToDb || "-"}`,
-      `Customer Expectations: ${activeSurveyData.customerExpectations || "-"}`,
-      `Special Requirements: ${activeSurveyData.specialRequirements || "-"}`,
-      `Challenges/Concerns: ${activeSurveyData.challengesConcerns || "-"}`,
-      `Coordinates: ${activeSurveyData.latitude || "-"}, ${activeSurveyData.longitude || "-"}`,
-=======
       `Roof Type: ${surveyData.roofType || "-"}`,
       `Roof Material: ${surveyData.roofMaterial || "-"}`,
       `Roof Condition: ${surveyData.roofCondition || "-"}`,
@@ -1395,7 +1321,7 @@ export default function VisitDetails({ onClose, onSave }) {
       `Special Requirements: ${surveyData.specialRequirements || "-"}`,
       `Challenges/Concerns: ${surveyData.challengesConcerns || "-"}`,
       `Coordinates: ${surveyData.latitude || "-"}, ${surveyData.longitude || "-"}`,
->>>>>>> origin/dipak
+
     ];
     if (activeSurveyData.remarks?.trim?.()) lines.push(`Additional Notes: ${activeSurveyData.remarks.trim()}`);
     return lines.join("\n");

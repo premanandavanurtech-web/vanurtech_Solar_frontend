@@ -898,6 +898,7 @@ const UserDetailsPage = () => {
                 : new Date(p.createdAt || Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
               daysWorked: p.daysWorked || 22,
               slipNo: p.payslipNo || `PAY-${p.year || "2026"}-${p.month || "01"}-${String(idx + 1).padStart(3, "0")}`,
+              attendance: p.attendance || p.attendanceSummary || null,
               raw: p,
             });
           }
@@ -940,6 +941,7 @@ const UserDetailsPage = () => {
                 : new Date(p.createdAt || Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
               daysWorked: p.daysWorked || 22,
               slipNo: p.salarySlipNo || `PAY-${p.year || "2026"}-${p.month || "01"}-${String(idx + 1).padStart(3, "0")}`,
+              attendance: p.attendance || p.attendanceSummary || null,
               raw: p,
             });
           }
@@ -1696,7 +1698,6 @@ const UserDetailsPage = () => {
         }
 
         if (holRes.status === "fulfilled" && holRes.value?.data?.success) {
-<<<<<<< HEAD
           const resObj = holRes.value.data.result || holRes.value.data.data;
           const hList = Array.isArray(resObj)
             ? resObj
@@ -1706,15 +1707,6 @@ const UserDetailsPage = () => {
           setHolidaysList(hList);
         } else if (holRes.status === "fulfilled" && Array.isArray(holRes.value?.data)) {
           setHolidaysList(holRes.value.data);
-=======
-          const holData = holRes.value.data.data || holRes.value.data.result || [];
-          const hList = Array.isArray(holData)
-            ? holData
-            : Array.isArray(holData?.holidays)
-            ? holData.holidays
-            : [];
-          setHolidaysList(hList);
->>>>>>> origin/dipak
         } else {
           setHolidaysList([]);
         }
@@ -1754,7 +1746,6 @@ const UserDetailsPage = () => {
     let totalWorkHoursSum = 0;
     let lateArrivalsCount = 0;
 
-<<<<<<< HEAD
     const safeAttendance = Array.isArray(attendanceRecords) ? attendanceRecords : [];
     safeAttendance.forEach((rec) => {
       let recDate = null;
@@ -1764,12 +1755,6 @@ const UserDetailsPage = () => {
         recDate = new Date(rec.punchIn.time);
       }
       if (recDate && !isNaN(recDate.getTime())) {
-=======
-    const safeRecords = Array.isArray(attendanceRecords) ? attendanceRecords : [];
-    safeRecords.forEach((rec) => {
-      const recDate = rec?.date ? new Date(rec.date) : (rec?.punchIn?.time ? new Date(rec.punchIn.time) : null);
-      if (recDate) {
->>>>>>> origin/dipak
         const key = `${recDate.getFullYear()}-${String(recDate.getMonth() + 1).padStart(2, "0")}-${String(recDate.getDate()).padStart(2, "0")}`;
         recordMap[key] = rec;
         const utcKey = recDate.toISOString().split("T")[0];
@@ -1785,25 +1770,13 @@ const UserDetailsPage = () => {
     });
 
     const holidayMap = {};
-<<<<<<< HEAD
     const safeHolidays = Array.isArray(holidaysList) ? holidaysList : [];
-=======
-    const safeHolidays = Array.isArray(holidaysList)
-      ? holidaysList
-      : Array.isArray(holidaysList?.holidays)
-      ? holidaysList.holidays
-      : [];
->>>>>>> origin/dipak
     safeHolidays.forEach((h) => {
       if (h?.date) {
         const d = new Date(h.date);
         if (!isNaN(d.getTime())) {
           const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-<<<<<<< HEAD
           holidayMap[key] = h.reason || h.name || h.title || "Holiday";
-=======
-          holidayMap[key] = h.name || h.title || h.reason || "Holiday";
->>>>>>> origin/dipak
         }
       }
     });
@@ -6443,16 +6416,35 @@ const UserDetailsPage = () => {
         onClose={() => setPreviewSlip(null)}
         slipData={previewSlip ? {
           ...previewSlip,
-          name: profileData.fullName || userName,
-          empId: profileData.employeeId || userEmpId,
+          name: profileData.fullName || userName || (user ? `${user.firstName || ""} ${user.lastName || ""}`.trim() : "Silu Reddy"),
+          empId: profileData.employeeId || userEmpId || user?.employeeId || "I0064",
           designation: profileData.designation || displayRole || user?.role || "Technical Incharge",
-          joiningDate: profileData.joiningDate || joinDate,
-          department: profileData.department || "Solar Operations",
-          employmentType: profileData.employmentType || "Full-time",
-          bankName: profileData.bankName || "State Bank of India",
-          accountNo: profileData.accountNumber || "XXXX XXXX 7890",
-          ifscCode: profileData.ifscCode || "SBIN0001234",
-          pan: profileData.panNumber || profileData.pan || "ABCPD1234F",
+          joiningDate: (profileData.joiningDate && profileData.joiningDate !== "—")
+            ? profileData.joiningDate
+            : (user?.joiningDate
+              ? new Date(user.joiningDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+              : (user?.createdAt
+                ? new Date(user.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                : (joinDate && joinDate !== "—" ? joinDate : "03 Oct 2026"))),
+          department: profileData.department && profileData.department !== "—" ? profileData.department : (user?.department || "Technical Incharge"),
+          employmentType: profileData.employmentType && profileData.employmentType !== "—" ? profileData.employmentType : (user?.employmentType || "Full-time"),
+          bankName: profileData.bankName && profileData.bankName !== "—" ? profileData.bankName : (user?.bankName || user?.bankDetails?.bankName || "State Bank of India"),
+          accountNo: profileData.accountNumber && profileData.accountNumber !== "—" ? profileData.accountNumber : (user?.accountNumber || user?.bankDetails?.accountNumber || "XXXX XXXX 7890"),
+          ifscCode: profileData.ifscCode && profileData.ifscCode !== "—" ? profileData.ifscCode : (user?.ifscCode || user?.bankDetails?.ifscCode || "SBIN0001234"),
+          pan: (profileData.panNumber && profileData.panNumber !== "—") ? profileData.panNumber : ((profileData.pan && profileData.pan !== "—") ? profileData.pan : (user?.pan || user?.panNumber || "ABCPD1234F")),
+          attendance: previewSlip.attendance || previewSlip.raw?.attendance || previewSlip.raw?.attendanceSummary || (
+            attendanceStats ? {
+              totalDays: attendanceStats.daysInMonth || 30,
+              presentDays: attendanceStats.presentCount ?? 0,
+              absentDays: attendanceStats.absentCount ?? 0,
+              leavePaid: attendanceStats.onLeaveCount ?? 0,
+              leaveUnpaid: 0,
+              holidays: (attendanceStats.weeklyOffCount ?? 0) + (attendanceStats.holidayCount ?? 0),
+            } : undefined
+          ),
+          totalDays: previewSlip.attendance?.totalDays || previewSlip.raw?.attendance?.totalDays || attendanceStats?.daysInMonth || 30,
+          presentDays: previewSlip.attendance?.presentDays !== undefined ? previewSlip.attendance.presentDays : (previewSlip.raw?.attendance?.presentDays !== undefined ? previewSlip.raw.attendance.presentDays : attendanceStats?.presentCount),
+          absentDays: previewSlip.attendance?.absentDays !== undefined ? previewSlip.attendance.absentDays : (previewSlip.raw?.attendance?.absentDays !== undefined ? previewSlip.raw.attendance.absentDays : attendanceStats?.absentCount),
           basicSalary: previewSlip.raw?.basicSalary || Number(String(previewSlip.basic || "").replace(/,/g, "")) || 40000,
           allowanceDetails: previewSlip.raw?.allowanceDetails || [],
           deductionDetails: previewSlip.raw?.deductionDetails || [],

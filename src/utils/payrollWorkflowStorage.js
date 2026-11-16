@@ -96,7 +96,7 @@ export const DEFAULT_HRMS_ROSTER = [
     avatarBg: "#dbeafe",
     avatarColor: "#1d4ed8",
     initials: "RR",
-    attendance: { totalDays: 31, presentDays: 31, absentDays: 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
+    attendance: { absentDays: 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
   },
   {
     id: 2,
@@ -112,7 +112,7 @@ export const DEFAULT_HRMS_ROSTER = [
     avatarBg: "#fef3c7",
     avatarColor: "#b45309",
     initials: "ID",
-    attendance: { totalDays: 31, presentDays: 30, absentDays: 1, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
+    attendance: { absentDays: 1, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
   },
   {
     id: 3,
@@ -128,7 +128,7 @@ export const DEFAULT_HRMS_ROSTER = [
     avatarBg: "#e2e8f0",
     avatarColor: "#475569",
     initials: "3C",
-    attendance: { totalDays: 31, presentDays: 30, absentDays: 1, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
+    attendance: { absentDays: 1, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
   },
   {
     id: 4,
@@ -144,7 +144,7 @@ export const DEFAULT_HRMS_ROSTER = [
     avatarBg: "#dbeafe",
     avatarColor: "#1d4ed8",
     initials: "AS",
-    attendance: { totalDays: 31, presentDays: 31, absentDays: 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
+    attendance: { absentDays: 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
   },
   {
     id: 5,
@@ -160,7 +160,7 @@ export const DEFAULT_HRMS_ROSTER = [
     avatarBg: "#e2e8f0",
     avatarColor: "#475569",
     initials: "SR",
-    attendance: { totalDays: 31, presentDays: 31, absentDays: 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
+    attendance: { absentDays: 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
   },
   {
     id: 6,
@@ -176,7 +176,7 @@ export const DEFAULT_HRMS_ROSTER = [
     avatarBg: "#f3e8ff",
     avatarColor: "#7e22ce",
     initials: "SK",
-    attendance: { totalDays: 31, presentDays: 31, absentDays: 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
+    attendance: { absentDays: 0, leavePaid: 0, leaveUnpaid: 0, holidays: 0 },
   },
 ];
 
@@ -249,11 +249,13 @@ export function calculateEmployeePayroll(emp, monthStr = "August 2026") {
 
   // Real Attendance details
   const rawAtt = emp.attendance || {};
-  const absentDays = rawAtt.absentDays !== undefined ? rawAtt.absentDays : (emp.name?.includes("incharge demo") ? 1 : 0);
-  const presentDays = rawAtt.presentDays !== undefined ? rawAtt.presentDays : Math.max(0, totalDays - absentDays);
-  const leavePaid = rawAtt.leavePaid || 0;
-  const leaveUnpaid = rawAtt.leaveUnpaid || 0;
-  const holidays = rawAtt.holidays || 0;
+  const absentDays = Math.max(0, Math.min(totalDays, Number(rawAtt.absentDays !== undefined ? rawAtt.absentDays : (emp.name?.includes("incharge demo") ? 1 : 0))));
+  const rawPresent = rawAtt.presentDays !== undefined ? Number(rawAtt.presentDays) : Math.max(0, totalDays - absentDays);
+  // Present days can NEVER exceed totalDays or (totalDays - absentDays)
+  const presentDays = Math.max(0, Math.min(totalDays - absentDays, rawPresent));
+  const leavePaid = Number(rawAtt.leavePaid || 0);
+  const leaveUnpaid = Number(rawAtt.leaveUnpaid || 0);
+  const holidays = Number(rawAtt.holidays || 0);
 
   const att = {
     totalDays,

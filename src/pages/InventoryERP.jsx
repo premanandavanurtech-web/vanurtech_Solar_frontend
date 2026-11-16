@@ -328,15 +328,12 @@ function InventoryERP() {
   const [cancelReasonInput, setCancelReasonInput] = useState("");
   const [cancellingIssue, setCancellingIssue] = useState(false);
 
-<<<<<<< HEAD
   // Select Converted Project for Add Materials Modal
   const [selectProjectModalOpen, setSelectProjectModalOpen] = useState(false);
   const [loadingConvertedProjects, setLoadingConvertedProjects] = useState(false);
   const [convertedProjects, setConvertedProjects] = useState([]);
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
 
-=======
->>>>>>> origin/dipak
   const imagePreviewUrl = useMemo(() => {
     if (!itemForm.image) return null;
     if (itemForm.image instanceof File || itemForm.image instanceof Blob) {
@@ -779,7 +776,6 @@ function InventoryERP() {
     }
   };
 
-<<<<<<< HEAD
   // Fetch only converted projects with EMPTY materials (not yet issued in active inventory-out)
   const fetchConvertedProjectsWithNoMaterials = useCallback(async () => {
     setLoadingConvertedProjects(true);
@@ -902,8 +898,6 @@ function InventoryERP() {
     });
   }, [convertedProjects, projectSearchQuery]);
 
-=======
->>>>>>> origin/dipak
   const fetchSummary = useCallback(async () => {
     try {
       const response = await axiosInstance.get("/inventory/summary");
@@ -2458,7 +2452,6 @@ function InventoryERP() {
               <Button
                 startIcon={<Add />}
                 variant="contained"
-<<<<<<< HEAD
                 onClick={() => {
                   fetchConvertedProjectsWithNoMaterials();
                   setSelectProjectModalOpen(true);
@@ -2466,12 +2459,7 @@ function InventoryERP() {
                 sx={{ bgcolor: INDIGO, borderRadius: 2, fontWeight: 900, px: 3 }}
               >
                 Add Materials to Project
-=======
-                onClick={() => setInventoryOutDialogOpen(true)}
-                sx={{ bgcolor: INDIGO, borderRadius: 2, fontWeight: 900, px: 3 }}
-              >
-                Issue Material to Project
->>>>>>> origin/dipak
+
               </Button>
             </Stack>
           </Stack>
@@ -3400,7 +3388,7 @@ function InventoryERP() {
         onClose={() => setSerialTraceModalOpen(false)}
       />
 
-<<<<<<< HEAD
+
       {/* Select Converted Project Modal for Add Materials Flow */}
       <Dialog
         open={selectProjectModalOpen}
@@ -3732,8 +3720,6 @@ function InventoryERP() {
         </DialogActions>
       </Dialog>
 
-=======
->>>>>>> origin/dipak
       {categoryModalNode}
       {subCategoryModalNode}
       {importModalNode}

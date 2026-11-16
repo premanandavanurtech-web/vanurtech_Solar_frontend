@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   Chip,
+  CircularProgress,
   Divider,
   Dialog,
   DialogActions,
@@ -36,16 +37,20 @@ import {
   AccountBalance,
   Add,
   ArrowBack,
+  ArrowForward,
   Bolt,
   Build,
   CalendarMonth,
+  Cancel,
   CheckCircle,
   Clear,
   CloudUpload,
+  CloudUploadOutlined,
   DescriptionOutlined,
   Download,
   Edit,
   FactCheck,
+  FileDownloadOutlined,
   InfoOutlined,
   Link as LinkIcon,
   LocationOn,
@@ -62,6 +67,7 @@ import {
   InsertDriveFileOutlined,
   OpenInNew,
   PictureAsPdfOutlined,
+  RemoveRedEyeOutlined,
   CheckCircleOutline,
   MonetizationOnOutlined,
   RedeemOutlined,
@@ -75,13 +81,10 @@ import {
   EmailOutlined,
   Inventory2Outlined,
   WhatsApp,
-<<<<<<< HEAD
   Search,
   PeopleAlt,
   CalendarMonthOutlined,
   KeyboardArrowDownRounded,
-=======
->>>>>>> origin/dipak
 } from "@mui/icons-material";
 import { format, parseISO } from "date-fns";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -91,6 +94,7 @@ import { getProjectStage } from "../utils/projectStage";
 import { getAcceptedOrLatestQuotation } from "../utils/quotationStorage";
 import ProjectProfitabilityCard from "../components/ProjectProfitabilityCard";
 import ProjectImagesWorkspace from "../components/ProjectImagesWorkspace";
+import { extractAllProjectMedia } from "../utils/projectMediaExtractor";
 
 // ---- Design tokens ---------------------------------------------------
 // A refined, professional palette: a deep navy ink, a single confident
@@ -239,12 +243,25 @@ const PHASE2_LEAD_STATUS_OPTIONS = [
 ];
 
 const STRICT_WORKFLOW_STAGES = [
+  "lead_converted",
   "registration",
   "document",
   "payment",
   "loan_pending",
   "disbursement",
   "installation",
+  "dcr_generation",
+  "notification_email",
+  "demand_note",
+  "demand_note_payment",
+  "inspection",
+  "meter_installation",
+  "phase2_disbursement",
+  "final_payment",
+  "project_commissioning",
+  "discom_approval",
+  "subsidy_redeemed",
+  "subsidy_received",
 ];
 
 const SOLAR_REQUIREMENT_TYPES = [
@@ -476,14 +493,24 @@ const isCompletedStatus = (value) => {
 
 const isStrictWorkflowStageComplete = (project, stageKey) => {
   if (!project) return false;
+  if (stageKey === "lead_converted") {
+    return Boolean(project.isProject || project.projectConvertedAt || project.projectCode || String(project.status || "").toLowerCase().includes("converted"));
+  }
+
+  const regDone = isCompletedStatus(project.registrationStatus);
 
   if (stageKey === "registration") {
-    return isCompletedStatus(project.registrationStatus);
+    return regDone;
   }
   if (stageKey === "document") {
-    return isCompletedStatus(project.documentStatus) || getUploadedDocuments(project).length > 0;
+    // Stage 03 Document requires DISCOM Registration (Stage 02) to be completed first
+    // Completed ONLY when all uploaded documents are verified; otherwise pending
+    if (!regDone) return false;
+    const uploadedDocs = getUploadedDocuments(project);
+    return uploadedDocs.length > 0 && uploadedDocs.every((doc) => doc.status === "verified");
   }
   if (stageKey === "payment") {
+    if (!regDone || !isStrictWorkflowStageComplete(project, "document")) return false;
     return (
       isCompletedStatus(project.paymentStatus) ||
       isCompletedStatus(project.loanStatus) ||
@@ -492,14 +519,53 @@ const isStrictWorkflowStageComplete = (project, stageKey) => {
   }
   if (stageKey === "loan_pending") {
     if (project?.paymentType !== "Bank Loan") return true;
+    if (!regDone) return false;
     return isCompletedStatus(project.bankAtPendingStatus);
   }
   if (stageKey === "disbursement") {
     if (project?.paymentType !== "Bank Loan") return true;
+    if (!regDone) return false;
     return isCompletedStatus(project.disbursementStatus) || (hasValue(project.disbursementAmount) && hasValue(project.disbursementDate));
   }
   if (stageKey === "installation") {
+    if (!regDone) return false;
     return isCompletedStatus(project.installationStatus) || hasValue(project.installationDate);
+  }
+  if (stageKey === "dcr_generation") {
+    return project.dcrGenerated === "Yes" || Boolean(project.dcrCertificate?.url) || project.status === "DCR Generation";
+  }
+  if (stageKey === "notification_email") {
+    return project.notificationEmailSent === "Yes" || Boolean(project.notificationNumber) || project.status === "Notification Email";
+  }
+  if (stageKey === "demand_note") {
+    return project.demandNoteGenerated === "Yes" || Boolean(project.demandNoteNumber) || project.status === "Demand Note";
+  }
+  if (stageKey === "demand_note_payment") {
+    return project.demandNotePaymentPaid === "Yes" || (Boolean(project.demandNotePaymentAmount) && Number(project.demandNotePaymentAmount) > 0) || project.status === "Demand Note Payment";
+  }
+  if (stageKey === "inspection") {
+    return ["by resco", "by solar coordinator", "by discom"].includes(String(project.inspectionStatus || "").toLowerCase()) || Boolean(project.inspectionDocument?.url) || project.status === "Inspection";
+  }
+  if (stageKey === "meter_installation") {
+    return project.meterInstallationComplete === "Yes" || Boolean(project.meterInstallationDate) || project.status === "Meter Installation";
+  }
+  if (stageKey === "phase2_disbursement") {
+    return project.phase2DisbursementPaid === "Yes" || (Boolean(project.phase2DisbursementAmount) && Number(project.phase2DisbursementAmount) > 0) || project.status === "Phase 2 Disbursement";
+  }
+  if (stageKey === "final_payment") {
+    return (project.duePaymentCleared === "Yes" && Boolean(project.duePaymentClearanceDate)) || project.status === "Final Payment";
+  }
+  if (stageKey === "project_commissioning") {
+    return project.projectCommissioningStatus === "Yes" || project.status === "Project Commissioning";
+  }
+  if (stageKey === "discom_approval") {
+    return project.discomApprovalStatus === "Yes" || project.status === "DISCOM Approval";
+  }
+  if (stageKey === "subsidy_redeemed") {
+    return project.subsidyRedeemedStatus === "Yes" || project.status === "Subsidy Redeemed";
+  }
+  if (stageKey === "subsidy_received") {
+    return project.subsidyReceivedStatus === "Yes" || (Boolean(project.subsidyReceivedAmount) && Number(project.subsidyReceivedAmount) > 0) || project.status === "Subsidy Received" || project.status === "Handover";
   }
 
   return false;
@@ -511,8 +577,13 @@ const getStrictWorkflowLock = () => ({
 });
 
 const getFirstAvailableWorkflowStage = (project) => {
-  const firstIncomplete = STRICT_WORKFLOW_STAGES.find((stageKey) => !isStrictWorkflowStageComplete(project, stageKey));
-  return firstIncomplete || STRICT_WORKFLOW_STAGES[STRICT_WORKFLOW_STAGES.length - 1];
+  const isBankLoan = !project?.paymentType || project?.paymentType === "Bank Loan";
+  const stages = STRICT_WORKFLOW_STAGES.filter((stg) => {
+    if (stg === "loan_pending" && !isBankLoan) return false;
+    return true;
+  });
+  const firstIncomplete = stages.find((stageKey) => !isStrictWorkflowStageComplete(project, stageKey));
+  return firstIncomplete || stages[stages.length - 1];
 };
 
 const getStageMeta = (key) => PROJECT_STAGES.find((stage) => stage.key === key) || PROJECT_STAGES[0];
@@ -571,7 +642,7 @@ const normalizeDocumentText = (value) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-const pickMatchingDocument = (pool, aliases, usedIndexes) => {
+function pickMatchingDocument(pool, aliases, usedIndexes) {
   const normalizedAliases = aliases.map(normalizeDocumentText);
   const index = pool.findIndex((doc, docIndex) => {
     if (usedIndexes.has(docIndex)) return false;
@@ -582,9 +653,37 @@ const pickMatchingDocument = (pool, aliases, usedIndexes) => {
   if (index === -1) return null;
   usedIndexes.add(index);
   return pool[index];
-};
+}
 
-const getDocumentSlots = (project) => {
+function resolveSlotStatus(doc, slotKey, project, localOverrides = {}) {
+  const activityMap = project?.leadActivities?.find((a) => a?.type === "document_statuses")?.statuses || {};
+  const statuses = {
+    ...(project?.documentStatuses || {}),
+    ...activityMap,
+    ...(localOverrides || {}),
+  };
+
+  const docUrl = doc?.url || "";
+  const docName = doc?.name || "";
+  const rawFileName = getFileNameFromUrl(docUrl);
+
+  if (slotKey && statuses[slotKey]) return String(statuses[slotKey]).toLowerCase();
+  if (docUrl && statuses[docUrl]) return String(statuses[docUrl]).toLowerCase();
+  if (docName && statuses[docName]) return String(statuses[docName]).toLowerCase();
+  if (rawFileName && statuses[rawFileName]) return String(statuses[rawFileName]).toLowerCase();
+
+  if (doc?.status) return String(doc.status).toLowerCase();
+  if (doc?.verificationStatus) return String(doc.verificationStatus).toLowerCase();
+
+  if (slotKey === "aadhaar" && project?.aadhaar?.status) return String(project.aadhaar.status).toLowerCase();
+  if (slotKey === "panCard" && project?.panCard?.status) return String(project.panCard.status).toLowerCase();
+  if (slotKey === "bankStatement" && project?.passbook?.status) return String(project.passbook.status).toLowerCase();
+  if (slotKey === "registrationDocument" && project?.uploadDocument?.status) return String(project.uploadDocument.status).toLowerCase();
+
+  return "pending";
+}
+
+function getDocumentSlots(project, localOverrides = {}) {
   const pooledDocuments = [];
   if (project?.uploadDocument?.url) {
     pooledDocuments.push({
@@ -604,8 +703,9 @@ const getDocumentSlots = (project) => {
   });
 
   const usedIndexes = new Set();
+  const standardSlotDefs = DOCUMENT_REQUIREMENTS.filter((s) => s.key !== "other");
 
-  return DOCUMENT_REQUIREMENTS.map((slot) => {
+  const standardSlots = standardSlotDefs.map((slot) => {
     let matchedDocument = null;
 
     if (slot.key === "aadhaar" && project?.aadhaar?.url) {
@@ -614,33 +714,86 @@ const getDocumentSlots = (project) => {
       matchedDocument = { name: "PAN Card", url: project.panCard.url, source: "panCard" };
     } else if (slot.key === "bankStatement" && project?.passbook?.url) {
       matchedDocument = { name: "Bank Passbook", url: project.passbook.url, source: "passbook" };
-    } else if (slot.key === "other") {
-      const remainingIndex = pooledDocuments.findIndex((_, docIndex) => !usedIndexes.has(docIndex));
-      if (remainingIndex !== -1) {
-        usedIndexes.add(remainingIndex);
-        matchedDocument = pooledDocuments[remainingIndex];
-      }
     } else {
       matchedDocument = pickMatchingDocument(pooledDocuments, slot.aliases, usedIndexes);
     }
 
     const url = matchedDocument?.url || "";
+    const slotStatus = url ? resolveSlotStatus(matchedDocument, slot.key, project, localOverrides) : "empty";
+    const fileName = matchedDocument?.name || getFileNameFromUrl(url);
+    const isImg = Boolean(
+      (url && isImageDocumentUrl(url)) ||
+      (fileName && IMAGE_DOCUMENT_REGEX.test(fileName)) ||
+      (matchedDocument?.name && IMAGE_DOCUMENT_REGEX.test(matchedDocument.name))
+    );
 
     return {
       ...slot,
       url,
-      previewUrl: isImageDocumentUrl(url) ? toBackendAssetUrl(url) : "",
-      fileName: matchedDocument?.name || getFileNameFromUrl(url),
+      previewUrl: isImg ? toBackendAssetUrl(url) : "",
+      fileName,
       source: matchedDocument?.source || null,
       uploaded: Boolean(url),
-      isImage: isImageDocumentUrl(url),
+      isImage: isImg,
       isPdf: isPdfDocumentUrl(url),
+      isCustomOther: false,
+      status: slotStatus,
     };
   });
-};
 
-const getUploadedDocuments = (project) =>
-  getDocumentSlots(project).filter((requirement) => requirement.uploaded);
+  // Remaining documents in pooledDocuments that were not matched to standard slots
+  const customOtherSlots = [];
+  pooledDocuments.forEach((doc, docIndex) => {
+    if (!usedIndexes.has(docIndex)) {
+      usedIndexes.add(docIndex);
+      const url = doc.url || "";
+      const rawName = doc.name || getFileNameFromUrl(url);
+      const cleanLabel = rawName ? rawName.replace(/\.[^/.]+$/, "") : `Document ${customOtherSlots.length + 1}`;
+      const customSlotKey = doc.key || (doc._id ? `other_${doc._id}` : `other_${docIndex}_${url}`);
+      const slotStatus = url ? resolveSlotStatus(doc, customSlotKey, project, localOverrides) : "empty";
+      const isImg = Boolean(
+        (url && isImageDocumentUrl(url)) ||
+        (rawName && IMAGE_DOCUMENT_REGEX.test(rawName))
+      );
+      customOtherSlots.push({
+        key: customSlotKey,
+        label: cleanLabel || "Other Document",
+        fileName: rawName,
+        url,
+        previewUrl: isImg ? toBackendAssetUrl(url) : "",
+        source: doc.source || "otherDocuments",
+        uploaded: true,
+        isImage: isImg,
+        isPdf: isPdfDocumentUrl(url),
+        accent: "#94a3b8",
+        isCustomOther: true,
+        status: slotStatus,
+      });
+    }
+  });
+
+  // Always show an empty "Other" slot for adding new custom documents
+  const emptyOtherSlot = {
+    key: "other",
+    label: "Other",
+    fileName: "",
+    url: "",
+    previewUrl: "",
+    source: null,
+    uploaded: false,
+    isImage: false,
+    isPdf: false,
+    accent: "#94a3b8",
+    isCustomOther: true,
+    status: "empty",
+  };
+
+  return [...standardSlots, ...customOtherSlots, emptyOtherSlot];
+}
+
+function getUploadedDocuments(project, localOverrides = {}) {
+  return getDocumentSlots(project, localOverrides).filter((requirement) => requirement.uploaded);
+}
 
 const getPersonName = (person) => {
   if (!person) return "";
@@ -900,7 +1053,6 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
           borderRadius: RADIUS,
           overflow: "hidden",
           boxShadow: SHADOW_LG,
-<<<<<<< HEAD
           bgcolor: isDark ? "#0b0e1a" : PANEL,
           color: isDark ? "#f8fafc" : "inherit",
           border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
@@ -908,22 +1060,12 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
       }}
     >
       <DialogTitle sx={{ px: 3, py: 2.25, borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE }}>
-=======
-        },
-      }}
-    >
-      <DialogTitle sx={{ px: 3, py: 2.25, borderBottom: `1px solid ${BORDER}`, bgcolor: SURFACE }}>
->>>>>>> origin/dipak
         <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
           <Stack direction="row" alignItems="center" spacing={1.25}>
             <Box sx={{ width: 34, height: 34, borderRadius: "9px", bgcolor: alpha(WARNING, 0.12), color: WARNING, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <FactCheck sx={{ fontSize: 18 }} />
             </Box>
-<<<<<<< HEAD
             <Typography variant="subtitle1" fontWeight={800} color={isDark ? "#f8fafc" : "text.primary"} letterSpacing="-0.01em">
-=======
-            <Typography variant="subtitle1" fontWeight={800} color="text.primary" letterSpacing="-0.01em">
->>>>>>> origin/dipak
               Site Survey Details
             </Typography>
             <Chip
@@ -932,41 +1074,24 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
               sx={{ height: 23, bgcolor: alpha(SUCCESS, 0.12), color: SUCCESS, fontSize: 11, fontWeight: 800 }}
             />
           </Stack>
-<<<<<<< HEAD
           <IconButton size="small" onClick={onClose} sx={{ color: isDark ? "#94a3b8" : MUTED }}>
-=======
-          <IconButton size="small" onClick={onClose} sx={{ color: MUTED }}>
->>>>>>> origin/dipak
             <Clear sx={{ fontSize: 20 }} />
           </IconButton>
         </Stack>
       </DialogTitle>
 
       <DialogContent sx={{ p: 3 }}>
-<<<<<<< HEAD
         <Grid container spacing={2} sx={{ p: 2, mb: 2.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE }}>
           <Grid item xs={12} md={4}>
             <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Visit Date
             </Typography>
             <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : "text.primary"}>
-=======
-        <Grid container spacing={2} sx={{ p: 2, mb: 2.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: SURFACE }}>
-          <Grid item xs={12} md={4}>
-            <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Visit Date
-            </Typography>
-            <Typography variant="body2" fontWeight={800} color="text.primary">
->>>>>>> origin/dipak
               {formatDate(siteSurvey.savedAt || project?.visitDate, "dd MMM yyyy")}
             </Typography>
           </Grid>
           <Grid item xs={12} md={4}>
-<<<<<<< HEAD
             <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-=======
-            <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
->>>>>>> origin/dipak
               Inspector
             </Typography>
             <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
@@ -974,11 +1099,7 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
             </Typography>
           </Grid>
           <Grid item xs={12} md={4}>
-<<<<<<< HEAD
             <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-=======
-            <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
->>>>>>> origin/dipak
               Customer
             </Typography>
             <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
@@ -990,11 +1111,7 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
         <Typography variant="caption" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ display: "block", mb: 1.25, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           General
         </Typography>
-<<<<<<< HEAD
         <Divider sx={{ mb: 1.5, borderColor: isDark ? "rgba(255,255,255,0.08)" : BORDER }} />
-=======
-        <Divider sx={{ mb: 1.5, borderColor: BORDER }} />
->>>>>>> origin/dipak
 
         <Grid container spacing={1.5}>
           {SITE_SURVEY_FIELDS.map(([key, label]) => (
@@ -1007,12 +1124,8 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
                   p: 1.5,
                   borderRadius: RADIUS_SM,
                   border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
-<<<<<<< HEAD
                   bgcolor: isDark ? "#0e1322" : PANEL,
                   color: isDark ? "#f8fafc" : "inherit",
-=======
-                  bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit",
->>>>>>> origin/dipak
                 }}
               >
                 <Box
@@ -1035,11 +1148,7 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
                   )}
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
-<<<<<<< HEAD
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
-=======
-                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
->>>>>>> origin/dipak
                     {label}
                   </Typography>
                   <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mt: 0.45, wordBreak: "break-word" }}>
@@ -1050,20 +1159,12 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
             </Grid>
           ))}
           <Grid item xs={12} sm={6} md={3}>
-<<<<<<< HEAD
             <Stack direction="row" spacing={1.5} sx={{ minHeight: 74, p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : PANEL }}>
-=======
-            <Stack direction="row" spacing={1.5} sx={{ minHeight: 74, p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: PANEL }}>
->>>>>>> origin/dipak
               <Box sx={{ width: 34, height: 34, flexShrink: 0, borderRadius: "9px", bgcolor: alpha(WARNING, 0.1), color: WARNING, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Typography variant="caption" fontWeight={800}>#</Typography>
               </Box>
               <Box sx={{ minWidth: 0 }}>
-<<<<<<< HEAD
                 <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
-=======
-                <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
->>>>>>> origin/dipak
                   GPS Longitude
                 </Typography>
                 <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mt: 0.45 }}>
@@ -1073,20 +1174,12 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
             </Stack>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-<<<<<<< HEAD
             <Stack direction="row" spacing={1.5} sx={{ minHeight: 74, p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : PANEL }}>
-=======
-            <Stack direction="row" spacing={1.5} sx={{ minHeight: 74, p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: PANEL }}>
->>>>>>> origin/dipak
               <Box sx={{ width: 34, height: 34, flexShrink: 0, borderRadius: "9px", bgcolor: alpha(WARNING, 0.1), color: WARNING, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Typography variant="caption" fontWeight={800}>#</Typography>
               </Box>
               <Box sx={{ minWidth: 0 }}>
-<<<<<<< HEAD
                 <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
-=======
-                <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", lineHeight: 1.2, letterSpacing: "0.03em" }}>
->>>>>>> origin/dipak
                   GPS Latitude
                 </Typography>
                 <Typography variant="body2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mt: 0.45 }}>
@@ -1127,48 +1220,28 @@ const SurveyDetailModal = ({ open, project, onClose, onOpenEditor }) => {
         )}
 
         {siteSurveyNotes && (
-<<<<<<< HEAD
           <Box sx={{ mt: 2.5, p: 1.75, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE }}>
             <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Notes
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: "pre-wrap", wordBreak: "break-word", color: isDark ? "#f8fafc" : INK }}>
-=======
-          <Box sx={{ mt: 2.5, p: 1.75, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: SURFACE }}>
-            <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Notes
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 0.75, whiteSpace: "pre-wrap", wordBreak: "break-word", color: INK }}>
->>>>>>> origin/dipak
               {siteSurveyNotes}
             </Typography>
           </Box>
         )}
       </DialogContent>
 
-<<<<<<< HEAD
       <DialogActions sx={{ px: 3, py: 2, borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}` }}>
-=======
-      <DialogActions sx={{ px: 3, py: 2, borderTop: `1px solid ${BORDER}` }}>
->>>>>>> origin/dipak
         <Button
           size="small"
           variant="contained"
           startIcon={<LinkIcon sx={{ fontSize: 15 }} />}
           onClick={onOpenEditor}
-<<<<<<< HEAD
           sx={{ mr: "auto", borderRadius: RADIUS_SM, bgcolor: isDark ? "rgba(255,255,255,0.08)" : "#EEF1F6", color: isDark ? "#f8fafc" : INK, boxShadow: "none", fontWeight: 800, textTransform: "none", "&:hover": { bgcolor: isDark ? "rgba(255,255,255,0.14)" : "#E3E7EF", boxShadow: "none" } }}
         >
           Open full editor
         </Button>
         <Button size="small" variant="outlined" onClick={onClose} sx={{ borderRadius: RADIUS_SM, borderColor: isDark ? "rgba(255,255,255,0.15)" : BORDER, color: isDark ? "#cbd5e1" : INK, textTransform: "none", fontWeight: 700 }}>
-=======
-          sx={{ mr: "auto", borderRadius: RADIUS_SM, bgcolor: "#EEF1F6", color: INK, boxShadow: "none", fontWeight: 800, textTransform: "none", "&:hover": { bgcolor: "#E3E7EF", boxShadow: "none" } }}
-        >
-          Open full editor
-        </Button>
-        <Button size="small" variant="outlined" onClick={onClose} sx={{ borderRadius: RADIUS_SM, borderColor: BORDER, color: INK, textTransform: "none", fontWeight: 700 }}>
->>>>>>> origin/dipak
           Close
         </Button>
       </DialogActions>
@@ -1240,7 +1313,6 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                 startIcon={<FactCheck sx={{ fontSize: 17 }} />}
                 onClick={() => setSurveyOpen(true)}
                 disabled={!siteSurveyReady}
-<<<<<<< HEAD
                 sx={{
                   borderRadius: RADIUS_SM,
                   borderColor: isDark ? "rgba(255,255,255,0.15)" : BORDER,
@@ -1253,9 +1325,6 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                   },
                   "&:hover": { borderColor: alpha(BRAND, 0.4), bgcolor: alpha(BRAND, 0.04) },
                 }}
-=======
-                sx={{ borderRadius: RADIUS_SM, borderColor: BORDER, color: INK, fontWeight: 700, textTransform: "none", "&:hover": { borderColor: alpha(BRAND, 0.4), bgcolor: alpha(BRAND, 0.04) } }}
->>>>>>> origin/dipak
               >
                 Site Survey
               </Button>
@@ -1268,13 +1337,8 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
             <Stack spacing={3}>
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-<<<<<<< HEAD
                   <Typography variant="body2" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2 }}>#</Typography>
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-=======
-                  <Typography variant="body2" fontWeight={800} sx={{ color: MUTED_2 }}>#</Typography>
-                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
->>>>>>> origin/dipak
                     Project Code
                   </Typography>
                 </Stack>
@@ -1285,13 +1349,8 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
 
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-<<<<<<< HEAD
                   <TaskAlt sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-=======
-                  <TaskAlt sx={{ fontSize: 17, color: MUTED_2 }} />
-                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
->>>>>>> origin/dipak
                     Status
                   </Typography>
                 </Stack>
@@ -1304,11 +1363,7 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                   <IconButton
                     size="small"
                     onClick={() => onGoToStage?.(normalizeProjectStage(project))}
-<<<<<<< HEAD
                     sx={{ width: 30, height: 30, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, borderRadius: RADIUS_SM, color: isDark ? "#f8fafc" : INK, "&:hover": { borderColor: alpha(BRAND, 0.4), bgcolor: alpha(BRAND, 0.04) } }}
-=======
-                    sx={{ width: 30, height: 30, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, borderRadius: RADIUS_SM, color: INK, "&:hover": { borderColor: alpha(BRAND, 0.4), bgcolor: alpha(BRAND, 0.04) } }}
->>>>>>> origin/dipak
                   >
                     <Edit sx={{ fontSize: 15 }} />
                   </IconButton>
@@ -1317,13 +1372,8 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
 
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-<<<<<<< HEAD
                   <CalendarMonth sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-=======
-                  <CalendarMonth sx={{ fontSize: 17, color: MUTED_2 }} />
-                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
->>>>>>> origin/dipak
                     Created
                   </Typography>
                 </Stack>
@@ -1340,55 +1390,32 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                 <>
                   <Box>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-<<<<<<< HEAD
                       <Workspaces sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                       <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                         Created By
                       </Typography>
                     </Stack>
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: createdByName ? (isDark ? "#f8fafc" : INK) : (isDark ? "#64748b" : MUTED_2) }}>
-=======
-                      <Workspaces sx={{ fontSize: 17, color: MUTED_2 }} />
-                      <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Created By
-                      </Typography>
-                    </Stack>
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: createdByName ? INK : MUTED_2 }}>
->>>>>>> origin/dipak
                       {createdByName || "Not available"}
                     </Typography>
                   </Box>
 
                   <Box>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-<<<<<<< HEAD
                       <Build sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                       <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                         Supervisor
                       </Typography>
                     </Stack>
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: supervisorName ? (isDark ? "#f8fafc" : INK) : (isDark ? "#64748b" : MUTED_2) }}>
-=======
-                      <Build sx={{ fontSize: 17, color: MUTED_2 }} />
-                      <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                        Supervisor
-                      </Typography>
-                    </Stack>
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: supervisorName ? INK : MUTED_2 }}>
->>>>>>> origin/dipak
                       {supervisorName || "Not assigned"}
                     </Typography>
                   </Box>
 
                   <Box>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-<<<<<<< HEAD
                       <TaskAlt sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                       <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-=======
-                      <TaskAlt sx={{ fontSize: 17, color: MUTED_2 }} />
-                      <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
->>>>>>> origin/dipak
                         Team Members
                       </Typography>
                     </Stack>
@@ -1399,20 +1426,12 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                             key={name}
                             label={name}
                             size="small"
-<<<<<<< HEAD
                             sx={{ borderRadius: "6px", bgcolor: isDark ? "rgba(79, 70, 229, 0.2)" : alpha(BRAND, 0.08), color: isDark ? "#a5b4fc" : INK, fontWeight: 700 }}
-=======
-                            sx={{ borderRadius: "6px", bgcolor: alpha(BRAND, 0.08), color: INK, fontWeight: 700 }}
->>>>>>> origin/dipak
                           />
                         ))}
                       </Stack>
                     ) : (
-<<<<<<< HEAD
                       <Typography variant="subtitle1" fontWeight={700} sx={{ color: isDark ? "#64748b" : MUTED_2 }}>
-=======
-                      <Typography variant="subtitle1" fontWeight={700} sx={{ color: MUTED_2 }}>
->>>>>>> origin/dipak
                         No team members added
                       </Typography>
                     )}
@@ -1423,22 +1442,13 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
               {!isWorksheetProject && (
                 <Box>
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-<<<<<<< HEAD
                     <Build sx={{ fontSize: 17, color: isDark ? "#94a3b8" : MUTED_2 }} />
                     <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-=======
-                    <Build sx={{ fontSize: 17, color: MUTED_2 }} />
-                    <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.06em" }}>
->>>>>>> origin/dipak
                       Site Installer
                     </Typography>
                   </Stack>
                   <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap>
-<<<<<<< HEAD
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: installerName ? (isDark ? "#f8fafc" : INK) : (isDark ? "#64748b" : MUTED_2) }}>
-=======
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: installerName ? INK : MUTED_2 }}>
->>>>>>> origin/dipak
                       {installerName || "Not assigned"}
                     </Typography>
                     {!installerName && (
@@ -1460,11 +1470,7 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
 
         {isWorksheetProject && (
           <>
-<<<<<<< HEAD
             <Divider sx={{ my: 3, borderColor: isDark ? "rgba(255,255,255,0.08)" : BORDER_SOFT }} />
-=======
-            <Divider sx={{ my: 3, borderColor: BORDER_SOFT }} />
->>>>>>> origin/dipak
 
             <Stack spacing={2.5}>
               <Box>
@@ -1474,19 +1480,11 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                 <Grid container spacing={1.5}>
                   {worksheetFields.map((field) => (
                     <Grid item xs={12} sm={field.wide ? 12 : 6} md={field.wide ? 12 : 3} key={field.label}>
-<<<<<<< HEAD
                       <Box sx={{ p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE, minHeight: 78 }}>
                         <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                           {field.label}
                         </Typography>
                         <Typography variant="body2" fontWeight={800} color={field.value ? (isDark ? "#f8fafc" : INK) : (isDark ? "#64748b" : MUTED_2)} sx={{ mt: 0.75, wordBreak: "break-word" }}>
-=======
-                      <Box sx={{ p: 1.5, borderRadius: RADIUS_SM, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0e1220" : SURFACE, minHeight: 78 }}>
-                        <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                          {field.label}
-                        </Typography>
-                        <Typography variant="body2" fontWeight={800} color={field.value ? INK : MUTED_2} sx={{ mt: 0.75, wordBreak: "break-word" }}>
->>>>>>> origin/dipak
                           {field.value || "Not available"}
                         </Typography>
                       </Box>
@@ -1498,7 +1496,6 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
               <Box>
                 <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1.5} sx={{ mb: 1.5 }}>
                   <Stack direction="row" alignItems="center" spacing={1}>
-<<<<<<< HEAD
                     <PhotoCameraOutlined sx={{ fontSize: 18, color: isDark ? "#94a3b8" : MUTED_2 }} />
                     <Typography variant="subtitle2" fontWeight={900} color={isDark ? "#f8fafc" : INK}>
                       Geo Tagged Photos
@@ -1529,25 +1526,6 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                   >
                     Open GPS Location
                   </Button>
-=======
-                    <PhotoCameraOutlined sx={{ fontSize: 18, color: MUTED_2 }} />
-                    <Typography variant="subtitle2" fontWeight={900} color={isDark ? "#f8fafc" : INK}>
-                      Geo Tagged Photos
-                    </Typography>
-                    <Chip label={`${worksheetPhotos.length} photo${worksheetPhotos.length === 1 ? "" : "s"}`} size="small" sx={{ height: 22, borderRadius: "6px", bgcolor: alpha(BRAND, 0.08), color: BRAND, fontWeight: 800 }} />
-                  </Stack>
-                  {worksheetGpsUrl && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<LocationOn sx={{ fontSize: 16 }} />}
-                      onClick={() => window.open(worksheetGpsUrl, "_blank", "noopener,noreferrer")}
-                      sx={{ borderRadius: RADIUS_SM, textTransform: "none", fontWeight: 800, borderColor: BORDER, color: INK }}
-                    >
-                      Open GPS Location
-                    </Button>
-                  )}
->>>>>>> origin/dipak
                 </Stack>
 
                 {worksheetPhotos.length > 0 ? (
@@ -1555,21 +1533,13 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                     {worksheetPhotos.map(({ photo, url, index }) => {
                       const photoGpsUrl = getGpsMapUrl(photo);
                       return (
-<<<<<<< HEAD
                         <Box key={`${url}-${index}`} sx={{ width: 148, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, borderRadius: RADIUS_SM, overflow: "hidden", bgcolor: isDark ? "#0e1322" : PANEL }}>
-=======
-                        <Box key={`${url}-${index}`} sx={{ width: 148, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, borderRadius: RADIUS_SM, overflow: "hidden", bgcolor: PANEL }}>
->>>>>>> origin/dipak
                           <Box
                             component="img"
                             src={url}
                             alt={`Geo tagged project photo ${index + 1}`}
                             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-<<<<<<< HEAD
                             sx={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block", cursor: "pointer", bgcolor: isDark ? "#070a12" : SURFACE }}
-=======
-                            sx={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block", cursor: "pointer", bgcolor: SURFACE }}
->>>>>>> origin/dipak
                           />
                           <Stack spacing={0.5} sx={{ p: 1 }}>
                             <Typography variant="caption" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
@@ -1583,11 +1553,7 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                                 size="small"
                                 startIcon={<LocationOn sx={{ fontSize: 14 }} />}
                                 onClick={() => window.open(photoGpsUrl, "_blank", "noopener,noreferrer")}
-<<<<<<< HEAD
                                 sx={{ alignSelf: "flex-start", minWidth: 0, p: 0, color: isDark ? "#818cf8" : BRAND, fontSize: 12, fontWeight: 800, textTransform: "none" }}
-=======
-                                sx={{ alignSelf: "flex-start", minWidth: 0, p: 0, color: BRAND, fontSize: 12, fontWeight: 800, textTransform: "none" }}
->>>>>>> origin/dipak
                               >
                                 Map
                               </Button>
@@ -1598,13 +1564,8 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                     })}
                   </Stack>
                 ) : (
-<<<<<<< HEAD
                   <Box sx={{ p: 2, borderRadius: RADIUS_SM, border: isDark ? "1px dashed rgba(255,255,255,0.12)" : `1px dashed ${BORDER}`, bgcolor: isDark ? "rgba(255,255,255,0.03)" : SURFACE }}>
                     <Typography variant="body2" color={isDark ? "#94a3b8" : MUTED_2} fontWeight={700}>
-=======
-                  <Box sx={{ p: 2, borderRadius: RADIUS_SM, border: `1px dashed ${BORDER}`, bgcolor: SURFACE }}>
-                    <Typography variant="body2" color={MUTED_2} fontWeight={700}>
->>>>>>> origin/dipak
                       No geo tagged photos uploaded for this project.
                     </Typography>
                   </Box>
@@ -1618,11 +1579,7 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
       <Paper elevation={0} sx={{ p: 3, borderRadius: RADIUS, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit", boxShadow: SHADOW_SM }}>
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} spacing={2} sx={{ mb: 2.5 }}>
           <Stack direction="row" spacing={1.25} alignItems="center">
-<<<<<<< HEAD
             <AccessTime sx={{ fontSize: 20, color: isDark ? "#818cf8" : BRAND }} />
-=======
-            <AccessTime sx={{ fontSize: 20, color: BRAND }} />
->>>>>>> origin/dipak
             <Typography variant="h6" fontWeight={800} color={isDark ? "#f8fafc" : INK} letterSpacing="-0.01em">
               Activity Timeline
             </Typography>
@@ -1639,7 +1596,6 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                     minWidth: 0,
                     px: 2,
                     borderRadius: "999px",
-<<<<<<< HEAD
                     color: active ? (isDark ? "#a5b4fc" : BRAND) : (isDark ? "#cbd5e1" : "#475569"),
                     bgcolor: active
                       ? (isDark ? "rgba(79, 70, 229, 0.2)" : alpha(BRAND, 0.08))
@@ -1652,13 +1608,6 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                         ? (isDark ? "rgba(79, 70, 229, 0.3)" : alpha(BRAND, 0.12))
                         : (isDark ? "rgba(255, 255, 255, 0.1)" : "#e2e8f0"),
                     },
-=======
-                    color: active ? BRAND : "#475569",
-                    bgcolor: active ? alpha(BRAND, 0.08) : "#F1F4F9",
-                    border: `1px solid ${active ? alpha(BRAND, 0.3) : "transparent"}`,
-                    fontWeight: 800,
-                    textTransform: "none",
->>>>>>> origin/dipak
                   }}
                 >
                   {filter.label}
@@ -1673,17 +1622,10 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
             {Object.entries(groupedEntries).map(([groupLabel, entries]) => (
               <Box key={groupLabel}>
                 <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5 }}>
-<<<<<<< HEAD
                   <Typography variant="caption" fontWeight={800} sx={{ color: isDark ? "#94a3b8" : MUTED_2, minWidth: 92, letterSpacing: "0.04em" }}>
                     {groupLabel}
                   </Typography>
                   <Divider sx={{ flex: 1, borderColor: isDark ? "rgba(255,255,255,0.08)" : BORDER }} />
-=======
-                  <Typography variant="caption" fontWeight={800} sx={{ color: MUTED_2, minWidth: 92, letterSpacing: "0.04em" }}>
-                    {groupLabel}
-                  </Typography>
-                  <Divider sx={{ flex: 1, borderColor: BORDER }} />
->>>>>>> origin/dipak
                 </Stack>
                 <Stack spacing={2}>
                   {entries.map((entry) => (
@@ -1693,19 +1635,11 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                           width: 40,
                           height: 40,
                           borderRadius: "50%",
-<<<<<<< HEAD
                           bgcolor: isDark ? "rgba(79, 70, 229, 0.18)" : alpha(BRAND, 0.08),
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           color: isDark ? "#818cf8" : BRAND,
-=======
-                          bgcolor: alpha(BRAND, 0.08),
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: BRAND,
->>>>>>> origin/dipak
                           flexShrink: 0,
                         }}
                       >
@@ -1719,17 +1653,10 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
                           <Chip
                             label={entry.tag}
                             size="small"
-<<<<<<< HEAD
                             sx={{ height: 21, bgcolor: isDark ? "rgba(255,255,255,0.08)" : "#EEF1F6", color: isDark ? "#cbd5e1" : "#475569", fontSize: 10.5, fontWeight: 800 }}
                           />
                         </Stack>
                         <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : MUTED, mt: 0.4 }}>
-=======
-                            sx={{ height: 21, bgcolor: "#EEF1F6", color: "#475569", fontSize: 10.5, fontWeight: 800 }}
-                          />
-                        </Stack>
-                        <Typography variant="body2" sx={{ color: MUTED, mt: 0.4 }}>
->>>>>>> origin/dipak
                           {entry.actor || "System"} · {formatDate(entry.date, "dd MMM, hh:mm a")}
                         </Typography>
                       </Box>
@@ -1740,11 +1667,7 @@ const SummaryWorkspace = ({ project, onGoToStage, onOpenSurveyEditor }) => {
             ))}
           </Stack>
         ) : (
-<<<<<<< HEAD
           <Typography variant="body2" sx={{ color: isDark ? "#64748b" : MUTED_2, py: 3, textAlign: "center" }}>
-=======
-          <Typography variant="body2" sx={{ color: MUTED_2, py: 3, textAlign: "center" }}>
->>>>>>> origin/dipak
             No activity available.
           </Typography>
         )}
@@ -1766,7 +1689,6 @@ const workspaceHeaderIcon = (Icon) => (
   </Box>
 );
 
-<<<<<<< HEAD
 const LeadConvertedWorkspace = ({ project, onGoToStage }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -1907,8 +1829,6 @@ const LeadConvertedWorkspace = ({ project, onGoToStage }) => {
   );
 };
 
-=======
->>>>>>> origin/dipak
 const RegistrationWorkspace = ({
   project,
   formData,
@@ -2138,6 +2058,7 @@ const DocumentWorkspace = ({
   onCopyLink,
   onShareLink,
   onUpload,
+  onUploadOtherDocument,
   onPreview,
   onClosePreview,
   onTogglePreviewZoom,
@@ -2146,11 +2067,63 @@ const DocumentWorkspace = ({
   onVerify,
   onReject,
   onDelete,
+  onProceedToPayment,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
-  const uploadedCount = documentSlots.filter((slot) => slot.uploaded).length;
+  const uploadedSlots = documentSlots.filter((slot) => slot.uploaded);
+  const unuploadedSlots = documentSlots.filter((slot) => !slot.uploaded);
+  const uploadedCount = uploadedSlots.length;
   const progress = uploadedCount > 0 ? 100 : 0;
+
+  const [otherModalOpen, setOtherModalOpen] = useState(false);
+  const [otherDocName, setOtherDocName] = useState("");
+  const [otherDocFile, setOtherDocFile] = useState(null);
+  const [otherDocError, setOtherDocError] = useState("");
+  const [otherDocSubmitting, setOtherDocSubmitting] = useState(false);
+
+  const openOtherModal = (slot = null) => {
+    if (slot && slot.isCustomOther && slot.uploaded) {
+      setOtherDocName(slot.label || slot.fileName || "");
+    } else {
+      setOtherDocName("");
+    }
+    setOtherDocFile(null);
+    setOtherDocError("");
+    setOtherModalOpen(true);
+  };
+
+  const closeOtherModal = () => {
+    if (otherDocSubmitting) return;
+    setOtherModalOpen(false);
+    setOtherDocName("");
+    setOtherDocFile(null);
+    setOtherDocError("");
+  };
+
+  const handleSubmitOther = async () => {
+    if (!otherDocName.trim()) {
+      setOtherDocError("Please enter a document name");
+      return;
+    }
+    if (!otherDocFile) {
+      setOtherDocError("Please select a file to upload");
+      return;
+    }
+    try {
+      setOtherDocSubmitting(true);
+      if (onUploadOtherDocument) {
+        await onUploadOtherDocument(otherDocName.trim(), otherDocFile);
+      }
+      setOtherModalOpen(false);
+      setOtherDocName("");
+      setOtherDocFile(null);
+    } catch (err) {
+      setOtherDocError(err.message || "Failed to upload document");
+    } finally {
+      setOtherDocSubmitting(false);
+    }
+  };
 
   return (
     <Paper elevation={0} sx={{ p: 2.5, borderRadius: RADIUS, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit", boxShadow: SHADOW_SM }}>
@@ -2241,140 +2214,824 @@ const DocumentWorkspace = ({
         }}
       />
 
-      <Grid container spacing={1.5}>
-        {documentSlots.map((slot) => {
-          const uploaded = slot.uploaded;
-          const normalizedStatus = String(project?.documentStatus || "").toLowerCase();
-          const isVerified = uploaded && ["verified", "approved", "completed", "submitted"].includes(normalizedStatus);
-          const isRejected = uploaded && normalizedStatus === "rejected";
-          const isPending = uploaded && !isVerified && !isRejected;
-          const displayUrl = toBackendAssetUrl(slot.url);
+      {/* ── Uploaded Documents Grid ── */}
+      {uploadedSlots.length > 0 && (
+        <Grid container spacing={1.5} sx={{ mb: unuploadedSlots.length > 0 ? 1 : 0 }}>
+          {uploadedSlots.map((slot) => {
+            const isVerified = slot.status === "verified";
+            const isRejected = slot.status === "rejected";
+            const isPending = !isVerified && !isRejected;
+            const displayUrl = toBackendAssetUrl(slot.url);
 
-          return (
-            <Grid item xs={12} sm={6} lg={3} key={slot.key}>
-              <Card
-                elevation={0}
-                onClick={() => uploaded ? onPreview(slot) : onUpload(slot.key)}
-                sx={{
-                  height: "100%",
-                  borderRadius: RADIUS_SM,
-                  border: isVerified ? `1.5px solid ${SUCCESS}` : isRejected ? `1.5px solid ${DANGER}` : `1px solid ${BORDER}`,
-                  bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit",
-                  overflow: "hidden",
-                  transition: "box-shadow 0.2s ease",
-                  cursor: "pointer",
-                  "&:hover": { boxShadow: SHADOW_MD },
-                }}
-              >
-                <Stack
-                  alignItems="center"
-                  justifyContent="center"
-                  spacing={0.75}
+            return (
+              <Grid item xs={12} sm={6} lg={3} key={slot.key}>
+                <Card
+                  elevation={0}
+                  onClick={() => onPreview(slot)}
                   sx={{
-                    minHeight: 108,
-                    bgcolor: uploaded ? alpha(SUCCESS, 0.06) : alpha(NEUTRAL, 0.08),
-                    color: uploaded ? SUCCESS : NEUTRAL,
-                    position: "relative",
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    borderRadius: RADIUS_SM,
+                    border: isVerified
+                      ? `1.5px solid ${SUCCESS}`
+                      : isRejected
+                      ? `1.5px solid ${DANGER}`
+                      : `1.5px solid #f59e0b`,
+                    bgcolor: isDark ? "#0b0e1a" : PANEL,
+                    color: isDark ? "#f8fafc" : "inherit",
                     overflow: "hidden",
-                    ...(slot.previewUrl ? { backgroundImage: `url(${slot.previewUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : {}),
+                    transition: "all 0.2s ease",
+                    cursor: "pointer",
+                    "&:hover": {
+                      boxShadow: SHADOW_MD,
+                      borderColor: isVerified ? SUCCESS : isRejected ? DANGER : BRAND,
+                    },
                   }}
                 >
-                  {!slot.previewUrl && (
-                    <>
-                      {slot.isPdf ? <PictureAsPdfOutlined sx={{ fontSize: 28 }} /> : uploaded ? <InsertDriveFileOutlined sx={{ fontSize: 28 }} /> : <PhotoCameraOutlined sx={{ fontSize: 28 }} />}
-                      <Typography variant="caption" fontWeight={700}>
-                        {uploaded ? "File uploaded" : "No file uploaded"}
-                      </Typography>
-                    </>
-                  )}
-                  {isVerified && (
-                    <Box sx={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", bgcolor: SUCCESS, display: "grid", placeItems: "center" }}>
-                      <CheckCircle sx={{ fontSize: 15, color: "#fff" }} />
-                    </Box>
-                  )}
-                </Stack>
-                <Stack spacing={1.25} sx={{ p: 1.5 }}>
-                  <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ lineHeight: 1.2 }}>
-                    {slot.label}
-                  </Typography>
-                  {slot.fileName && (
-                    <Typography variant="caption" sx={{ color: MUTED_2 }} noWrap>
-                      {slot.fileName}
-                    </Typography>
-                  )}
-                  {uploaded && (
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                      <Chip
-                        size="small"
-                        icon={isVerified ? <CheckCircle sx={{ fontSize: 12 }} /> : <AccessTime sx={{ fontSize: 12 }} />}
-                        label={isVerified ? "Verified" : isRejected ? "Rejected" : "Pending"}
+                  {/* Thumbnail */}
+                  <Box
+                    sx={{
+                      height: 120,
+                      bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc",
+                      position: "relative",
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : BORDER}`,
+                    }}
+                  >
+                    {slot.isImage && (slot.previewUrl || slot.url) ? (
+                      <Box
+                        component="img"
+                        src={toBackendAssetUrl(slot.previewUrl || slot.url)}
+                        alt={slot.label}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          const fb = e.currentTarget.parentElement?.querySelector(".doc-card-fallback");
+                          if (fb) fb.style.display = "flex";
+                        }}
                         sx={{
-                          height: 22,
-                          borderRadius: 99,
-                          fontSize: "0.68rem",
-                          fontWeight: 800,
-                          bgcolor: isVerified ? "#dcfce7" : isRejected ? "#fff1f2" : "#fef9c3",
-                          color: isVerified ? SUCCESS : isRejected ? DANGER : "#854d0e",
-                          "& .MuiChip-icon": { color: isVerified ? SUCCESS : isRejected ? DANGER : "#854d0e" },
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
                         }}
                       />
-                      <Typography variant="caption" sx={{ color: MUTED_2, fontWeight: 700 }}>
-                        {project?.companyName || "SAHOO CONSTRUCTION"}
-                      </Typography>
-                    </Stack>
-                  )}
-                  <Divider sx={{ borderColor: BORDER }} />
-                  {uploaded ? (
-                    <>
-                      <Stack direction="row" alignItems="center" spacing={0.75}>
-                        {isPending && (
-                          <Button size="small" startIcon={<CheckCircle sx={{ fontSize: 13 }} />} onClick={(event) => { event.stopPropagation(); onVerify(slot); }} sx={{ flex: 1, fontSize: "0.7rem", fontWeight: 800, py: 0.8, borderRadius: 1.5, bgcolor: "#f0fdf4", color: SUCCESS, border: "1px solid #bbf7d0" }}>
-                            Verify
-                          </Button>
-                        )}
-                        <Button size="small" startIcon={<Clear sx={{ fontSize: 13 }} />} onClick={(event) => { event.stopPropagation(); onReject(slot); }} sx={{ flex: 1, fontSize: "0.7rem", fontWeight: 800, py: 0.8, borderRadius: 1.5, bgcolor: "#fff1f2", color: DANGER, border: "1px solid #fecdd3" }}>
-                          Reject
-                        </Button>
-                        <IconButton size="small" onClick={(event) => { event.stopPropagation(); onDownloadDocument(displayUrl, slot.fileName || slot.label); }} sx={{ width: 32, height: 32, borderRadius: 1.5, bgcolor: isDark ? "#0e1220" : SURFACE, border: `0.5px solid ${BORDER}` }}>
-                          <Download sx={{ fontSize: 14, color: MUTED }} />
-                        </IconButton>
-                      </Stack>
-                      <Stack direction="row" justifyContent="space-around" sx={{ pt: 0.5 }}>
-                        <Button size="small" startIcon={<Clear sx={{ fontSize: 13 }} />} onClick={(event) => { event.stopPropagation(); onDelete(slot); }} sx={{ fontSize: "0.7rem", color: DANGER, fontWeight: 700 }}>
-                          Delete
-                        </Button>
-                        <Button size="small" startIcon={<CloudUpload sx={{ fontSize: 13 }} />} onClick={(event) => { event.stopPropagation(); onUpload(slot.key); }} sx={{ fontSize: "0.7rem", color: MUTED, fontWeight: 700 }}>
-                          Re-upload
-                        </Button>
-                      </Stack>
-                    </>
-                  ) : (
-                    <Button
-                      fullWidth
-                      size="small"
-                      variant="outlined"
-                      startIcon={<CloudUpload sx={{ fontSize: 16 }} />}
-                      disabled={uploadingSlotKey === slot.key}
-                      onClick={(event) => { event.stopPropagation(); onUpload(slot.key); }}
+                    ) : null}
+
+                    {/* Fallback Icon Box */}
+                    <Stack
+                      className="doc-card-fallback"
+                      alignItems="center"
+                      justifyContent="center"
+                      spacing={0.5}
                       sx={{
-                        borderRadius: "999px",
-                        borderStyle: "dashed",
-                        borderColor: alpha(BRAND, 0.35),
-                        color: BRAND,
-                        fontWeight: 800,
-                        textTransform: "none",
-                        bgcolor: alpha(BRAND, 0.02),
+                        display: slot.isImage && (slot.previewUrl || slot.url) ? "none" : "flex",
+                        width: "100%",
+                        height: "100%",
                       }}
                     >
-                      {uploadingSlotKey === slot.key ? "Uploading..." : "Upload document"}
-                    </Button>
-                  )}
-                </Stack>
-              </Card>
-            </Grid>
-          );
-        })}
-      </Grid>
+                      {slot.isPdf ? (
+                        <PictureAsPdfOutlined sx={{ fontSize: 32, color: "#ef4444" }} />
+                      ) : (
+                        <InsertDriveFileOutlined sx={{ fontSize: 32, color: BRAND }} />
+                      )}
+                      <Typography variant="caption" sx={{ fontSize: "0.7rem", fontWeight: 700, color: MUTED_2 }}>
+                        {slot.isPdf ? "PDF Document" : "File uploaded"}
+                      </Typography>
+                    </Stack>
+
+                    {/* Top Right Pill Badge */}
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        bgcolor: isVerified ? SUCCESS : isRejected ? DANGER : "#f59e0b",
+                        color: "#fff",
+                        px: 1,
+                        py: 0.25,
+                        borderRadius: "999px",
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        lineHeight: 1.3,
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+                      }}
+                    >
+                      {isVerified ? "Verified" : isRejected ? "Rejected" : "Pending"}
+                    </Box>
+                  </Box>
+
+                  {/* Body */}
+                  <Box sx={{ p: 1.5, flex: 1, display: "flex", flexDirection: "column" }}>
+                    <Typography
+                      variant="subtitle2"
+                      fontWeight={800}
+                      color={isDark ? "#f8fafc" : INK}
+                      sx={{ fontSize: "0.85rem", lineHeight: 1.25, mb: 0.75 }}
+                      noWrap
+                      title={slot.label}
+                    >
+                      {slot.label}
+                    </Typography>
+
+                    {/* Status row */}
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                      {isVerified ? (
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <CheckCircle sx={{ fontSize: 13, color: SUCCESS }} />
+                          <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, color: SUCCESS }}>
+                            Verified
+                          </Typography>
+                        </Stack>
+                      ) : isRejected ? (
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <Clear sx={{ fontSize: 13, color: DANGER }} />
+                          <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, color: DANGER }}>
+                            Rejected
+                          </Typography>
+                        </Stack>
+                      ) : (
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <AccessTime sx={{ fontSize: 13, color: "#f59e0b" }} />
+                          <Typography sx={{ fontSize: "0.72rem", fontWeight: 700, color: "#f59e0b" }}>
+                            Pending
+                          </Typography>
+                        </Stack>
+                      )}
+
+                      {/* Right action button */}
+                      {isVerified ? (
+                        <Button
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onReject(slot);
+                          }}
+                          sx={{
+                            color: isDark ? "#94a3b8" : MUTED,
+                            fontSize: "0.72rem",
+                            fontWeight: 600,
+                            textTransform: "none",
+                            p: 0,
+                            minWidth: 0,
+                            "&:hover": { color: DANGER },
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      ) : isRejected ? (
+                        <Button
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onVerify(slot);
+                          }}
+                          sx={{
+                            color: SUCCESS,
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            textTransform: "none",
+                            p: 0,
+                            minWidth: 0,
+                            "&:hover": { color: "#16a34a" },
+                          }}
+                        >
+                          Re-verify
+                        </Button>
+                      ) : (
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Button
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onVerify(slot);
+                            }}
+                            sx={{
+                              color: SUCCESS,
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              textTransform: "none",
+                              p: 0,
+                              minWidth: 0,
+                              "&:hover": { color: "#16a34a" },
+                            }}
+                          >
+                            Verify
+                          </Button>
+                          <Button
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onReject(slot);
+                            }}
+                            sx={{
+                              color: DANGER,
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              textTransform: "none",
+                              p: 0,
+                              minWidth: 0,
+                              "&:hover": { color: "#dc2626" },
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </Stack>
+                      )}
+                    </Stack>
+
+                    {/* Divider */}
+                    <Box sx={{ borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, my: 0.75 }} />
+
+                    {/* Bottom 4 action icons */}
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 0.5, pt: 0.25 }}>
+                      <Tooltip title="View document">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPreview(slot);
+                          }}
+                          sx={{
+                            color: isDark ? "#94a3b8" : "#64748b",
+                            p: 0.5,
+                            "&:hover": { color: BRAND },
+                          }}
+                        >
+                          <RemoveRedEyeOutlined sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Download document">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDownloadDocument(displayUrl, slot.fileName || slot.label);
+                          }}
+                          sx={{
+                            color: isDark ? "#94a3b8" : "#64748b",
+                            p: 0.5,
+                            "&:hover": { color: BRAND },
+                          }}
+                        >
+                          <FileDownloadOutlined sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Re-upload">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (slot.isCustomOther || slot.key.startsWith("other")) {
+                              openOtherModal(slot);
+                            } else {
+                              onUpload(slot.key);
+                            }
+                          }}
+                          sx={{
+                            color: isDark ? "#94a3b8" : "#64748b",
+                            p: 0.5,
+                            "&:hover": { color: BRAND },
+                          }}
+                        >
+                          <CloudUploadOutlined sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Delete document">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(slot);
+                          }}
+                          sx={{
+                            color: DANGER,
+                            p: 0.5,
+                            "&:hover": { color: "#dc2626" },
+                          }}
+                        >
+                          <DeleteOutline sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Box>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+      )}
+
+      {/* ── PENDING / ADDITIONAL DOCUMENTS Heading ── */}
+      {unuploadedSlots.length > 0 && (
+        <Box sx={{ mt: uploadedSlots.length > 0 ? 3.5 : 0.5, mb: 1.5 }}>
+          <Typography
+            sx={{
+              fontSize: "0.75rem",
+              fontWeight: 800,
+              color: "#818cf8",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            PENDING / ADDITIONAL DOCUMENTS ({unuploadedSlots.length})
+          </Typography>
+        </Box>
+      )}
+
+      {/* ── Unuploaded Documents Grid ── */}
+      {unuploadedSlots.length > 0 && (
+        <Grid container spacing={1.5}>
+          {unuploadedSlots.map((slot) => {
+            return (
+              <Grid item xs={12} sm={6} lg={3} key={slot.key}>
+                <Card
+                  elevation={0}
+                  onClick={() => {
+                    if (slot.isCustomOther || slot.key === "other" || slot.key.startsWith("other")) {
+                      openOtherModal(slot);
+                    } else {
+                      onUpload(slot.key);
+                    }
+                  }}
+                  sx={{
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                    borderRadius: RADIUS_SM,
+                    border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : BORDER}`,
+                    bgcolor: isDark ? "#0b0e1a" : PANEL,
+                    color: isDark ? "#f8fafc" : "inherit",
+                    overflow: "hidden",
+                    transition: "all 0.2s ease",
+                    cursor: "pointer",
+                    "&:hover": {
+                      boxShadow: SHADOW_MD,
+                      borderColor: BRAND,
+                    },
+                  }}
+                >
+                  {/* Top Colored Accent Stripe */}
+                  <Box sx={{ height: 3, width: "100%", bgcolor: slot.accent || "#3b82f6" }} />
+
+                  {/* Camera Placeholder Box */}
+                  <Box
+                    sx={{
+                      height: 95,
+                      bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.04)" : BORDER_SOFT}`,
+                    }}
+                  >
+                    <PhotoCameraOutlined sx={{ fontSize: 24, color: isDark ? "#475569" : "#94a3b8", mb: 0.5 }} />
+                    <Typography sx={{ fontSize: "0.7rem", color: isDark ? "#64748b" : "#94a3b8", fontWeight: 600 }}>
+                      No file uploaded
+                    </Typography>
+                  </Box>
+
+                  {/* Card Body */}
+                  <Box sx={{ p: 1.5, flex: 1, display: "flex", flexDirection: "column" }}>
+                    <Typography
+                      variant="subtitle2"
+                      fontWeight={800}
+                      color={isDark ? "#f8fafc" : INK}
+                      sx={{ fontSize: "0.83rem", lineHeight: 1.25, mb: 1.5 }}
+                      noWrap
+                      title={slot.label}
+                    >
+                      {slot.label}
+                    </Typography>
+
+                    <Box sx={{ mt: "auto" }}>
+                      <Button
+                        fullWidth
+                        disabled={uploadingSlotKey === slot.key}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (slot.isCustomOther || slot.key === "other" || slot.key.startsWith("other")) {
+                            openOtherModal(slot);
+                          } else {
+                            onUpload(slot.key);
+                          }
+                        }}
+                        sx={{
+                          py: 0.65,
+                          borderRadius: "999px",
+                          border: `1px dashed ${isDark ? "rgba(59, 130, 246, 0.4)" : "#93c5fd"}`,
+                          bgcolor: isDark ? "rgba(15, 23, 42, 0.6)" : "#f8fafc",
+                          color: isDark ? "#60a5fa" : BRAND,
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          textTransform: "none",
+                          gap: 0.75,
+                          "&:hover": {
+                            bgcolor: isDark ? "rgba(59, 130, 246, 0.12)" : "#eff6ff",
+                            borderColor: isDark ? "#60a5fa" : BRAND,
+                            borderStyle: "solid",
+                          },
+                        }}
+                      >
+                        <CloudUploadOutlined sx={{ fontSize: 14 }} />
+                        {uploadingSlotKey === slot.key
+                          ? "Uploading..."
+                          : slot.key === "other"
+                          ? "Upload other file"
+                          : "Upload document"}
+                      </Button>
+                    </Box>
+                  </Box>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+      )}
+
+      {/* Bottom Action Footer for Document Step */}
+      <Box
+        sx={{
+          mt: 3,
+          p: 2,
+          borderRadius: RADIUS_SM,
+          border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
+          bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#FAFBFC",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 1.5,
+        }}
+      >
+        <Stack direction="row" spacing={1.25} alignItems="center">
+          {documentSlots.filter((s) => s.uploaded).every((s) => s.status === "verified") && uploadedCount > 0 ? (
+            <CheckCircle sx={{ fontSize: 20, color: SUCCESS }} />
+          ) : (
+            <InfoOutlined sx={{ fontSize: 20, color: BRAND }} />
+          )}
+          <Typography variant="body2" fontWeight={600} sx={{ color: isDark ? "#f8fafc" : INK }}>
+            {documentSlots.filter((s) => s.uploaded).every((s) => s.status === "verified") && uploadedCount > 0
+              ? "All uploaded documents are verified! Ready to proceed to payment."
+              : "Upload customer documents and verify them to complete this stage."}
+          </Typography>
+        </Stack>
+        {onProceedToPayment && (
+          <Button
+            variant="contained"
+            onClick={onProceedToPayment}
+            endIcon={<ArrowForward sx={{ fontSize: 16 }} />}
+            sx={{
+              bgcolor: BRAND,
+              color: "#fff",
+              fontWeight: 800,
+              textTransform: "none",
+              borderRadius: RADIUS_SM,
+              px: 2.5,
+              py: 0.85,
+              boxShadow: "none",
+              "&:hover": { bgcolor: BRAND_DARK },
+            }}
+          >
+            Proceed to Stage 04: Payment
+          </Button>
+        )}
+      </Box>
+
+      {/* Preview Dialog */}
+      <Dialog open={Boolean(previewDoc)} onClose={onClosePreview} maxWidth={previewDoc?.isImage ? "lg" : "sm"} fullWidth PaperProps={{ sx: { borderRadius: 3, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `0.5px solid ${BORDER}`, bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit", overflow: "hidden" } }}>
+        {previewDoc && (
+          <>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", py: 1.75, px: 2.5, borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : `0.5px solid ${BORDER}`, bgcolor: isDark ? "#0e1322" : SURFACE }}>
+              <Typography variant="body2" sx={{ fontWeight: 800, color: isDark ? "#f8fafc" : INK, fontSize: "0.85rem" }} noWrap>
+                {previewDoc.label}{previewDoc.fileName ? ` - ${previewDoc.fileName}` : ""}
+              </Typography>
+              <IconButton size="small" onClick={onClosePreview} sx={{ width: 28, height: 28, borderRadius: 1.5, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `0.5px solid ${BORDER}`, bgcolor: isDark ? "rgba(255,255,255,0.04)" : SURFACE, color: isDark ? "#94a3b8" : MUTED }}>
+                <Clear sx={{ fontSize: 15 }} />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent sx={{ p: 0 }}>
+              {previewDoc.isImage && previewDoc.url ? (
+                <Box sx={{ maxHeight: previewImageZoomed ? "78vh" : "68vh", overflow: "auto", bgcolor: "#0b1220", display: "flex", alignItems: "center", justifyContent: "center", p: previewImageZoomed ? 2 : 0 }}>
+                  <Box
+                    component="img"
+                    src={toBackendAssetUrl(previewDoc.url)}
+                    alt={previewDoc.label}
+                    onClick={onTogglePreviewZoom}
+                    sx={{
+                      width: "100%",
+                      display: "block",
+                      maxHeight: previewImageZoomed ? "none" : "68vh",
+                      objectFit: "contain",
+                      cursor: previewImageZoomed ? "zoom-out" : "zoom-in",
+                      transform: previewImageZoomed ? "scale(1.6)" : "scale(1)",
+                      transformOrigin: "center center",
+                      transition: "transform 0.18s ease",
+                    }}
+                  />
+                </Box>
+              ) : (
+                <Box sx={{ height: 280, bgcolor: isDark ? "#0e1220" : SURFACE, display: "grid", placeItems: "center" }}>
+                  <Stack alignItems="center" spacing={1}>
+                    {previewDoc.isPdf ? <PictureAsPdfOutlined sx={{ fontSize: 48, color: MUTED_2 }} /> : <InsertDriveFileOutlined sx={{ fontSize: 48, color: MUTED_2 }} />}
+                    <Typography variant="caption" sx={{ color: MUTED_2 }}>Preview not available</Typography>
+                  </Stack>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ px: 2.5, py: 1.75, borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `0.5px solid ${BORDER}`, gap: 1, bgcolor: isDark ? "#0e1322" : SURFACE }}>
+              {previewDoc.isImage ? (
+                <Typography variant="caption" sx={{ color: MUTED_2, flex: 1 }}>
+                  Click image to {previewImageZoomed ? "zoom out" : "zoom in"}
+                </Typography>
+              ) : <Box sx={{ flex: 1 }} />}
+              <Button onClick={onClosePreview} sx={{ borderRadius: 2, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `0.5px solid ${BORDER}`, color: isDark ? "#94a3b8" : MUTED, fontSize: "0.8rem", fontWeight: 700 }}>Close</Button>
+              <Button startIcon={<Download sx={{ fontSize: 14 }} />} onClick={() => onDownloadDocument(toBackendAssetUrl(previewDoc.url), previewDoc.fileName)} sx={{ borderRadius: 2, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `0.5px solid ${BORDER}`, bgcolor: isDark ? "#0e1220" : SURFACE, color: isDark ? "#f8fafc" : INK, fontSize: "0.8rem", fontWeight: 700 }}>Download</Button>
+              <Button variant="contained" startIcon={<OpenInNew sx={{ fontSize: 14 }} />} onClick={() => onOpenDocument(toBackendAssetUrl(previewDoc.url))} sx={{ borderRadius: 2, bgcolor: BRAND, color: "#fff", fontSize: "0.8rem", fontWeight: 800, boxShadow: "none" }}>Open in new tab</Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+
+      {/* Other Document Upload Modal */}
+      <Dialog
+        open={otherModalOpen}
+        onClose={closeOtherModal}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "18px",
+            bgcolor: isDark ? "#0b0e1a" : PANEL,
+            color: isDark ? "#f8fafc" : "inherit",
+            border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
+            boxShadow: SHADOW_LG,
+            overflow: "hidden",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 3,
+            py: 2.25,
+            borderBottom: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
+            bgcolor: isDark ? "#0e1322" : SURFACE,
+          }}
+        >
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: "10px",
+                bgcolor: alpha(BRAND, 0.12),
+                color: BRAND,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <DescriptionOutlined sx={{ fontSize: 20 }} />
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : INK, lineHeight: 1.2 }}>
+                Upload Other Document
+              </Typography>
+              <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : MUTED }}>
+                Add custom additional documents for this project
+              </Typography>
+            </Box>
+          </Stack>
+          <IconButton
+            size="small"
+            onClick={closeOtherModal}
+            disabled={otherDocSubmitting}
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: "8px",
+              border: isDark ? "1px solid rgba(255,255,255,0.1)" : `1px solid ${BORDER}`,
+              bgcolor: isDark ? "rgba(255,255,255,0.04)" : SURFACE,
+              color: isDark ? "#94a3b8" : MUTED,
+            }}
+          >
+            <Clear sx={{ fontSize: 16 }} />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3, py: 3, bgcolor: isDark ? "#0b0e1a" : PANEL }}>
+          <Stack spacing={2.5}>
+            {otherDocError && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {otherDocError}
+              </Alert>
+            )}
+
+            {/* Field 1: Document Name */}
+            <Box>
+              <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : INK, mb: 1 }}>
+                Document Name <span style={{ color: "#ef4444" }}>*</span>
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="e.g. Building Plan, Ration Card, Sanction Letter..."
+                value={otherDocName}
+                onChange={(e) => {
+                  setOtherDocName(e.target.value);
+                  if (otherDocError) setOtherDocError("");
+                }}
+                disabled={otherDocSubmitting}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "10px",
+                    bgcolor: isDark ? "rgba(255,255,255,0.04)" : SURFACE,
+                    color: isDark ? "#f8fafc" : INK,
+                    "& fieldset": { borderColor: isDark ? "rgba(255,255,255,0.1)" : BORDER },
+                    "&:hover fieldset": { borderColor: BRAND },
+                    "&.Mui-focused fieldset": { borderColor: BRAND },
+                  },
+                }}
+              />
+            </Box>
+
+            {/* Field 2: Upload File */}
+            <Box>
+              <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : INK, mb: 1 }}>
+                Upload File <span style={{ color: "#ef4444" }}>*</span>
+              </Typography>
+
+              <input
+                id="proj-doc-other-file-input"
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setOtherDocFile(file);
+                    if (otherDocError) setOtherDocError("");
+                    if (!otherDocName.trim()) {
+                      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+                      setOtherDocName(nameWithoutExt);
+                    }
+                  }
+                }}
+                disabled={otherDocSubmitting}
+              />
+
+              {!otherDocFile ? (
+                <Box
+                  component="label"
+                  htmlFor="proj-doc-other-file-input"
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    p: 3.5,
+                    borderRadius: "12px",
+                    border: `2px dashed ${isDark ? "rgba(255,255,255,0.15)" : BORDER}`,
+                    bgcolor: isDark ? "rgba(255,255,255,0.02)" : alpha(BRAND, 0.02),
+                    cursor: otherDocSubmitting ? "not-allowed" : "pointer",
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      borderColor: BRAND,
+                      bgcolor: alpha(BRAND, 0.05),
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      bgcolor: alpha(BRAND, 0.1),
+                      color: BRAND,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      mb: 1.5,
+                    }}
+                  >
+                    <CloudUpload sx={{ fontSize: 24 }} />
+                  </Box>
+                  <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : INK, mb: 0.5 }}>
+                    Click to select file
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : MUTED }}>
+                    Supported: JPG, PNG, PDF (Max 5MB)
+                  </Typography>
+                </Box>
+              ) : (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: "12px",
+                    border: `1.5px solid ${alpha(BRAND, 0.3)}`,
+                    bgcolor: isDark ? "rgba(255,255,255,0.03)" : SURFACE,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+                    <Box
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: "8px",
+                        bgcolor: alpha(BRAND, 0.12),
+                        color: BRAND,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {otherDocFile.type === "application/pdf" ? (
+                        <PictureAsPdfOutlined sx={{ fontSize: 22 }} />
+                      ) : (
+                        <PhotoCameraOutlined sx={{ fontSize: 22 }} />
+                      )}
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : INK }} noWrap>
+                        {otherDocFile.name}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : MUTED }}>
+                        {(otherDocFile.size / 1024).toFixed(1)} KB
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Button
+                    size="small"
+                    component="label"
+                    htmlFor="proj-doc-other-file-input"
+                    sx={{ textTransform: "none", fontWeight: 700, color: BRAND, ml: 1, flexShrink: 0 }}
+                  >
+                    Change
+                  </Button>
+                </Paper>
+              )}
+            </Box>
+          </Stack>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2,
+            borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
+            bgcolor: isDark ? "#0e1322" : SURFACE,
+          }}
+        >
+          <Button
+            onClick={closeOtherModal}
+            disabled={otherDocSubmitting}
+            variant="outlined"
+            sx={{
+              borderRadius: RADIUS_SM,
+              px: 2.5,
+              color: isDark ? "#94a3b8" : MUTED,
+              borderColor: isDark ? "rgba(255,255,255,0.15)" : BORDER,
+              textTransform: "none",
+              fontWeight: 700,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmitOther}
+            disabled={otherDocSubmitting || !otherDocName.trim() || !otherDocFile}
+            startIcon={otherDocSubmitting ? <CircularProgress size={16} color="inherit" /> : <CloudUpload />}
+            sx={{
+              borderRadius: RADIUS_SM,
+              px: 3,
+              py: 0.9,
+              textTransform: "none",
+              fontWeight: 800,
+              bgcolor: BRAND,
+              color: "#fff",
+              "&:hover": { bgcolor: BRAND_DARK },
+            }}
+          >
+            {otherDocSubmitting ? "Uploading..." : "Upload Document"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={Boolean(previewDoc)} onClose={onClosePreview} maxWidth={previewDoc?.isImage ? "lg" : "sm"} fullWidth PaperProps={{ sx: { borderRadius: 3, border: `0.5px solid ${BORDER}`, overflow: "hidden" } }}>
         {previewDoc && (
@@ -2771,15 +3428,13 @@ const InstallationWorkspace = ({
   const [newPartnerName, setNewPartnerName] = useState("");
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
+  const resolvedStatusValue = formData?.installationStatus || project?.installationStatus;
   const currentStatusObj = INSTALLATION_STATUS_OPTIONS.find(
-    (s) => s.value === formData.installationStatus || s.value === project?.installationStatus
-  ) || (isCompletedStatus(project?.installationStatus) ? INSTALLATION_STATUS_OPTIONS[1] : INSTALLATION_STATUS_OPTIONS[0]);
+    (s) => s.value === resolvedStatusValue
+  ) || (isCompletedStatus(resolvedStatusValue) ? INSTALLATION_STATUS_OPTIONS[1] : INSTALLATION_STATUS_OPTIONS[0]);
 
-<<<<<<< HEAD
   const isCompleted = currentStatusObj.value === "installation_completed";
 
-=======
->>>>>>> origin/dipak
   const existingPartners = useMemo(() => {
     const defaultList = ["In-House Team", "Solar Pro Tech", "Apex Installations", "BrightSun Solar EPC", "SunRay Tech Partners"];
     if (formData.installationPartner && !defaultList.includes(formData.installationPartner)) {
@@ -2819,7 +3474,6 @@ const InstallationWorkspace = ({
     <Paper
       elevation={0}
       sx={{
-<<<<<<< HEAD
         borderRadius: 4,
         border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
         bgcolor: isDark ? "#0b0f19" : "#ffffff",
@@ -3138,138 +3792,10 @@ const InstallationWorkspace = ({
                         borderColor: isDark ? "#818cf8" : "#4338ca",
                         bgcolor: isDark ? "rgba(79, 70, 229, 0.25)" : "#eef2ff",
                       },
-=======
-        borderRadius: RADIUS,
-        border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
-        bgcolor: isDark ? "#0b0e1a" : PANEL,
-        color: isDark ? "#f8fafc" : "inherit",
-        overflow: "hidden",
-        boxShadow: SHADOW_SM,
-      }}
-    >
-      {workflowStatusHeader(Build, "Update Installation Status", getCustomerName(project), onCancel)}
-
-      <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
-        {/* Status Chip Banner */}
-        <Grid container spacing={2} sx={{ mb: 2.5 }}>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mb: 0.75 }}>
-              Current Installation Status
-            </Typography>
-            <Chip
-              icon={currentStatusObj.value === "installation_completed" ? <CheckCircle sx={{ fontSize: "16px !important" }} /> : <AccessTime sx={{ fontSize: "16px !important" }} />}
-              label={currentStatusObj.label}
-              size="small"
-              sx={{
-                bgcolor: currentStatusObj.value === "installation_completed" ? alpha(SUCCESS, 0.15) : alpha(WARNING, 0.15),
-                color: currentStatusObj.value === "installation_completed" ? SUCCESS : WARNING,
-                fontWeight: 800,
-                "& .MuiChip-icon": { color: `${currentStatusObj.value === "installation_completed" ? SUCCESS : WARNING} !important` }
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : INK} sx={{ mb: 0.75 }}>
-              Assigned Partner
-            </Typography>
-            <Chip
-              label={formData.installationPartner || project?.installationPartner || "Not Assigned"}
-              size="small"
-              sx={{ bgcolor: alpha(BRAND, 0.08), color: BRAND, fontWeight: 800 }}
-            />
-          </Grid>
-        </Grid>
-
-        <Stack spacing={2.5}>
-          <Grid container spacing={2}>
-            {/* 1. Installation Status */}
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth size="small" error={!!errors.installationStatus}>
-                <InputLabel>Installation Status *</InputLabel>
-                <Select
-                  label="Installation Status *"
-                  value={
-                    formData.installationStatus === "installation_completed" || formData.installationStatus === "Completed Installation"
-                      ? "installation_completed"
-                      : "pending_installation"
-                  }
-                  onChange={(event) => onChange("installationStatus", event.target.value)}
-                  sx={{ borderRadius: RADIUS_SM }}
-                >
-                  {INSTALLATION_STATUS_OPTIONS.map((status) => (
-                    <MenuItem key={status.value} value={status.value}>
-                      <Stack direction="row" spacing={1.25} alignItems="center">
-                        {status.value === "installation_completed" ? (
-                          <CheckCircle sx={{ fontSize: 18, color: SUCCESS }} />
-                        ) : (
-                          <AccessTime sx={{ fontSize: 18, color: WARNING }} />
-                        )}
-                        <Box>
-                          <Typography variant="body2" fontWeight={700}>{status.label}</Typography>
-                          <Typography variant="caption" sx={{ color: MUTED }}>{status.description}</Typography>
-                        </Box>
-                      </Stack>
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.installationStatus && <FormHelperText>{errors.installationStatus}</FormHelperText>}
-              </FormControl>
-            </Grid>
-
-            {/* 2. Installation Partner Name */}
-            <Grid item xs={12} md={6}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Autocomplete
-                  freeSolo
-                  fullWidth
-                  size="small"
-                  options={existingPartners}
-                  value={formData.installationPartner || ""}
-                  onInputChange={(_, newInputValue) => {
-                    onChange("installationPartner", newInputValue);
-                  }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Installation Partner Name"
-                      placeholder="Select or enter partner name"
-                      error={!!errors.installationPartner}
-                      helperText={errors.installationPartner}
-                      InputProps={{
-                        ...params.InputProps,
-                        startAdornment: (
-                          <>
-                            <InputAdornment position="start">
-                              <Build sx={{ fontSize: 16, color: MUTED_2 }} />
-                            </InputAdornment>
-                            {params.InputProps.startAdornment}
-                          </>
-                        ),
-                      }}
-                    />
-                  )}
-                />
-                <Tooltip title="Add New Partner Name">
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => setPartnerDialogOpen(true)}
-                    sx={{
-                      minWidth: 40,
-                      px: 1.5,
-                      height: 40,
-                      borderRadius: RADIUS_SM,
-                      borderColor: BORDER,
-                      color: BRAND,
-                      fontWeight: 800,
-                      textTransform: "none",
-                      whiteSpace: "nowrap",
->>>>>>> origin/dipak
                     }}
                   >
                     + Add
                   </Button>
-<<<<<<< HEAD
                 </Box>
 
                 {/* Installation Notes Input */}
@@ -3349,60 +3875,6 @@ const InstallationWorkspace = ({
                 >
                   {`${photos.length} photo${photos.length === 1 ? "" : "s"}`}
                 </Box>
-=======
-                </Tooltip>
-              </Stack>
-            </Grid>
-
-            {/* 3. Installation Date */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                size="small"
-                type="date"
-                label="Installation Date"
-                value={formData.installationDate || formatInputDate(new Date())}
-                onChange={(event) => onChange("installationDate", event.target.value)}
-                disabled={readOnly}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-
-            {/* 4. Notes */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Installation Notes"
-                placeholder="Add notes about this installation..."
-                value={formData.installationNotes || ""}
-                onChange={(event) => onChange("installationNotes", event.target.value)}
-              />
-            </Grid>
-          </Grid>
-
-          {/* 5. 📸 Installation Pictures Upload Section */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2,
-              borderRadius: RADIUS_SM,
-              border: isDark ? "1px solid rgba(255,255,255,0.06)" : `1px solid ${BORDER_SOFT}`,
-              bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#FAFBFC",
-            }}
-          >
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <PhotoCameraOutlined sx={{ fontSize: 18, color: BRAND }} />
-                <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
-                  Installation Pictures (Post-Installation Photographs)
-                </Typography>
-                <Chip
-                  label={`${photos.length} photo${photos.length === 1 ? "" : "s"}`}
-                  size="small"
-                  sx={{ height: 20, fontSize: 10.5, fontWeight: 800, bgcolor: alpha(BRAND, 0.1), color: BRAND }}
-                />
->>>>>>> origin/dipak
               </Stack>
 
               <input
@@ -3421,7 +3893,6 @@ const InstallationWorkspace = ({
 
               <Button
                 variant="contained"
-<<<<<<< HEAD
                 startIcon={<CloudUpload sx={{ fontSize: 17 }} />}
                 disabled={uploadingPhoto || !project?._id}
                 onClick={() => fileInputRef.current?.click()}
@@ -3435,19 +3906,6 @@ const InstallationWorkspace = ({
                   py: 0.8,
                   boxShadow: "0 4px 14px rgba(79, 70, 229, 0.3)",
                   "&:hover": { bgcolor: "#4338ca" },
-=======
-                size="small"
-                startIcon={<CloudUpload sx={{ fontSize: 16 }} />}
-                disabled={uploadingPhoto || !project?._id}
-                onClick={() => fileInputRef.current?.click()}
-                sx={{
-                  borderRadius: RADIUS_SM,
-                  bgcolor: BRAND,
-                  fontWeight: 800,
-                  textTransform: "none",
-                  boxShadow: "none",
-                  "&:hover": { bgcolor: BRAND_DARK },
->>>>>>> origin/dipak
                 }}
               >
                 {uploadingPhoto ? "Uploading..." : "Upload Photos"}
@@ -3461,17 +3919,10 @@ const InstallationWorkspace = ({
                     <Box
                       sx={{
                         position: "relative",
-<<<<<<< HEAD
                         borderRadius: 2.5,
                         overflow: "hidden",
                         border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #e2e8f0",
                         bgcolor: isDark ? "#0b0f19" : "#ffffff",
-=======
-                        borderRadius: RADIUS_SM,
-                        overflow: "hidden",
-                        border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`,
-                        bgcolor: isDark ? "#0e1220" : "#FFFFFF",
->>>>>>> origin/dipak
                         "&:hover .photo-overlay": { opacity: 1 },
                       }}
                     >
@@ -3494,21 +3945,13 @@ const InstallationWorkspace = ({
                         direction="row"
                         justifyContent="space-between"
                         alignItems="center"
-<<<<<<< HEAD
                         sx={{ p: 1, bgcolor: isDark ? "#0b0f19" : "#ffffff" }}
-=======
-                        sx={{ p: 1, bgcolor: isDark ? "#0b0e1a" : "#FFFFFF" }}
->>>>>>> origin/dipak
                       >
                         <Typography
                           variant="caption"
                           fontWeight={700}
                           noWrap
-<<<<<<< HEAD
                           sx={{ flex: 1, pr: 0.5, color: isDark ? "#f8fafc" : "#0f172a" }}
-=======
-                          sx={{ flex: 1, pr: 0.5, color: isDark ? "#f8fafc" : INK }}
->>>>>>> origin/dipak
                         >
                           {photo.name || `Photo ${idx + 1}`}
                         </Typography>
@@ -3519,11 +3962,7 @@ const InstallationWorkspace = ({
                               e.stopPropagation();
                               onDeletePhoto?.(photo.index);
                             }}
-<<<<<<< HEAD
                             sx={{ width: 22, height: 22, color: "#ef4444", "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" } }}
-=======
-                            sx={{ width: 22, height: 22, color: DANGER, "&:hover": { bgcolor: alpha(DANGER, 0.1) } }}
->>>>>>> origin/dipak
                           >
                             <DeleteOutline sx={{ fontSize: 15 }} />
                           </IconButton>
@@ -3537,7 +3976,6 @@ const InstallationWorkspace = ({
               <Box
                 onClick={() => fileInputRef.current?.click()}
                 sx={{
-<<<<<<< HEAD
                   p: 4,
                   textAlign: "center",
                   borderRadius: 2.5,
@@ -3570,29 +4008,12 @@ const InstallationWorkspace = ({
                   No installation photographs uploaded yet
                 </Typography>
                 <Typography sx={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: "0.78rem", mt: 0.5 }}>
-=======
-                  p: 3,
-                  textAlign: "center",
-                  borderRadius: RADIUS_SM,
-                  border: `1.5px dashed ${BORDER}`,
-                  bgcolor: isDark ? "rgba(255,255,255,0.01)" : "#FFFFFF",
-                  cursor: "pointer",
-                  "&:hover": { borderColor: BRAND, bgcolor: alpha(BRAND, 0.02) },
-                }}
-              >
-                <PhotoCameraOutlined sx={{ fontSize: 32, color: MUTED_2, mb: 1 }} />
-                <Typography variant="body2" fontWeight={700} color={isDark ? "#f8fafc" : INK}>
-                  No installation photographs uploaded yet
-                </Typography>
-                <Typography variant="caption" sx={{ color: MUTED, display: "block", mt: 0.5 }}>
->>>>>>> origin/dipak
                   Click here or use the "Upload Photos" button to attach on-site installation pictures
                 </Typography>
               </Box>
             )}
           </Paper>
 
-<<<<<<< HEAD
           {/* Information Alert Banner */}
           <Stack
             direction="row"
@@ -3623,18 +4044,11 @@ const InstallationWorkspace = ({
             </Box>
             <Typography sx={{ fontSize: "0.82rem", color: isDark ? "#cbd5e1" : "#1e293b", lineHeight: 1.4 }}>
               Marking status as <strong>Completed Installation</strong> updates the project to <strong>Installation Completion</strong> and advances to <strong>DCR Generation</strong>.
-=======
-          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ p: 1.75, borderRadius: RADIUS_SM, bgcolor: alpha(BRAND, 0.06), color: INK }}>
-            <InfoOutlined sx={{ fontSize: 20, color: BRAND }} />
-            <Typography variant="body2">
-              Marking status as <strong>Completed Installation</strong> updates the project to <strong>Installation Completion</strong> and advances to DCR Generation.
->>>>>>> origin/dipak
             </Typography>
           </Stack>
         </Stack>
       </Box>
 
-<<<<<<< HEAD
       {/* ── Footer Actions ── */}
       <Stack
         direction="row"
@@ -3696,15 +4110,12 @@ const InstallationWorkspace = ({
         </Button>
       </Stack>
 
-=======
->>>>>>> origin/dipak
       {/* Manual Add Partner Modal */}
       <Dialog
         open={partnerDialogOpen}
         onClose={() => setPartnerDialogOpen(false)}
         maxWidth="xs"
         fullWidth
-<<<<<<< HEAD
         PaperProps={{
           sx: {
             borderRadius: 3,
@@ -3720,13 +4131,6 @@ const InstallationWorkspace = ({
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : "#64748b", mb: 2 }}>
-=======
-        PaperProps={{ sx: { borderRadius: RADIUS_SM, p: 1 } }}
-      >
-        <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>Add Installation Partner</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color={MUTED} sx={{ mb: 2 }}>
->>>>>>> origin/dipak
             Enter the name of the installer / contractor partner for this project:
           </Typography>
           <TextField
@@ -3740,22 +4144,14 @@ const InstallationWorkspace = ({
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-<<<<<<< HEAD
           <Button onClick={() => setPartnerDialogOpen(false)} sx={{ textTransform: "none", fontWeight: 700, color: isDark ? "#94a3b8" : "#64748b" }}>
-=======
-          <Button onClick={() => setPartnerDialogOpen(false)} sx={{ textTransform: "none", fontWeight: 700 }}>
->>>>>>> origin/dipak
             Cancel
           </Button>
           <Button
             variant="contained"
             onClick={handleAddPartnerSubmit}
             disabled={!newPartnerName.trim()}
-<<<<<<< HEAD
             sx={{ bgcolor: "#4f46e5", fontWeight: 800, textTransform: "none", borderRadius: 999 }}
-=======
-            sx={{ bgcolor: BRAND, fontWeight: 800, textTransform: "none" }}
->>>>>>> origin/dipak
           >
             Add Partner
           </Button>
@@ -3768,11 +4164,7 @@ const InstallationWorkspace = ({
         onClose={() => setPreviewPhoto(null)}
         maxWidth="md"
         fullWidth
-<<<<<<< HEAD
         PaperProps={{ sx: { borderRadius: 3, bgcolor: "#000", overflow: "hidden" } }}
-=======
-        PaperProps={{ sx: { borderRadius: RADIUS_SM, bgcolor: "#000", overflow: "hidden" } }}
->>>>>>> origin/dipak
       >
         {previewPhoto && (
           <>
@@ -3795,11 +4187,6 @@ const InstallationWorkspace = ({
           </>
         )}
       </Dialog>
-<<<<<<< HEAD
-=======
-
-      {workflowFooter(onCancel, onSave, saving, "Updating...", saving || !project?._id)}
->>>>>>> origin/dipak
     </Paper>
   );
 };
@@ -3970,11 +4357,28 @@ const LoanPendingWorkspace = ({
     BANK_STATUS_OPTIONS.find((status) => status.value === project?.bankAtPendingStatus)?.description ||
     "No bank status details available";
   const currentLead = project?.status || "";
+  const LEAD_STATUS_DESCRIPTIONS = {
+    "Registration": "Customer registered with DISCOM",
+    "Document Submission": "Documents uploaded and awaiting verification",
+    "Bank Loan Apply": "Applied for bank loan financing",
+    "Bank at Pending": "Application under bank review",
+    "Disbursement": "Loan approved, awaiting 1st disbursement",
+    "Installation Completion": "Plant installation in progress or complete",
+    "Missed Leads": "Lead not converted or bank loan rejected",
+  };
   const currentLeadDescription =
     BANK_LEAD_STATUS_OPTIONS.find((status) => status.value === currentLead)?.description ||
-    "No lead status details available";
-  const selectedLead =
-    BANK_LEAD_STATUS_OPTIONS.find((status) => status.value === formData.status) || BANK_LEAD_STATUS_OPTIONS[0];
+    LEAD_STATUS_DESCRIPTIONS[currentLead] ||
+    "Current lead status in workflow";
+
+  const effectiveLeadStatus =
+    formData.status && BANK_LEAD_STATUS_OPTIONS.some((opt) => opt.value === formData.status)
+      ? formData.status
+      : formData.bankAtPendingStatus === "approved"
+      ? "Disbursement"
+      : formData.bankAtPendingStatus === "rejected"
+      ? "Missed Leads"
+      : "Bank at Pending";
 
   return (
     <Paper elevation={0} sx={{ borderRadius: RADIUS, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit", overflow: "hidden", boxShadow: SHADOW_SM }}>
@@ -4013,12 +4417,13 @@ const LoanPendingWorkspace = ({
           </Box>
 
           <FormControl fullWidth size="small" error={!!errors.bankAtPendingStatus}>
-            <InputLabel>New Bank Status *</InputLabel>
+            <InputLabel id="new-bank-status-label">New Bank Status *</InputLabel>
             <Select
+              labelId="new-bank-status-label"
               label="New Bank Status *"
               value={formData.bankAtPendingStatus}
               onChange={(event) => onChange("bankAtPendingStatus", event.target.value)}
-              sx={{ borderRadius: RADIUS_SM }}
+              sx={{ borderRadius: RADIUS_SM, bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#FAFBFC" }}
             >
               <MenuItem value="">
                 <em>Select bank status</em>
@@ -4039,19 +4444,20 @@ const LoanPendingWorkspace = ({
           </FormControl>
 
           <FormControl fullWidth size="small" error={!!errors.status}>
-            <InputLabel>Lead Status *</InputLabel>
+            <InputLabel id="lead-status-select-label">Lead Status *</InputLabel>
             <Select
+              labelId="lead-status-select-label"
               label="Lead Status *"
-              value={formData.status}
+              value={effectiveLeadStatus}
               onChange={(event) => onChange("status", event.target.value)}
-              sx={{ borderRadius: RADIUS_SM }}
+              sx={{ borderRadius: RADIUS_SM, bgcolor: isDark ? "rgba(255,255,255,0.03)" : "#FAFBFC" }}
             >
               {BANK_LEAD_STATUS_OPTIONS.map((status) => (
                 <MenuItem key={status.value} value={status.value}>
                   <Stack direction="row" spacing={1.25} alignItems="center">
                     <AccountBalance sx={{ fontSize: 17, color: BRAND }} />
                     <Box>
-                      <Typography variant="body2">{status.label}</Typography>
+                      <Typography variant="body2" fontWeight={600}>{status.label}</Typography>
                       <Typography variant="caption" sx={{ color: MUTED }}>{status.description}</Typography>
                     </Box>
                   </Stack>
@@ -4085,12 +4491,77 @@ const LoanPendingWorkspace = ({
             onChange={(event) => onChange("bankAtPendingNotes", event.target.value)}
           />
 
-          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ p: 1.75, borderRadius: RADIUS_SM, bgcolor: alpha(BRAND, 0.06), color: INK }}>
-            <InfoOutlined sx={{ fontSize: 20, color: BRAND }} />
-            <Typography variant="body2">
-              When pending, lead will stay in {selectedLead.label} stage.
-            </Typography>
-          </Stack>
+          {(() => {
+            const isApproved = formData.bankAtPendingStatus === "approved";
+            const isRejected = formData.bankAtPendingStatus === "rejected";
+
+            return (
+              <Stack
+                direction="row"
+                spacing={1.5}
+                alignItems="center"
+                sx={{
+                  p: 2,
+                  borderRadius: RADIUS_SM,
+                  bgcolor: isDark
+                    ? isApproved
+                      ? "rgba(16, 185, 129, 0.14)"
+                      : isRejected
+                      ? "rgba(239, 68, 68, 0.14)"
+                      : "rgba(59, 130, 246, 0.14)"
+                    : isApproved
+                    ? alpha(SUCCESS, 0.1)
+                    : isRejected
+                    ? alpha(DANGER, 0.1)
+                    : alpha(BRAND, 0.08),
+                  border: `1px solid ${
+                    isDark
+                      ? isApproved
+                        ? "rgba(16, 185, 129, 0.35)"
+                        : isRejected
+                        ? "rgba(239, 68, 68, 0.35)"
+                        : "rgba(59, 130, 246, 0.35)"
+                      : isApproved
+                      ? alpha(SUCCESS, 0.3)
+                      : isRejected
+                      ? alpha(DANGER, 0.3)
+                      : alpha(BRAND, 0.25)
+                  }`,
+                }}
+              >
+                {isApproved ? (
+                  <CheckCircle sx={{ fontSize: 22, color: isDark ? "#34d399" : SUCCESS }} />
+                ) : isRejected ? (
+                  <Cancel sx={{ fontSize: 22, color: isDark ? "#f87171" : DANGER }} />
+                ) : (
+                  <InfoOutlined sx={{ fontSize: 22, color: isDark ? "#60a5fa" : BRAND }} />
+                )}
+                <Box>
+                  <Typography
+                    variant="body2"
+                    fontWeight={700}
+                    sx={{ color: isDark ? "#f8fafc" : INK, lineHeight: 1.4 }}
+                  >
+                    {isApproved
+                      ? `Bank approval received. Lead will move to "${effectiveLeadStatus}" stage.`
+                      : isRejected
+                      ? `Application rejected. Lead will move to "${effectiveLeadStatus}" stage.`
+                      : `When pending, lead will stay in "${effectiveLeadStatus}" stage.`}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: isDark ? "#94a3b8" : MUTED, display: "block", mt: 0.25 }}
+                  >
+                    {isApproved
+                      ? "Saving will automatically advance the project to Stage 06: Phase 1 Disbursement."
+                      : isRejected
+                      ? "This lead will be archived under Missed Leads."
+                      : "The lead remains in Stage 05 awaiting loan approval from the bank."}
+                  </Typography>
+                </Box>
+              </Stack>
+            );
+          })()}
         </Stack>
       </Box>
 
@@ -4143,12 +4614,12 @@ const StageFileUploadCard = ({
         }}
       />
       <Stack
-        direction={{ xs: "column", sm: "row" }}
+        direction="row"
         justifyContent="space-between"
-        alignItems={{ xs: "flex-start", sm: "center" }}
-        spacing={1.5}
+        alignItems="flex-start"
+        spacing={2}
       >
-        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ minWidth: 0, flex: 1 }}>
           <Box
             sx={{
               width: 38,
@@ -4164,11 +4635,25 @@ const StageFileUploadCard = ({
           >
             <Icon sx={{ fontSize: 20 }} />
           </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle2" fontWeight={800} color={isDark ? "#f8fafc" : INK} noWrap>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography
+              variant="subtitle2"
+              fontWeight={800}
+              color={isDark ? "#f8fafc" : INK}
+              sx={{ lineHeight: 1.3, fontSize: "0.85rem" }}
+            >
               {title}
             </Typography>
-            <Typography variant="caption" sx={{ color: MUTED }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: MUTED,
+                display: "block",
+                lineHeight: 1.35,
+                mt: 0.25,
+                fontSize: "0.72rem",
+              }}
+            >
               {subtitle}
             </Typography>
           </Box>
@@ -4176,17 +4661,27 @@ const StageFileUploadCard = ({
         <Button
           size="small"
           variant={docUrl ? "outlined" : "contained"}
-          startIcon={<CloudUpload sx={{ fontSize: 16 }} />}
+          startIcon={uploading ? <CircularProgress size={14} color="inherit" /> : <CloudUpload sx={{ fontSize: 15 }} />}
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading || readOnly}
           sx={{
+            flexShrink: 0,
+            whiteSpace: "nowrap",
+            minWidth: 105,
             borderRadius: RADIUS_SM,
             fontWeight: 700,
+            fontSize: "0.75rem",
+            py: 0.7,
+            px: 1.5,
             textTransform: "none",
             bgcolor: docUrl ? "transparent" : BRAND,
-            color: docUrl ? BRAND : "#fff",
-            borderColor: docUrl ? BORDER : "transparent",
-            "&:hover": { bgcolor: docUrl ? alpha(BRAND, 0.06) : BRAND_DARK },
+            color: docUrl ? (isDark ? "#60a5fa" : BRAND) : "#fff",
+            borderColor: docUrl ? (isDark ? "rgba(59, 130, 246, 0.4)" : alpha(BRAND, 0.35)) : "transparent",
+            boxShadow: "none",
+            "&:hover": {
+              bgcolor: docUrl ? alpha(BRAND, 0.08) : BRAND_DARK,
+              boxShadow: "none",
+            },
           }}
         >
           {uploading ? "Uploading..." : docUrl ? "Replace File" : "Upload File"}
@@ -4288,7 +4783,7 @@ const DcrGenerationWorkspace = ({
             subtitle="Upload official DCR (Domestic Content Requirement) Certificate"
             document={formData.dcrCertificate || project?.dcrCertificate}
             onUpload={(file) => onUploadDocument("dcrCertificate", file)}
-            uploading={uploadingDoc}
+            uploading={uploadingDoc === "dcrCertificate" || uploadingDoc === true}
             readOnly={readOnly}
           />
 
@@ -4553,7 +5048,7 @@ const DemandNotePaymentWorkspace = ({
             subtitle="Upload bank transfer slip, receipt, or acknowledgement for demand note payment"
             document={formData.demandNotePaymentReceipt || project?.demandNotePaymentReceipt}
             onUpload={(file) => onUploadDocument("demandNotePaymentReceipt", file)}
-            uploading={uploadingDoc}
+            uploading={uploadingDoc === "demandNotePaymentReceipt" || uploadingDoc === true}
             readOnly={readOnly}
           />
 
@@ -4644,7 +5139,7 @@ const InspectionWorkspace = ({
             subtitle="Upload signed inspection report, clearance certificate or approval doc"
             document={formData.inspectionDocument || project?.inspectionDocument}
             onUpload={(file) => onUploadDocument("inspectionDocument", file)}
-            uploading={uploadingDoc}
+            uploading={uploadingDoc === "inspectionDocument" || uploadingDoc === true}
             readOnly={readOnly}
           />
 
@@ -4729,7 +5224,7 @@ const MeterInstallationWorkspace = ({
                 subtitle="Upload photograph of installed bidirectional net meter"
                 document={formData.meterPhotograph || project?.meterPhotograph}
                 onUpload={(file) => onUploadDocument("meterPhotograph", file)}
-                uploading={uploadingDoc}
+                uploading={uploadingDoc === "meterPhotograph"}
                 readOnly={readOnly}
                 accept="image/jpeg,image/png,image/jpg"
               />
@@ -4741,7 +5236,7 @@ const MeterInstallationWorkspace = ({
                 subtitle="Upload official DISCOM commissioning / meter report"
                 document={formData.meterInstallationReport || project?.meterInstallationReport}
                 onUpload={(file) => onUploadDocument("meterInstallationReport", file)}
-                uploading={uploadingDoc}
+                uploading={uploadingDoc === "meterInstallationReport"}
                 readOnly={readOnly}
               />
             </Grid>
@@ -5587,20 +6082,29 @@ function ProjectDetails() {
   const navigate = useNavigate();
   const { fetchAPI } = useAuth();
   const initialProject = location.state?.project || null;
-<<<<<<< HEAD
   const isWorksheetProject = initialProject?.source === "installerWorksheet" || String(projectId || "").startsWith("worksheet-");
-=======
-  const isWorksheetProject = initialProject?.source === "installerWorksheet";
->>>>>>> origin/dipak
 
   const [project, setProject] = useState(initialProject);
+  const totalProjectMediaCount = useMemo(() => {
+    return extractAllProjectMedia(project).length;
+  }, [project]);
   const [loading, setLoading] = useState(!initialProject);
   const [error, setError] = useState("");
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
   const [selectedWorkflowStage, setSelectedWorkflowStage] = useState(() => {
-    const initialStage = normalizeProjectStage(location.state?.projectStage);
-    return ACTION_STAGES.some((stage) => stage.key === initialStage) ? initialStage : "summary";
+    const rawPassed = location.state?.projectStage;
+    const initialStage = rawPassed ? normalizeProjectStage(rawPassed) : "registration";
+    return ACTION_STAGES.some((stage) => stage.key === initialStage) ? initialStage : "registration";
   });
+
+  // Guard: If DISCOM Registration is still pending, don't allow landing on document or payment
+  useEffect(() => {
+    if (project && !isCompletedStatus(project.registrationStatus)) {
+      if (["document", "payment", "loan_pending", "disbursement"].includes(selectedWorkflowStage)) {
+        setSelectedWorkflowStage("registration");
+      }
+    }
+  }, [project, selectedWorkflowStage]);
   const [registrationForm, setRegistrationForm] = useState({
     address: "",
     city: "",
@@ -5771,7 +6275,7 @@ function ProjectDetails() {
   const [subsidyReceivedErrors, setSubsidyReceivedErrors] = useState({});
   const [savingSubsidyReceived, setSavingSubsidyReceived] = useState(false);
 
-  const [uploadingStageDoc, setUploadingStageDoc] = useState(false);
+  const [uploadingStageDoc, setUploadingStageDoc] = useState("");
   const [documentUploadLinks, setDocumentUploadLinks] = useState([]);
   const [pendingUploadSlot, setPendingUploadSlot] = useState("");
   const [uploadingSlotKey, setUploadingSlotKey] = useState("");
@@ -5779,13 +6283,10 @@ function ProjectDetails() {
   const [previewImageZoomed, setPreviewImageZoomed] = useState(false);
   const documentFileInputRef = useRef(null);
   const hasInitialProjectRef = useRef(Boolean(location.state?.project));
+  const lastLoadedProjectIdRef = useRef(null);
 
   const fetchProject = useCallback(async () => {
-<<<<<<< HEAD
     if (isWorksheetProject && hasInitialProjectRef.current) {
-=======
-    if (isWorksheetProject) {
->>>>>>> origin/dipak
       setError("");
       setLoading(false);
       return;
@@ -5823,11 +6324,36 @@ function ProjectDetails() {
     setPreviewImageZoomed(false);
   }, [previewDoc?.url]);
 
+  const [docStatusOverrides, setDocStatusOverrides] = useState(() => {
+    try {
+      const pId = projectId || initialProject?._id;
+      const cached = pId ? localStorage.getItem(`solar_doc_status_${pId}`) : null;
+      if (cached) return JSON.parse(cached);
+      const globalCached = localStorage.getItem("solar_doc_status_overrides");
+      if (globalCached) return JSON.parse(globalCached);
+    } catch {}
+    return {};
+  });
+
+  useEffect(() => {
+    if (!project?._id) return;
+    try {
+      const leadId = project._id;
+      const localMap = JSON.parse(localStorage.getItem(`solar_doc_status_${leadId}`) || "{}");
+      const backendMap = project?.documentStatuses || {};
+      const activityMap = project?.leadActivities?.find((a) => a?.type === "document_statuses")?.statuses || {};
+      const merged = { ...backendMap, ...activityMap, ...localMap };
+      if (Object.keys(merged).length > 0) {
+        setDocStatusOverrides((prev) => ({ ...prev, ...merged }));
+      }
+    } catch {}
+  }, [project]);
+
   const currentStageKey = normalizeProjectStage(project || location.state?.projectStage);
   const currentStage = getStageMeta(currentStageKey);
   const selectedWorkflow = getStageMeta(selectedWorkflowStage);
   const registrationReadOnly = isStrictWorkflowStageComplete(project, "registration") && !registrationEditMode;
-  const documentSlots = useMemo(() => getDocumentSlots(project), [project]);
+  const documentSlots = useMemo(() => getDocumentSlots(project, docStatusOverrides), [project, docStatusOverrides]);
   const firstAvailableWorkflowStage = useMemo(() => getFirstAvailableWorkflowStage(project), [project]);
   const selectedWorkflowLock = useMemo(
     () => getStrictWorkflowLock(project, selectedWorkflowStage),
@@ -5888,12 +6414,23 @@ function ProjectDetails() {
     disbursementNotes: source?.disbursementNotes || "",
   }), []);
 
-  const getLoanPendingForm = useCallback((source) => ({
-    bankAtPendingStatus: source?.bankAtPendingStatus || "",
-    status: source?.status || "Bank at Pending",
-    reason: source?.reason || "",
-    bankAtPendingNotes: source?.bankAtPendingNotes || "",
-  }), []);
+  const getLoanPendingForm = useCallback((source) => {
+    let resolvedStatus = "Bank at Pending";
+    if (source?.bankAtPendingStatus === "approved") {
+      resolvedStatus = "Disbursement";
+    } else if (source?.bankAtPendingStatus === "rejected") {
+      resolvedStatus = "Missed Leads";
+    } else if (BANK_LEAD_STATUS_OPTIONS.some((opt) => opt.value === source?.status)) {
+      resolvedStatus = source.status;
+    }
+
+    return {
+      bankAtPendingStatus: source?.bankAtPendingStatus || "",
+      status: resolvedStatus,
+      reason: source?.reason || "",
+      bankAtPendingNotes: source?.bankAtPendingNotes || "",
+    };
+  }, []);
 
   const getDcrForm = useCallback((source) => ({
     dcrGenerated: source?.dcrGenerated || "No",
@@ -6018,40 +6555,208 @@ function ProjectDetails() {
   }), []);
 
   useEffect(() => {
-    setRegistrationForm(getRegistrationForm(project));
-    setRegistrationErrors({});
-    setPaymentForm(getPaymentForm(project));
-    setPaymentErrors({});
-    setInstallationForm(getInstallationForm(project));
-    setInstallationErrors({});
-    setDisbursementForm(getDisbursementForm(project));
-    setDisbursementErrors({});
-    setLoanPendingForm(getLoanPendingForm(project));
-    setLoanPendingErrors({});
-    setDcrForm(getDcrForm(project));
-    setDcrErrors({});
-    setNotificationEmailForm(getNotificationEmailForm(project));
-    setNotificationEmailErrors({});
-    setDemandNoteForm(getDemandNoteForm(project));
-    setDemandNoteErrors({});
-    setDemandNotePaymentForm(getDemandNotePaymentForm(project));
-    setDemandNotePaymentErrors({});
-    setInspectionForm(getInspectionForm(project));
-    setInspectionErrors({});
-    setMeterInstallationForm(getMeterInstallationForm(project));
-    setMeterInstallationErrors({});
-    setPhase2DisbursementForm(getPhase2DisbursementForm(project));
-    setPhase2DisbursementErrors({});
-    setFinalPaymentForm(getFinalPaymentForm(project));
-    setFinalPaymentErrors({});
-    setProjectCommissioningForm(getProjectCommissioningForm(project));
-    setProjectCommissioningErrors({});
-    setDiscomApprovalForm(getDiscomApprovalForm(project));
-    setDiscomApprovalErrors({});
-    setSubsidyRedeemedForm(getSubsidyRedeemedForm(project));
-    setSubsidyRedeemedErrors({});
-    setSubsidyReceivedForm(getSubsidyReceivedForm(project));
-    setSubsidyReceivedErrors({});
+    if (!project?._id) return;
+    const isNewProject = lastLoadedProjectIdRef.current !== project._id;
+    if (isNewProject) {
+      lastLoadedProjectIdRef.current = project._id;
+      setRegistrationForm(getRegistrationForm(project));
+      setRegistrationErrors({});
+      setPaymentForm(getPaymentForm(project));
+      setPaymentErrors({});
+      setInstallationForm(getInstallationForm(project));
+      setInstallationErrors({});
+      setDisbursementForm(getDisbursementForm(project));
+      setDisbursementErrors({});
+      setLoanPendingForm(getLoanPendingForm(project));
+      setLoanPendingErrors({});
+      setDcrForm(getDcrForm(project));
+      setDcrErrors({});
+      setNotificationEmailForm(getNotificationEmailForm(project));
+      setNotificationEmailErrors({});
+      setDemandNoteForm(getDemandNoteForm(project));
+      setDemandNoteErrors({});
+      setDemandNotePaymentForm(getDemandNotePaymentForm(project));
+      setDemandNotePaymentErrors({});
+      setInspectionForm(getInspectionForm(project));
+      setInspectionErrors({});
+      setMeterInstallationForm(getMeterInstallationForm(project));
+      setMeterInstallationErrors({});
+      setPhase2DisbursementForm(getPhase2DisbursementForm(project));
+      setPhase2DisbursementErrors({});
+      setFinalPaymentForm(getFinalPaymentForm(project));
+      setFinalPaymentErrors({});
+      setProjectCommissioningForm(getProjectCommissioningForm(project));
+      setProjectCommissioningErrors({});
+      setDiscomApprovalForm(getDiscomApprovalForm(project));
+      setDiscomApprovalErrors({});
+      setSubsidyRedeemedForm(getSubsidyRedeemedForm(project));
+      setSubsidyRedeemedErrors({});
+      setSubsidyReceivedForm(getSubsidyReceivedForm(project));
+      setSubsidyReceivedErrors({});
+    } else {
+      // Same project updated (e.g. photos/documents uploaded, deleted, verified, etc.)
+      // Carefully merge fresh project data (like uploaded document URLs) WITHOUT wiping user-modified in-progress fields!
+      const freshInstall = getInstallationForm(project);
+      setInstallationForm((prev) => ({
+        ...freshInstall,
+        installationStatus: prev?.installationStatus || freshInstall.installationStatus,
+        status: prev?.installationStatus === "installation_completed" ? "Installation Completion" : (prev?.status || freshInstall.status),
+        installationPartner: (prev?.installationPartner !== undefined && prev?.installationPartner !== "") ? prev.installationPartner : freshInstall.installationPartner,
+        installationDate: prev?.installationDate || freshInstall.installationDate,
+        installationNotes: prev?.installationNotes !== undefined ? prev.installationNotes : freshInstall.installationNotes,
+      }));
+
+      const freshDcr = getDcrForm(project);
+      setDcrForm((prev) => ({
+        ...freshDcr,
+        dcrGenerated: prev?.dcrGenerated || freshDcr.dcrGenerated,
+        dcrDate: prev?.dcrDate || freshDcr.dcrDate,
+        dcrNotes: prev?.dcrNotes !== undefined ? prev.dcrNotes : freshDcr.dcrNotes,
+        dcrCertificate: freshDcr.dcrCertificate || prev?.dcrCertificate,
+      }));
+
+      const freshDemandNotePayment = getDemandNotePaymentForm(project);
+      setDemandNotePaymentForm((prev) => ({
+        ...freshDemandNotePayment,
+        demandNotePaymentPaid: prev?.demandNotePaymentPaid || freshDemandNotePayment.demandNotePaymentPaid,
+        demandNotePaymentAmount: (prev?.demandNotePaymentAmount !== undefined && prev?.demandNotePaymentAmount !== "") ? prev.demandNotePaymentAmount : freshDemandNotePayment.demandNotePaymentAmount,
+        demandNotePaymentDate: prev?.demandNotePaymentDate || freshDemandNotePayment.demandNotePaymentDate,
+        demandNotePaymentNotes: prev?.demandNotePaymentNotes !== undefined ? prev.demandNotePaymentNotes : freshDemandNotePayment.demandNotePaymentNotes,
+        demandNotePaymentReceipt: freshDemandNotePayment.demandNotePaymentReceipt || prev?.demandNotePaymentReceipt,
+      }));
+
+      const freshInspection = getInspectionForm(project);
+      setInspectionForm((prev) => ({
+        ...freshInspection,
+        inspectionStatus: prev?.inspectionStatus || freshInspection.inspectionStatus,
+        inspectionDate: prev?.inspectionDate || freshInspection.inspectionDate,
+        inspectionNotes: prev?.inspectionNotes !== undefined ? prev.inspectionNotes : freshInspection.inspectionNotes,
+        inspectionDocument: freshInspection.inspectionDocument || prev?.inspectionDocument,
+      }));
+
+      const freshMeter = getMeterInstallationForm(project);
+      setMeterInstallationForm((prev) => ({
+        ...freshMeter,
+        meterInstallationComplete: prev?.meterInstallationComplete || freshMeter.meterInstallationComplete,
+        meterInstallationDate: prev?.meterInstallationDate || freshMeter.meterInstallationDate,
+        meterInstallationNotes: prev?.meterInstallationNotes !== undefined ? prev.meterInstallationNotes : freshMeter.meterInstallationNotes,
+        meterPhotograph: freshMeter.meterPhotograph || prev?.meterPhotograph,
+        meterInstallationReport: freshMeter.meterInstallationReport || prev?.meterInstallationReport,
+      }));
+
+      const freshReg = getRegistrationForm(project);
+      setRegistrationForm((prev) => ({
+        ...freshReg,
+        address: (prev?.address !== undefined && prev.address !== "") ? prev.address : freshReg.address,
+        city: (prev?.city !== undefined && prev.city !== "") ? prev.city : freshReg.city,
+        pincode: (prev?.pincode !== undefined && prev.pincode !== "") ? prev.pincode : freshReg.pincode,
+        solarRequirement: (prev?.solarRequirement !== undefined && prev.solarRequirement !== "") ? prev.solarRequirement : freshReg.solarRequirement,
+        dateOfRegistration: prev?.dateOfRegistration || freshReg.dateOfRegistration,
+        registrationStatus: prev?.registrationStatus || freshReg.registrationStatus,
+        registrationNumber: prev?.registrationNumber !== undefined ? prev.registrationNumber : freshReg.registrationNumber,
+        registrationFee: prev?.registrationFee !== undefined ? prev.registrationFee : freshReg.registrationFee,
+        registrationNotes: prev?.registrationNotes !== undefined ? prev.registrationNotes : freshReg.registrationNotes,
+      }));
+
+      const freshPay = getPaymentForm(project);
+      setPaymentForm((prev) => ({
+        ...freshPay,
+        paymentType: prev?.paymentType || freshPay.paymentType,
+        paymentAmount: (prev?.paymentAmount !== undefined && prev.paymentAmount !== "") ? prev.paymentAmount : freshPay.paymentAmount,
+        paymentDate: prev?.paymentDate || freshPay.paymentDate,
+        referenceNumber: prev?.referenceNumber !== undefined ? prev.referenceNumber : freshPay.referenceNumber,
+        paymentNotes: prev?.paymentNotes !== undefined ? prev.paymentNotes : freshPay.paymentNotes,
+      }));
+
+      const freshLoan = getLoanPendingForm(project);
+      setLoanPendingForm((prev) => ({
+        ...freshLoan,
+        bankAtPendingStatus: prev?.bankAtPendingStatus || freshLoan.bankAtPendingStatus,
+        status: prev?.status || freshLoan.status,
+        reason: prev?.reason !== undefined ? prev.reason : freshLoan.reason,
+        bankAtPendingNotes: prev?.bankAtPendingNotes !== undefined ? prev.bankAtPendingNotes : freshLoan.bankAtPendingNotes,
+      }));
+
+      const freshDisb = getDisbursementForm(project);
+      setDisbursementForm((prev) => ({
+        ...freshDisb,
+        disbursementStatus: prev?.disbursementStatus || freshDisb.disbursementStatus,
+        status: prev?.status || freshDisb.status,
+        disbursementAmount: (prev?.disbursementAmount !== undefined && prev.disbursementAmount !== "") ? prev.disbursementAmount : freshDisb.disbursementAmount,
+        disbursementDate: prev?.disbursementDate || freshDisb.disbursementDate,
+        disbursementNotes: prev?.disbursementNotes !== undefined ? prev.disbursementNotes : freshDisb.disbursementNotes,
+      }));
+
+      const freshNotif = getNotificationEmailForm(project);
+      setNotificationEmailForm((prev) => ({
+        ...freshNotif,
+        notificationEmailSent: prev?.notificationEmailSent || freshNotif.notificationEmailSent,
+        notificationNumber: prev?.notificationNumber !== undefined ? prev.notificationNumber : freshNotif.notificationNumber,
+        notificationEmailDate: prev?.notificationEmailDate || freshNotif.notificationEmailDate,
+        notificationEmailNotes: prev?.notificationEmailNotes !== undefined ? prev.notificationEmailNotes : freshNotif.notificationEmailNotes,
+      }));
+
+      const freshDemandNote = getDemandNoteForm(project);
+      setDemandNoteForm((prev) => ({
+        ...freshDemandNote,
+        demandNoteGenerated: prev?.demandNoteGenerated || freshDemandNote.demandNoteGenerated,
+        demandNoteNumber: prev?.demandNoteNumber !== undefined ? prev.demandNoteNumber : freshDemandNote.demandNoteNumber,
+        demandNoteDate: prev?.demandNoteDate || freshDemandNote.demandNoteDate,
+        demandNoteNotes: prev?.demandNoteNotes !== undefined ? prev.demandNoteNotes : freshDemandNote.demandNoteNotes,
+      }));
+
+      const freshPhase2 = getPhase2DisbursementForm(project);
+      setPhase2DisbursementForm((prev) => ({
+        ...freshPhase2,
+        phase2DisbursementPaid: prev?.phase2DisbursementPaid || freshPhase2.phase2DisbursementPaid,
+        phase2DisbursementAmount: prev?.phase2DisbursementAmount !== undefined ? prev.phase2DisbursementAmount : freshPhase2.phase2DisbursementAmount,
+        phase2DisbursementDate: prev?.phase2DisbursementDate || freshPhase2.phase2DisbursementDate,
+        phase2DisbursementNotes: prev?.phase2DisbursementNotes !== undefined ? prev.phase2DisbursementNotes : freshPhase2.phase2DisbursementNotes,
+      }));
+
+      const freshFinalPay = getFinalPaymentForm(project);
+      setFinalPaymentForm((prev) => ({
+        ...freshFinalPay,
+        finalPaymentStatus: prev?.finalPaymentStatus || freshFinalPay.finalPaymentStatus,
+        finalPaymentTotalReceived: prev?.finalPaymentTotalReceived !== undefined ? prev.finalPaymentTotalReceived : freshFinalPay.finalPaymentTotalReceived,
+        finalPaymentCost: prev?.finalPaymentCost !== undefined ? prev.finalPaymentCost : freshFinalPay.finalPaymentCost,
+        finalPaymentDate: prev?.finalPaymentDate || freshFinalPay.finalPaymentDate,
+        finalPaymentNotes: prev?.finalPaymentNotes !== undefined ? prev.finalPaymentNotes : freshFinalPay.finalPaymentNotes,
+      }));
+
+      const freshComm = getProjectCommissioningForm(project);
+      setProjectCommissioningForm((prev) => ({
+        ...freshComm,
+        projectCommissioningStatus: prev?.projectCommissioningStatus || freshComm.projectCommissioningStatus,
+        projectCommissioningDate: prev?.projectCommissioningDate || freshComm.projectCommissioningDate,
+        projectCommissioningNotes: prev?.projectCommissioningNotes !== undefined ? prev.projectCommissioningNotes : freshComm.projectCommissioningNotes,
+      }));
+
+      const freshDiscomAppr = getDiscomApprovalForm(project);
+      setDiscomApprovalForm((prev) => ({
+        ...freshDiscomAppr,
+        discomApprovalStatus: prev?.discomApprovalStatus || freshDiscomAppr.discomApprovalStatus,
+        discomApprovalDate: prev?.discomApprovalDate || freshDiscomAppr.discomApprovalDate,
+        discomApprovalNotes: prev?.discomApprovalNotes !== undefined ? prev.discomApprovalNotes : freshDiscomAppr.discomApprovalNotes,
+      }));
+
+      const freshSubRed = getSubsidyRedeemedForm(project);
+      setSubsidyRedeemedForm((prev) => ({
+        ...freshSubRed,
+        subsidyRedeemedStatus: prev?.subsidyRedeemedStatus || freshSubRed.subsidyRedeemedStatus,
+        subsidyRedeemedDate: prev?.subsidyRedeemedDate || freshSubRed.subsidyRedeemedDate,
+        subsidyRedeemedNotes: prev?.subsidyRedeemedNotes !== undefined ? prev.subsidyRedeemedNotes : freshSubRed.subsidyRedeemedNotes,
+      }));
+
+      const freshSubRec = getSubsidyReceivedForm(project);
+      setSubsidyReceivedForm((prev) => ({
+        ...freshSubRec,
+        subsidyReceivedStatus: prev?.subsidyReceivedStatus || freshSubRec.subsidyReceivedStatus,
+        subsidyReceivedDate: prev?.subsidyReceivedDate || freshSubRec.subsidyReceivedDate,
+        subsidyReceivedAmount: prev?.subsidyReceivedAmount !== undefined ? prev.subsidyReceivedAmount : freshSubRec.subsidyReceivedAmount,
+        subsidyReceivedNotes: prev?.subsidyReceivedNotes !== undefined ? prev.subsidyReceivedNotes : freshSubRec.subsidyReceivedNotes,
+      }));
+    }
   }, [getDiscomApprovalForm, getFinalPaymentForm, getProjectCommissioningForm, getSubsidyReceivedForm, getSubsidyRedeemedForm, getDcrForm, getDemandNoteForm, getDemandNotePaymentForm, getDisbursementForm, getInspectionForm, getInstallationForm, getLoanPendingForm, getMeterInstallationForm, getNotificationEmailForm, getPaymentForm, getPhase2DisbursementForm, getRegistrationForm, project]);
 
   const effectivePaymentType = paymentForm?.paymentType || project?.paymentType || "Bank Loan";
@@ -6066,27 +6771,35 @@ function ProjectDetails() {
 
   const actionState = useMemo(() => {
     if (!project) return {};
+    const isRegDone = isCompletedStatus(project.registrationStatus);
+    const uploadedDocs = documentSlots.filter((slot) => slot.uploaded);
+    const areAllUploadedVerified = uploadedDocs.length > 0 && uploadedDocs.every((slot) => slot.status === "verified");
+    const isDocDone = isRegDone && areAllUploadedVerified;
+    const isInspectionDone =
+      ["by resco", "by solar coordinator", "by discom"].includes(String(project.inspectionStatus || "").toLowerCase()) ||
+      Boolean(project.inspectionDocument?.url);
+
     return {
       registration: project.registrationStatus || "",
-      document: project.documentStatus || "",
-      payment: project.loanStatus || project.paymentStatus || "",
-      loan_pending: (!isBankLoan) ? "completed" : (project.bankAtPendingStatus || ""),
-      disbursement: project.disbursementStatus || "",
+      document: isDocDone ? "completed" : "pending",
+      payment: (isRegDone && isDocDone) ? (project.loanStatus || project.paymentStatus || "") : "",
+      loan_pending: (!isBankLoan) ? "completed" : ((isRegDone && isDocDone) ? (project.bankAtPendingStatus || "") : ""),
+      disbursement: (isRegDone && isDocDone) ? (project.disbursementStatus || "") : "",
       installation: project.installationStatus || "",
       dcr_generation: project.dcrGenerated === "Yes" ? "completed" : "",
       notification_email: project.notificationEmailSent === "Yes" ? "completed" : "",
       demand_note: project.demandNoteGenerated === "Yes" ? "completed" : "",
       demand_note_payment: project.demandNotePaymentPaid === "Yes" ? "completed" : "",
-      inspection: project.inspectionStatus ? "completed" : "",
+      inspection: isInspectionDone ? "completed" : "",
       meter_installation: project.meterInstallationComplete === "Yes" ? "completed" : "",
       phase2_disbursement: project.phase2DisbursementPaid === "Yes" ? "completed" : "",
-      final_payment: (project.duePaymentCleared === "Yes" || project.status === "Final Payment" || (project.finalPaymentCost && Number(project.finalPaymentDue) <= 0)) ? "completed" : (project.status === "Final Payment" ? "completed" : ""),
+      final_payment: ((project.duePaymentCleared === "Yes" && Boolean(project.duePaymentClearanceDate)) || project.status === "Final Payment") ? "completed" : "",
       project_commissioning: project.projectCommissioningStatus === "Yes" || project.status === "Project Commissioning" ? "completed" : "",
       discom_approval: project.discomApprovalStatus === "Yes" || project.status === "DISCOM Approval" ? "completed" : "",
       subsidy_redeemed: project.subsidyRedeemedStatus === "Yes" || project.status === "Subsidy Redeemed" ? "completed" : "",
-      subsidy_received: project.subsidyReceivedStatus === "Yes" || Boolean(project.subsidyReceivedAmount) || project.status === "Subsidy Received" ? "completed" : "",
+      subsidy_received: project.subsidyReceivedStatus === "Yes" || (Boolean(project.subsidyReceivedAmount) && Number(project.subsidyReceivedAmount) > 0) || project.status === "Subsidy Received" ? "completed" : "",
     };
-  }, [isBankLoan, project]);
+  }, [documentSlots, isBankLoan, project]);
 
   const completedStageCount = useMemo(() => {
     if (!project) return 0;
@@ -6274,7 +6987,10 @@ function ProjectDetails() {
       }
 
       const updatedProject = response?.result?.lead || response?.result || { ...project, ...payload };
-      setProject(updatedProject);
+      setProject(updatedProject);
+      setRegistrationForm(getRegistrationForm(updatedProject));
+      setRegistrationErrors({});
+
       setRegistrationEditMode(false);
       setSelectedWorkflowStage("document");
       setSnackbar({ open: true, message: "Registration updated successfully", severity: "success" });
@@ -6409,9 +7125,15 @@ function ProjectDetails() {
 
       const updatedProject = response?.result?.lead || response?.result || { ...project, ...payload };
       setProject(updatedProject);
+      setPaymentForm(getPaymentForm(updatedProject));
+      setPaymentErrors({});
       setSnackbar({ open: true, message: "Payment updated successfully", severity: "success" });
-      if (paymentForm.paymentType !== "Bank Loan") {
+      if (paymentForm.paymentType === "Bank Loan") {
+        setSelectedWorkflowStage("loan_pending");
+        setActivePhaseId("phase1");
+      } else {
         setSelectedWorkflowStage("disbursement");
+        setActivePhaseId("phase1");
       }
     } catch (err) {
       setSnackbar({ open: true, message: err.message || "Failed to update payment", severity: "error" });
@@ -6435,6 +7157,7 @@ function ProjectDetails() {
     if (!project?._id || !files || files.length === 0) return;
     setUploadingInstallationPhoto(true);
     try {
+      let latestLead = null;
       for (const file of Array.from(files)) {
         const formData = new FormData();
         formData.append("document", file);
@@ -6443,8 +7166,18 @@ function ProjectDetails() {
           body: formData,
         });
         if (res?.success && (res.result?.lead || res.result)) {
-          setProject(res.result.lead || res.result);
+          latestLead = res.result.lead || res.result;
         }
+      }
+      if (latestLead) {
+        setProject((prev) => ({
+          ...prev,
+          ...latestLead,
+          installationStatus: installationForm.installationStatus || prev.installationStatus,
+          installationPartner: (installationForm.installationPartner !== undefined && installationForm.installationPartner !== "") ? installationForm.installationPartner : prev.installationPartner,
+          installationDate: installationForm.installationDate || prev.installationDate,
+          installationNotes: installationForm.installationNotes !== undefined ? installationForm.installationNotes : prev.installationNotes,
+        }));
       }
       setSnackbar({ open: true, message: "Installation photo(s) uploaded successfully", severity: "success" });
     } catch (err) {
@@ -6452,7 +7185,7 @@ function ProjectDetails() {
     } finally {
       setUploadingInstallationPhoto(false);
     }
-  }, [fetchAPI, project]);
+  }, [fetchAPI, installationForm, project]);
 
   const handleDeleteInstallationPhoto = useCallback(async (indexToRemove) => {
     if (!project?._id) return;
@@ -6465,13 +7198,20 @@ function ProjectDetails() {
       });
       if (res?.success) {
         const updatedLead = res.result?.lead || res.result || { ...project, installationPhotos: updatedPhotos };
-        setProject(updatedLead);
+        setProject((prev) => ({
+          ...prev,
+          ...updatedLead,
+          installationStatus: installationForm.installationStatus || prev.installationStatus,
+          installationPartner: (installationForm.installationPartner !== undefined && installationForm.installationPartner !== "") ? installationForm.installationPartner : prev.installationPartner,
+          installationDate: installationForm.installationDate || prev.installationDate,
+          installationNotes: installationForm.installationNotes !== undefined ? installationForm.installationNotes : prev.installationNotes,
+        }));
         setSnackbar({ open: true, message: "Photo removed", severity: "success" });
       }
     } catch (err) {
       setSnackbar({ open: true, message: "Failed to delete photo", severity: "error" });
     }
-  }, [fetchAPI, project]);
+  }, [fetchAPI, installationForm, project]);
 
   const handleInstallationFieldChange = useCallback((field, value) => {
     setInstallationForm((prev) => {
@@ -6519,6 +7259,8 @@ function ProjectDetails() {
 
       const updatedProject = response?.result?.lead || response?.result || { ...project, ...payload };
       setProject(updatedProject);
+      setInstallationForm(getInstallationForm(updatedProject));
+      setInstallationErrors({});
       setSnackbar({ open: true, message: "Installation status updated successfully", severity: "success" });
       setSelectedWorkflowStage("dcr_generation");
       setActivePhaseId("phase2");
@@ -6594,6 +7336,8 @@ function ProjectDetails() {
 
       const updatedProject = response?.result?.lead || response?.result || { ...project, ...payload };
       setProject(updatedProject);
+      setDisbursementForm(getDisbursementForm(updatedProject));
+      setDisbursementErrors({});
       setSnackbar({ open: true, message: "1st Installment / Disbursement saved successfully", severity: "success" });
       setSelectedWorkflowStage("installation");
       setActivePhaseId("phase2");
@@ -6602,7 +7346,7 @@ function ProjectDetails() {
     } finally {
       setSavingDisbursement(false);
     }
-  }, [disbursementForm, fetchAPI, project, validateDisbursementForm]);
+  }, [disbursementForm, fetchAPI, getDisbursementForm, project, validateDisbursementForm]);
 
   const validateLoanPendingForm = useCallback(() => {
     const errors = {};
@@ -6646,9 +7390,17 @@ function ProjectDetails() {
 
     setSavingLoanPending(true);
     try {
+      const resolvedStatus =
+        loanPendingForm.status ||
+        (loanPendingForm.bankAtPendingStatus === "approved"
+          ? "Disbursement"
+          : loanPendingForm.bankAtPendingStatus === "rejected"
+          ? "Missed Leads"
+          : "Bank at Pending");
+
       const payload = {
         bankAtPendingStatus: loanPendingForm.bankAtPendingStatus,
-        status: loanPendingForm.status,
+        status: resolvedStatus,
         reason: loanPendingForm.bankAtPendingStatus === "rejected" ? loanPendingForm.reason.trim() : "",
         bankAtPendingNotes: loanPendingForm.bankAtPendingNotes.trim(),
       };
@@ -6665,13 +7417,17 @@ function ProjectDetails() {
 
       const updatedProject = response?.result?.lead || response?.result || { ...project, ...payload };
       setProject(updatedProject);
+      setLoanPendingForm(getLoanPendingForm(updatedProject));
+      setLoanPendingErrors({});
       setSnackbar({ open: true, message: "Bank status updated successfully", severity: "success" });
+      setSelectedWorkflowStage("disbursement");
+      setActivePhaseId("phase1");
     } catch (err) {
       setSnackbar({ open: true, message: err.message || "Failed to update bank status", severity: "error" });
     } finally {
       setSavingLoanPending(false);
     }
-  }, [fetchAPI, loanPendingForm, project, validateLoanPendingForm]);
+  }, [fetchAPI, getLoanPendingForm, loanPendingForm, project, validateLoanPendingForm]);
 
   const editProject = () => {
     if (!project?._id) return;
@@ -6793,6 +7549,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save final payment");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setFinalPaymentForm(getFinalPaymentForm(updated));
+      setFinalPaymentErrors({});
       setSnackbar({ open: true, message: "Final Payment details saved successfully", severity: "success" });
       setSelectedWorkflowStage("project_commissioning");
       setActivePhaseId("phase4");
@@ -6801,7 +7559,7 @@ function ProjectDetails() {
     } finally {
       setSavingFinalPayment(false);
     }
-  }, [fetchAPI, finalPaymentForm, project]);
+  }, [fetchAPI, finalPaymentForm, getFinalPaymentForm, project]);
 
   /* 🔹 Project Commissioning Handler */
   const handleProjectCommissioningChange = useCallback((field, value) => {
@@ -6831,6 +7589,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save commissioning");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setProjectCommissioningForm(getProjectCommissioningForm(updated));
+      setProjectCommissioningErrors({});
       setSnackbar({ open: true, message: "Project Commissioning saved successfully", severity: "success" });
       setSelectedWorkflowStage("discom_approval");
       setActivePhaseId("phase4");
@@ -6839,7 +7599,7 @@ function ProjectDetails() {
     } finally {
       setSavingProjectCommissioning(false);
     }
-  }, [fetchAPI, project, projectCommissioningForm]);
+  }, [fetchAPI, getProjectCommissioningForm, project, projectCommissioningForm]);
 
   /* 🔹 DISCOM Approval Handler */
   const handleDiscomApprovalChange = useCallback((field, value) => {
@@ -6869,6 +7629,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save DISCOM approval");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setDiscomApprovalForm(getDiscomApprovalForm(updated));
+      setDiscomApprovalErrors({});
       setSnackbar({ open: true, message: "DISCOM Approval saved successfully", severity: "success" });
       setSelectedWorkflowStage("subsidy_redeemed");
       setActivePhaseId("phase4");
@@ -6877,7 +7639,7 @@ function ProjectDetails() {
     } finally {
       setSavingDiscomApproval(false);
     }
-  }, [discomApprovalForm, fetchAPI, project]);
+  }, [discomApprovalForm, fetchAPI, getDiscomApprovalForm, project]);
 
   /* 🔹 Subsidy Redeemed Handler */
   const handleSubsidyRedeemedChange = useCallback((field, value) => {
@@ -6907,14 +7669,17 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save subsidy redeemed");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setSubsidyRedeemedForm(getSubsidyRedeemedForm(updated));
+      setSubsidyRedeemedErrors({});
       setSnackbar({ open: true, message: "Subsidy Redeemed saved successfully", severity: "success" });
       setSelectedWorkflowStage("subsidy_received");
+      setActivePhaseId("phase4");
     } catch (err) {
       setSnackbar({ open: true, message: err.message || "Failed to save subsidy redeemed", severity: "error" });
     } finally {
       setSavingSubsidyRedeemed(false);
     }
-  }, [fetchAPI, project, subsidyRedeemedForm]);
+  }, [fetchAPI, getSubsidyRedeemedForm, project, subsidyRedeemedForm]);
 
   /* 🔹 Subsidy Received Handler */
   const handleSubsidyReceivedChange = useCallback((field, value) => {
@@ -6947,6 +7712,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save subsidy received");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setSubsidyReceivedForm(getSubsidyReceivedForm(updated));
+      setSubsidyReceivedErrors({});
       setSnackbar({ open: true, message: "Subsidy Received updated! Project is now in Ready Handover stage.", severity: "success" });
       setTimeout(() => {
         navigate("/projects", { state: { stageFilter: "ready_handover" } });
@@ -6965,7 +7732,7 @@ function ProjectDetails() {
     formDataToSend.append("document", file);
 
     try {
-      setUploadingStageDoc(true);
+      setUploadingStageDoc(docType);
       const res = await fetchAPI(`/lead/stage-upload/${getValidLeadId(project)}/${docType}`, {
         method: "POST",
         body: formDataToSend,
@@ -6977,7 +7744,31 @@ function ProjectDetails() {
 
       const updatedLead = res?.result?.lead || res?.result;
       if (updatedLead) {
-        setProject(updatedLead);
+        setProject((prev) => ({
+          ...prev,
+          ...updatedLead,
+          ...(docType === "dcrCertificate" ? {
+            dcrGenerated: dcrForm.dcrGenerated || prev?.dcrGenerated,
+            dcrDate: dcrForm.dcrDate || prev?.dcrDate,
+            dcrNotes: dcrForm.dcrNotes !== undefined ? dcrForm.dcrNotes : prev?.dcrNotes,
+          } : {}),
+          ...(docType === "demandNotePaymentReceipt" ? {
+            demandNotePaymentPaid: demandNotePaymentForm.demandNotePaymentPaid || prev?.demandNotePaymentPaid,
+            demandNotePaymentAmount: (demandNotePaymentForm.demandNotePaymentAmount !== undefined && demandNotePaymentForm.demandNotePaymentAmount !== "") ? demandNotePaymentForm.demandNotePaymentAmount : prev?.demandNotePaymentAmount,
+            demandNotePaymentDate: demandNotePaymentForm.demandNotePaymentDate || prev?.demandNotePaymentDate,
+            demandNotePaymentNotes: demandNotePaymentForm.demandNotePaymentNotes !== undefined ? demandNotePaymentForm.demandNotePaymentNotes : prev?.demandNotePaymentNotes,
+          } : {}),
+          ...(docType === "inspectionDocument" ? {
+            inspectionStatus: inspectionForm.inspectionStatus || prev?.inspectionStatus,
+            inspectionDate: inspectionForm.inspectionDate || prev?.inspectionDate,
+            inspectionNotes: inspectionForm.inspectionNotes !== undefined ? inspectionForm.inspectionNotes : prev?.inspectionNotes,
+          } : {}),
+          ...(docType === "meterPhotograph" || docType === "meterInstallationReport" ? {
+            meterInstallationComplete: meterInstallationForm.meterInstallationComplete || prev?.meterInstallationComplete,
+            meterInstallationDate: meterInstallationForm.meterInstallationDate || prev?.meterInstallationDate,
+            meterInstallationNotes: meterInstallationForm.meterInstallationNotes !== undefined ? meterInstallationForm.meterInstallationNotes : prev?.meterInstallationNotes,
+          } : {}),
+        }));
       } else {
         await fetchProject();
       }
@@ -6985,9 +7776,9 @@ function ProjectDetails() {
     } catch (err) {
       setSnackbar({ open: true, message: err.message || "Failed to upload document", severity: "error" });
     } finally {
-      setUploadingStageDoc(false);
+      setUploadingStageDoc("");
     }
-  }, [fetchAPI, fetchProject, project]);
+  }, [dcrForm, demandNotePaymentForm, fetchAPI, fetchProject, inspectionForm, meterInstallationForm, project]);
 
   /* 🔹 DCR Generation Handler */
   const handleDcrChange = useCallback((field, value) => {
@@ -7015,6 +7806,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save DCR");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setDcrForm(getDcrForm(updated));
+      setDcrErrors({});
       setSnackbar({ open: true, message: "DCR Generation saved successfully", severity: "success" });
       setSelectedWorkflowStage("notification_email");
       setActivePhaseId("phase2");
@@ -7052,6 +7845,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save Notification Email");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setNotificationEmailForm(getNotificationEmailForm(updated));
+      setNotificationEmailErrors({});
       setSnackbar({ open: true, message: "Notification Email details saved successfully", severity: "success" });
       setSelectedWorkflowStage("demand_note");
       setActivePhaseId("phase2");
@@ -7060,7 +7855,7 @@ function ProjectDetails() {
     } finally {
       setSavingNotificationEmail(false);
     }
-  }, [fetchAPI, notificationEmailForm, project]);
+  }, [fetchAPI, getNotificationEmailForm, notificationEmailForm, project]);
 
   /* 🔹 Demand Note Handler */
   const handleDemandNoteChange = useCallback((field, value) => {
@@ -7089,6 +7884,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save Demand Note");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setDemandNoteForm(getDemandNoteForm(updated));
+      setDemandNoteErrors({});
       setSnackbar({ open: true, message: "Demand Note saved successfully", severity: "success" });
       setSelectedWorkflowStage("demand_note_payment");
       setActivePhaseId("phase2");
@@ -7097,7 +7894,7 @@ function ProjectDetails() {
     } finally {
       setSavingDemandNote(false);
     }
-  }, [demandNoteForm, fetchAPI, project]);
+  }, [demandNoteForm, fetchAPI, getDemandNoteForm, project]);
 
   /* 🔹 Demand Note Payment Handler */
   const handleDemandNotePaymentChange = useCallback((field, value) => {
@@ -7126,6 +7923,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save Demand Note Payment");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setDemandNotePaymentForm(getDemandNotePaymentForm(updated));
+      setDemandNotePaymentErrors({});
       setSnackbar({ open: true, message: "Demand Note Payment saved successfully", severity: "success" });
       setSelectedWorkflowStage("inspection");
       setActivePhaseId("phase3");
@@ -7134,7 +7933,7 @@ function ProjectDetails() {
     } finally {
       setSavingDemandNotePayment(false);
     }
-  }, [demandNotePaymentForm, fetchAPI, project]);
+  }, [demandNotePaymentForm, fetchAPI, getDemandNotePaymentForm, project]);
 
   /* 🔹 Inspection Handler */
   const handleInspectionChange = useCallback((field, value) => {
@@ -7162,6 +7961,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save Inspection");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setInspectionForm(getInspectionForm(updated));
+      setInspectionErrors({});
       setSnackbar({ open: true, message: "Inspection details saved successfully", severity: "success" });
       setSelectedWorkflowStage("meter_installation");
       setActivePhaseId("phase3");
@@ -7170,7 +7971,7 @@ function ProjectDetails() {
     } finally {
       setSavingInspection(false);
     }
-  }, [fetchAPI, inspectionForm, project]);
+  }, [fetchAPI, getInspectionForm, inspectionForm, project]);
 
   /* 🔹 Meter Installation Handler */
   const handleMeterInstallationChange = useCallback((field, value) => {
@@ -7198,6 +7999,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save Meter Installation");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setMeterInstallationForm(getMeterInstallationForm(updated));
+      setMeterInstallationErrors({});
       setSnackbar({ open: true, message: "Meter Installation saved successfully", severity: "success" });
       setSelectedWorkflowStage("phase2_disbursement");
       setActivePhaseId("phase3");
@@ -7206,7 +8009,7 @@ function ProjectDetails() {
     } finally {
       setSavingMeterInstallation(false);
     }
-  }, [fetchAPI, meterInstallationForm, project]);
+  }, [fetchAPI, getMeterInstallationForm, meterInstallationForm, project]);
 
   /* 🔹 Phase 2 Disbursement Handler */
   const handlePhase2DisbursementChange = useCallback((field, value) => {
@@ -7236,6 +8039,8 @@ function ProjectDetails() {
       if (!res?.success) throw new Error(res?.message || "Failed to save Phase 2 Disbursement");
       const updated = res?.result?.lead || res?.result || { ...project, ...payload };
       setProject(updated);
+      setPhase2DisbursementForm(getPhase2DisbursementForm(updated));
+      setPhase2DisbursementErrors({});
       setSnackbar({ open: true, message: "Phase 2 Disbursement saved successfully", severity: "success" });
       setSelectedWorkflowStage("final_payment");
       setActivePhaseId("phase3");
@@ -7244,17 +8049,122 @@ function ProjectDetails() {
     } finally {
       setSavingPhase2Disbursement(false);
     }
-  }, [fetchAPI, phase2DisbursementForm, project]);
+  }, [fetchAPI, getPhase2DisbursementForm, phase2DisbursementForm, project]);
+
+  const updateIndividualDocumentStatus = useCallback(async (slot, newStatus) => {
+    if (!project?._id || !slot?.uploaded) return;
+
+    const nextStatuses = {
+      ...docStatusOverrides,
+      ...(project.documentStatuses || {}),
+      ...(slot.key ? { [slot.key]: newStatus } : {}),
+      ...(slot.url ? { [slot.url]: newStatus } : {}),
+      ...(slot.fileName ? { [slot.fileName]: newStatus } : {}),
+      ...(slot.label ? { [slot.label]: newStatus } : {}),
+    };
+
+    // 1. Immediately update UI state without waiting for network
+    setDocStatusOverrides(nextStatuses);
+
+    // 2. Persist to localStorage synchronously
+    try {
+      localStorage.setItem(`solar_doc_status_${project._id}`, JSON.stringify(nextStatuses));
+      localStorage.setItem("solar_doc_status_overrides", JSON.stringify(nextStatuses));
+    } catch {}
+
+    setSnackbar({
+      open: true,
+      message: `"${slot.label || slot.fileName || 'Document'}" marked as ${newStatus === "verified" ? "verified" : "rejected"}.`,
+      severity: "success",
+    });
+
+    // 3. Persist to backend asynchronously
+    try {
+      const payload = {
+        documentStatuses: nextStatuses,
+      };
+
+      // Also persist in leadActivities array so it persists in MongoDB
+      const existingActivities = Array.isArray(project.leadActivities) ? project.leadActivities : [];
+      const filteredActivities = existingActivities.filter((a) => a?.type !== "document_statuses");
+      filteredActivities.push({
+        type: "document_statuses",
+        statuses: nextStatuses,
+        updatedAt: new Date().toISOString(),
+      });
+      payload.leadActivities = filteredActivities;
+
+      if (slot.source === "aadhaar") {
+        payload.aadhaar = { ...(project.aadhaar || {}), url: slot.url, status: newStatus };
+      } else if (slot.source === "panCard") {
+        payload.panCard = { ...(project.panCard || {}), url: slot.url, status: newStatus };
+      } else if (slot.source === "passbook") {
+        payload.passbook = { ...(project.passbook || {}), url: slot.url, status: newStatus };
+      } else if (slot.source === "uploadDocument") {
+        payload.uploadDocument = { ...(project.uploadDocument || {}), url: slot.url, status: newStatus };
+      } else if (slot.source === "otherDocuments") {
+        payload.otherDocuments = (project.otherDocuments || []).map((doc) => {
+          const docName = doc?.name || getFileNameFromUrl(doc?.url);
+          const isTarget =
+            (slot.url && doc?.url === slot.url) ||
+            (slot.fileName && (docName === slot.fileName || doc?.name === slot.fileName));
+          if (isTarget) {
+            return {
+              ...doc,
+              name: doc.name || slot.fileName,
+              url: doc.url || slot.url,
+              status: newStatus,
+            };
+          }
+          return doc;
+        });
+      }
+
+      // Compute overall document status for project
+      const allUploaded = documentSlots.filter((s) => s.uploaded);
+      const isAnyRejected = allUploaded.some((s) =>
+        (s.key === slot.key || s.url === slot.url)
+          ? newStatus === "rejected"
+          : (nextStatuses[s.key] === "rejected" || nextStatuses[s.url] === "rejected" || s.status === "rejected")
+      );
+      const areAllVerified = allUploaded.length > 0 && allUploaded.every((s) =>
+        (s.key === slot.key || s.url === slot.url)
+          ? newStatus === "verified"
+          : (nextStatuses[s.key] === "verified" || nextStatuses[s.url] === "verified" || s.status === "verified")
+      );
+
+      payload.documentStatus = isAnyRejected ? "rejected" : areAllVerified ? "submitted" : "pending";
+
+      const res = await fetchAPI(`/lead/updateLead/${getValidLeadId(project)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res?.success) {
+        const updated = res?.result?.lead || res?.result;
+        if (updated) {
+          setProject((prev) => ({ ...prev, ...updated, documentStatuses: nextStatuses }));
+        }
+        if (areAllVerified) {
+          setSelectedWorkflowStage("payment");
+          setActivePhaseId("phase1");
+        }
+      }
+    } catch (statusError) {
+      console.warn("Could not save document status to backend:", statusError);
+    }
+  }, [docStatusOverrides, documentSlots, fetchAPI, project]);
 
   const handleDocumentVerify = useCallback((slot) => {
     if (!slot?.uploaded) return;
-    updateDocumentStatus("submitted");
-  }, [updateDocumentStatus]);
+    updateIndividualDocumentStatus(slot, "verified");
+  }, [updateIndividualDocumentStatus]);
 
   const handleDocumentReject = useCallback((slot) => {
     if (!slot?.uploaded) return;
-    updateDocumentStatus("rejected");
-  }, [updateDocumentStatus]);
+    updateIndividualDocumentStatus(slot, "rejected");
+  }, [updateIndividualDocumentStatus]);
 
   const handleDocumentDelete = useCallback(async (slot) => {
     if (!project?._id || !slot?.uploaded || !slot?.source) {
@@ -7308,11 +8218,22 @@ function ProjectDetails() {
       if (previewDoc?.url === slot.url) {
         setPreviewDoc(null);
       }
+      if (docStatusOverrides[slot.key] || (slot.url && docStatusOverrides[slot.url]) || (slot.fileName && docStatusOverrides[slot.fileName])) {
+        const nextOverrides = { ...docStatusOverrides };
+        if (slot.key) delete nextOverrides[slot.key];
+        if (slot.url) delete nextOverrides[slot.url];
+        if (slot.fileName) delete nextOverrides[slot.fileName];
+        setDocStatusOverrides(nextOverrides);
+        try {
+          const leadId = project?._id;
+          if (leadId) localStorage.setItem(`solar_doc_status_${leadId}`, JSON.stringify(nextOverrides));
+        } catch {}
+      }
       setSnackbar({ open: true, message: "Document deleted successfully", severity: "success" });
     } catch (err) {
       setSnackbar({ open: true, message: err.message || "Failed to delete document", severity: "error" });
     }
-  }, [fetchAPI, previewDoc?.url, project]);
+  }, [docStatusOverrides, fetchAPI, previewDoc?.url, project]);
 
   const validateDocumentFile = useCallback((file) => {
     if (file.size > MAX_DOCUMENT_FILE_SIZE) {
@@ -7413,6 +8334,71 @@ function ProjectDetails() {
     if (!file || !slotKey) return;
     await uploadDocumentForSlot(slotKey, file);
   }, [pendingUploadSlot, uploadDocumentForSlot]);
+
+  const uploadOtherDocument = useCallback(async (docName, file) => {
+    if (!project?._id) {
+      setSnackbar({ open: true, message: "Project is not ready for upload", severity: "error" });
+      return;
+    }
+
+    const validationError = validateDocumentFile(file);
+    if (validationError) {
+      setSnackbar({ open: true, message: validationError, severity: "error" });
+      throw new Error(validationError);
+    }
+
+    const ext = getFileExtension(file);
+    const cleanDocName = docName.trim();
+    const finalFileName = cleanDocName.toLowerCase().endsWith(ext.toLowerCase())
+      ? cleanDocName
+      : `${cleanDocName}${ext}`;
+
+    const renamedFile = new File([file], finalFileName, {
+      type: file.type,
+      lastModified: file.lastModified || Date.now(),
+    });
+
+    const formDataToSend = new FormData();
+    const jsonData = {
+      documentStatus: project.documentStatus || "pending",
+      documentSubmissionDate: project.documentSubmissionDate
+        ? format(new Date(project.documentSubmissionDate), "yyyy-MM-dd")
+        : format(new Date(), "yyyy-MM-dd"),
+    };
+    if (project.documentNotes) {
+      jsonData.documentNotes = project.documentNotes;
+    }
+
+    formDataToSend.append("otherDocuments", renamedFile);
+    formDataToSend.append("data", JSON.stringify(jsonData));
+
+    setUploadingSlotKey("other");
+    try {
+      const response = await fetchAPI(`/lead/upload/${getValidLeadId(project)}/upload-documents`, {
+        method: "PUT",
+        body: formDataToSend,
+      });
+
+      if (!response?.success) {
+        throw new Error(response?.message || "Failed to upload document");
+      }
+
+      setSnackbar({
+        open: true,
+        message: `"${cleanDocName}" uploaded successfully.`,
+        severity: "success",
+      });
+
+      const updatedProject = response?.result?.lead || response?.result || null;
+      if (updatedProject) {
+        setProject(updatedProject);
+      } else {
+        await fetchProject();
+      }
+    } finally {
+      setUploadingSlotKey("");
+    }
+  }, [fetchAPI, fetchProject, project, validateDocumentFile]);
 
   if (loading && !project) {
     return (
@@ -7519,9 +8505,9 @@ function ProjectDetails() {
               <PhotoCameraOutlined sx={{ fontSize: 18, color: "#ffffff" }} />
             </Box>
             <span>Project Images</span>
-            {Array.isArray(project?.projectImages) && project.projectImages.length > 0 && (
+            {totalProjectMediaCount > 0 && (
               <Chip
-                label={project.projectImages.length}
+                label={totalProjectMediaCount}
                 size="small"
                 sx={{
                   height: 20,
@@ -8073,6 +9059,7 @@ function ProjectDetails() {
               previewImageZoomed={previewImageZoomed}
               uploadingSlotKey={uploadingSlotKey}
               onUpload={openDirectDocumentUpload}
+              onUploadOtherDocument={uploadOtherDocument}
               onCreateLink={createDocumentUploadLink}
               onCopyLink={copyDocumentUploadLink}
               onShareLink={shareDocumentUploadLink}
@@ -8084,6 +9071,10 @@ function ProjectDetails() {
               onVerify={handleDocumentVerify}
               onReject={handleDocumentReject}
               onDelete={handleDocumentDelete}
+              onProceedToPayment={() => {
+                setSelectedWorkflowStage("payment");
+                setActivePhaseId("phase1");
+              }}
             />
           ) : selectedWorkflowStage === "payment" ? (
             <PaymentWorkspace
@@ -8257,7 +9248,6 @@ function ProjectDetails() {
               onCancel={() => setSelectedWorkflowStage("summary")}
               onSave={saveSubsidyReceived}
             />
-<<<<<<< HEAD
           ) : selectedWorkflowStage === "lead_converted" ? (
             <LeadConvertedWorkspace
               project={project}
@@ -8273,23 +9263,12 @@ function ProjectDetails() {
                   {selectedWorkflow.label} Workspace
                 </Typography>
                 <Typography variant="body2" sx={{ color: isDark ? "#94a3b8" : MUTED, maxWidth: 520 }}>
-=======
-          ) : (
-            <Paper elevation={0} sx={{ minHeight: 220, p: 3, borderRadius: RADIUS, border: isDark ? "1px solid rgba(255,255,255,0.08)" : `1px solid ${BORDER}`, bgcolor: isDark ? "#0b0e1a" : PANEL, color: isDark ? "#f8fafc" : "inherit", boxShadow: SHADOW_SM }}>
-              <Stack alignItems="center" justifyContent="center" spacing={1.25} sx={{ minHeight: 170, textAlign: "center" }}>
-                <TaskAlt sx={{ fontSize: 44, color: alpha(INK, 0.25) }} />
-                <Typography variant="subtitle1" fontWeight={800} color={isDark ? "#f8fafc" : INK}>
-                  {selectedWorkflow.label} Workspace
-                </Typography>
-                <Typography variant="body2" sx={{ color: MUTED, maxWidth: 520 }}>
->>>>>>> origin/dipak
                   This stage is available in the project workflow. Open the full page when you need the detailed update tools.
                 </Typography>
                 <Button
                   size="small"
                   variant="outlined"
                   onClick={() => openStagePage(selectedWorkflowStage)}
-<<<<<<< HEAD
                   sx={{
                     mt: 1,
                     borderRadius: RADIUS_SM,
@@ -8305,9 +9284,6 @@ function ProjectDetails() {
                       bgcolor: isDark ? "rgba(255,255,255,0.08)" : alpha(BRAND, 0.04),
                     },
                   }}
-=======
-                  sx={{ mt: 1, borderRadius: RADIUS_SM, borderColor: BORDER, color: INK, fontWeight: 700, textTransform: "none" }}
->>>>>>> origin/dipak
                 >
                   Open {selectedWorkflow.label}
                 </Button>
