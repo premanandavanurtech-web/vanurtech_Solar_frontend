@@ -6,7 +6,20 @@ import { CircularProgress, Box } from '@mui/material';
 
 const normalizeRole = (role) => {
   const value = String(role || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-  const map = { head_office: 'ADMIN', admin_panel: 'ADMIN', admin: 'ADMIN', project_head: 'PROJECT_HEAD', manager: 'MANAGER', supervisor: 'SUPERVISOR', installer: 'INSTALLER', team: 'INSTALLER', zsm: 'PROJECT_HEAD', incharge: 'SUPERVISOR' };
+  const map = {
+    super_admin: 'SUPER_ADMIN',
+    superadmin: 'SUPER_ADMIN',
+    head_office: 'ADMIN',
+    admin_panel: 'ADMIN',
+    admin: 'ADMIN',
+    project_head: 'PROJECT_HEAD',
+    manager: 'MANAGER',
+    supervisor: 'SUPERVISOR',
+    installer: 'INSTALLER',
+    team: 'INSTALLER',
+    zsm: 'PROJECT_HEAD',
+    incharge: 'SUPERVISOR',
+  };
   return map[value] || role;
 };
 
@@ -59,19 +72,35 @@ const ProtectedRoute = ({
   }
 
   // Get current user role
-  const userRole = normalizeRole(getUserRole());
-  
+  let userRole = normalizeRole(getUserRole());
+  if (!userRole) {
+    try {
+      const saved = localStorage.getItem("user");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        userRole = normalizeRole(parsed?.role || parsed?.designation || "");
+      }
+    } catch {}
+  }
+
   // If no role, redirect to login
   if (!userRole) {
     console.warn('User has no role assigned, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
+  // If Super Admin, grant full access
+  if (userRole === "SUPER_ADMIN") {
+    return children;
+  }
+
   // Check if user's role is allowed for this route
   const normalizedAllowedRoles = allowedRoles.map(normalizeRole);
   if (normalizedAllowedRoles.length > 0 && !normalizedAllowedRoles.includes(userRole)) {
-    console.warn(`User role ${userRole} not allowed for this route`);
-    
+    console.warn(`User role ${userRole} not allowed for this route: ${location.pathname}`);
+    if (location.pathname === "/dashboard" || location.pathname.endsWith("/dashboard")) {
+      return children;
+    }
     // Redirect to dashboard (since all roles use the same dashboard)
     return <Navigate to="/dashboard" replace />;
   }

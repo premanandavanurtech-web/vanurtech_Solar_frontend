@@ -1,5 +1,5 @@
 // components/Topbar.jsx
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -29,6 +29,7 @@ import {
   Alert,
   InputAdornment,
   useTheme,
+  Chip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -46,11 +47,18 @@ import {
   Edit as EditIcon,
   DarkMode as DarkModeIcon,
   LightMode as LightModeIcon,
+  KeyboardArrowDown,
+  Business,
+  Timer as TimerIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from "../contexts/AuthContext";
 import { toBackendAssetUrl } from "../utils/backendAssetUrl";
 import { API_BASE_URL } from "../utils/apiConfig";
+import sidebarLogoLight from "../assets/sidebar-logo-light.webp";
+import sidebarLogoDark from "../assets/sidebar-logo-dark.webp";
+import themeMoonIcon from "../assets/theme-moon.png";
+import themeSunIcon from "../assets/theme-sun.png";
 
 const API = API_BASE_URL;
 
@@ -70,11 +78,68 @@ const Topbar = ({
   isTablet, 
   drawerOpen, 
   sidebarWidth = 268,
-  collapsedWidth = 68 
+  collapsedWidth = 68,
+  noSidebar = false,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
   const navigate = useNavigate();
+  const { user, logout, updateLocalUser } = useAuth();
+  const normalizedUserRole = String(user?.role || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const isSuperAdmin = ["SUPER_ADMIN", "SUPERADMIN"].includes(normalizedUserRole);
+  const hideSidebar = noSidebar || isSuperAdmin;
+  const superAdminSearchInputRef = useRef(null);
+
+  const [validityRemainingMs, setValidityRemainingMs] = useState(null);
+
+  useEffect(() => {
+    if (isSuperAdmin || !user?.subscriptionExpiresAt) {
+      setValidityRemainingMs(null);
+      return;
+    }
+    const expiryTime = new Date(user.subscriptionExpiresAt).getTime();
+    if (Number.isNaN(expiryTime)) {
+      setValidityRemainingMs(null);
+      return;
+    }
+    const updateRemaining = () => {
+      setValidityRemainingMs(Math.max(0, expiryTime - Date.now()));
+    };
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 1000);
+    return () => clearInterval(timer);
+  }, [isSuperAdmin, user?.subscriptionExpiresAt]);
+
+  const show48HourTimer =
+    !isSuperAdmin &&
+    validityRemainingMs !== null &&
+    validityRemainingMs > 0 &&
+    validityRemainingMs <= 48 * 60 * 60 * 1000;
+
+  const formatCountdownHMS = (ms) => {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map((n) => String(n).padStart(2, "0")).join(":");
+  };
+
+  useEffect(() => {
+    if (!hideSidebar) return;
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        superAdminSearchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [hideSidebar]);
+
+  const handleSuperAdminSearchChange = (val) => {
+    setSearchQuery(val);
+    window.dispatchEvent(new CustomEvent("superAdminSearch", { detail: val }));
+  };
   const [anchorEl, setAnchorEl] = useState(null);
   const [notificationAnchor, setNotificationAnchor] = useState(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -101,7 +166,6 @@ const Topbar = ({
     avatar: null,
   });
 
-  const { user, logout, updateLocalUser } = useAuth()
   //console.log("users11...", user)
   const avatarSrc = avatarLoadFailed ? "" : getAvatarUrl(user?.avatar);
 
@@ -159,12 +223,17 @@ const Topbar = ({
     setNotificationAnchor(null);
   }, []);
   
-  const handleLogout = useCallback(async () => {
-    if (!window.confirm('Are you sure you want to log out?')) {
-      return;
-    }
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+
+  const handleLogout = useCallback(() => {
+    setLogoutModalOpen(true);
+    handleClose();
+  }, [handleClose]);
+
+  const performLogout = useCallback(async () => {
     try {
       setLoggingOut(true);
+      setLogoutModalOpen(false);
       handleClose();
       logout();
       navigate('/login', { replace: true });
@@ -318,6 +387,9 @@ const Topbar = ({
   const userRole = useMemo(() => {
     if (!user?.role) return 'User';
     const roleMap = {
+      'SUPER_ADMIN': 'Super Admin',
+      'superadmin': 'Super Admin',
+      'Head_office': 'Company Admin',
       'Admin_panel': 'Admin Panel',
       'ZSM': 'Operation Lead',
       'Incharge': 'Incharge',
@@ -332,12 +404,12 @@ const Topbar = ({
 
   // Calculate AppBar width
   const getAppBarWidth = useMemo(() => {
-    if (isMobile) return "100%";
+    if (hideSidebar || isMobile) return "100%";
     if (isTablet) {
       return drawerOpen ? `calc(100% - ${sidebarWidth}px)` : `calc(100% - ${collapsedWidth}px)`;
     }
     return drawerOpen ? `calc(100% - ${sidebarWidth}px)` : `calc(100% - ${collapsedWidth}px)`;
-  }, [isMobile, isTablet, drawerOpen, sidebarWidth, collapsedWidth]);
+  }, [hideSidebar, isMobile, isTablet, drawerOpen, sidebarWidth, collapsedWidth]);
 
   // Mobile Search Drawer
   const MobileSearchDrawer = (
@@ -427,177 +499,602 @@ const Topbar = ({
         position="fixed"
         elevation={0}
         sx={{
-          bgcolor: isDark ? '#080c14' : '#ffffff',
-          borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e0e0e0',
+          bgcolor: hideSidebar
+            ? (isDark ? 'rgba(9, 14, 26, 0.88)' : 'rgba(255, 255, 255, 0.92)')
+            : (isDark ? '#080c14' : '#ffffff'),
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0',
           width: getAppBarWidth,
-          left: isMobile ? 0 : (drawerOpen ? `${sidebarWidth}px` : `${collapsedWidth}px`),
+          left: hideSidebar || isMobile ? 0 : (drawerOpen ? `${sidebarWidth}px` : `${collapsedWidth}px`),
           right: 0,
           zIndex: (theme) => theme.zIndex.drawer + 1,
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          boxShadow: isDark
+            ? '0 4px 24px rgba(0, 0, 0, 0.4), inset 0 -1px 0 rgba(255, 255, 255, 0.05)'
+            : '0 2px 14px rgba(0, 0, 0, 0.04)',
         }}
       >
         <Toolbar sx={{
           justifyContent: 'space-between',
-          minHeight: { xs: 56, sm: 64 },
-          px: { xs: 1.5, sm: 2, md: 3 },
+          minHeight: hideSidebar ? { xs: 60, sm: 68 } : { xs: 56, sm: 64 },
+          px: { xs: 1.5, sm: 2.5, md: 3.5 },
+          gap: 2,
         }}>
-          {/* Left Section */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 } }}>
-            {(isMobile || isTablet) && (
-              <Tooltip title="Menu" arrow>
-                <IconButton 
-                  onClick={toggleDrawer} 
-                  sx={{ 
-                    color: isDark ? '#f8fafc' : '#0f1f3d',
-                    '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.1)' : alpha('#0f1f3d', 0.1) },
+          {hideSidebar ? (
+            /* ═════════════════════════════════════════════════════════════════
+               ── SUPER ADMIN LUXURY PLATFORM HEADER ──
+               ═════════════════════════════════════════════════════════════════ */
+            <>
+              {/* 1. Left: Brand Emblem, Platform Name & Live Cluster Status */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    cursor: 'pointer',
+                    textDecoration: 'none',
+                  }}
+                  onClick={() => navigate('/super-admin')}
+                >
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '13px',
+                      background: isDark
+                        ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%)'
+                        : 'linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%)',
+                      border: `1.5px solid ${isDark ? 'rgba(56, 189, 248, 0.35)' : 'rgba(37, 99, 235, 0.25)'}`,
+                      boxShadow: isDark
+                        ? '0 0 20px rgba(56, 189, 248, 0.2)'
+                        : '0 4px 12px rgba(37, 99, 235, 0.12)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      p: 0.6,
+                      transition: 'all 0.25s ease',
+                      '&:hover': {
+                        transform: 'scale(1.05)',
+                        boxShadow: isDark
+                          ? '0 0 28px rgba(56, 189, 248, 0.35)'
+                          : '0 6px 18px rgba(37, 99, 235, 0.2)',
+                      },
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={isDark ? sidebarLogoDark : sidebarLogoLight}
+                      alt="SaaS Platform"
+                      sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  </Box>
+                  <Box>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight={900}
+                        sx={{
+                          color: isDark ? '#ffffff' : '#0f172a',
+                          lineHeight: 1.2,
+                          fontSize: '1rem',
+                          letterSpacing: '-0.02em',
+                        }}
+                      >
+                        Vanurtech SaaS
+                      </Typography>
+                      <Chip
+                        label="MASTER"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: '0.62rem',
+                          fontWeight: 900,
+                          letterSpacing: '0.06em',
+                          bgcolor: 'rgba(56, 189, 248, 0.15)',
+                          color: '#38bdf8',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
+                        }}
+                      />
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.2 }}>
+                      <Box
+                        sx={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          bgcolor: '#22c55e',
+                          boxShadow: '0 0 8px #22c55e',
+                          animation: 'beaconGlow 2s infinite',
+                          '@keyframes beaconGlow': {
+                            '0%': { transform: 'scale(0.95)', opacity: 0.8 },
+                            '50%': { transform: 'scale(1.2)', opacity: 1 },
+                            '100%': { transform: 'scale(0.95)', opacity: 0.8 },
+                          },
+                        }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: isDark ? '#94a3b8' : '#64748b',
+                          fontWeight: 700,
+                          fontSize: '0.68rem',
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Multi-Tenant Cloud Live
+                      </Typography>
+                    </Stack>
+                  </Box>
+                </Box>
+
+                {/* Breadcrumb / Workspace Pills - hidden on smaller tablets */}
+                <Box
+                  sx={{
+                    display: { xs: 'none', lg: 'flex' },
+                    alignItems: 'center',
+                    gap: 1,
+                    ml: 1.5,
+                    pl: 2,
+                    borderLeft: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
                   }}
                 >
-                  <MenuIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-            
-            {/* Search Bar - Hidden on mobile */}
-            {!isMobile && (
-              <Box
-                component="form"
-                onSubmit={handleSearch}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  bgcolor: isDark ? '#0e1628' : '#f5f5f5',
-                  borderRadius: 2,
-                  px: 2,
-                  py: 0.5,
-                  width: { sm: 250, md: 300 },
-                  ml: { sm: 2, md: 4 },
-                  border: isDark ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid #e0e0e0',
-                  '&:hover': { bgcolor: isDark ? '#121c32' : '#f0f0f0' },
-                  '&:focus-within': {
-                    borderColor: '#2563eb',
-                    boxShadow: `0 0 0 2px rgba(37, 99, 235, 0.25)`,
-                  },
-                }}
-              >
-                <SearchIcon sx={{ color: isDark ? '#64748b' : '#999', mr: 1, fontSize: 20 }} />
-                <InputBase
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  sx={{
-                    flex: 1,
-                    fontSize: '0.9rem',
-                    color: isDark ? '#f8fafc' : 'inherit',
-                    '& input::placeholder': { color: isDark ? '#64748b' : '#999', opacity: 1 },
-                  }}
-                />
+                  <Chip
+                    icon={<Business sx={{ fontSize: '15px !important', color: '#38bdf8' }} />}
+                    label="Organizations & Tenants"
+                    size="small"
+                    sx={{
+                      height: 28,
+                      px: 0.8,
+                      fontWeight: 800,
+                      fontSize: '0.75rem',
+                      bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : '#eff6ff',
+                      color: isDark ? '#f8fafc' : '#1e40af',
+                      border: `1px solid ${isDark ? 'rgba(56, 189, 248, 0.2)' : '#bfdbfe'}`,
+                    }}
+                  />
+                </Box>
               </Box>
-            )}
-          </Box>
 
-          {/* Right Section */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1 } }}>
-            {/* Mobile Search Icon */}
-            {isMobile && (
-              <Tooltip title="Search" arrow>
-                <IconButton
-                  sx={{
-                    color: isDark ? '#94a3b8' : '#666',
-                    '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.08)' : alpha('#0f1f3d', 0.05) },
-                  }}
-                  onClick={() => setMobileSearchOpen(true)}
-                >
-                  <SearchIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-
-            <Tooltip title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"} arrow>
-              <IconButton
-                onClick={() => {
-                  const nextMode = isDark ? "light" : "dark";
-                  localStorage.setItem("appThemeMode", nextMode);
-                  window.dispatchEvent(new CustomEvent("themeModeChange", { detail: nextMode }));
-                }}
-                sx={{
-                  color: isDark ? '#fbbf24' : '#64748b',
-                  border: isDark ? '1px solid rgba(251, 191, 36, 0.3)' : '1px solid #e2e8f0',
-                  bgcolor: isDark ? '#0e1628' : '#ffffff',
-                  '&:hover': { bgcolor: isDark ? '#121c32' : alpha('#0f1f3d', 0.06) },
-                }}
-              >
-                {isDark ? <LightModeIcon sx={{ fontSize: 20 }} /> : <DarkModeIcon sx={{ fontSize: 20 }} />}
-              </IconButton>
-            </Tooltip>
-
-            <Tooltip title="Notifications" arrow>
-              <IconButton
-                onClick={handleNotificationMenu}
-                sx={{
-                  color: isDark ? '#60a5fa' : '#0f1f3d',
-                  border: isDark ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid #e2e8f0',
-                  bgcolor: isDark ? '#0e1628' : '#ffffff',
-                  '&:hover': { bgcolor: isDark ? '#121c32' : alpha('#0f1f3d', 0.06) },
-                }}
-              >
-                <Badge badgeContent={unreadCount} color="error" overlap="circular">
-                  <NotificationsIcon />
-                </Badge>
-              </IconButton>
-            </Tooltip>
-
-            {/* User Profile */}
-            <Tooltip title="Profile" arrow>
+              {/* 2. Center: Sleek Interactive Search Bar */}
               <Box
                 sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  cursor: 'pointer',
-                  p: 0.5,
-                  borderRadius: '8px',
-                  '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.08)' : alpha('#0f1f3d', 0.05) },
+                  flex: 1,
+                  maxWidth: 520,
+                  mx: 2,
+                  display: { xs: 'none', sm: 'block' },
                 }}
-                onClick={handleProfileMenu}
               >
-                <Avatar
-                  src={avatarSrc}
-                  imgProps={{
-                    onError: () => setAvatarLoadFailed(true),
-                  }}
+                <Box
+                  component="form"
+                  onSubmit={(e) => { e.preventDefault(); handleSearch(e); }}
                   sx={{
-                    bgcolor: avatarSrc ? 'transparent' : '#1e40af',
-                    width: { xs: 32, sm: 36 },
-                    height: { xs: 32, sm: 36 },
-                    fontSize: { xs: '0.8rem', sm: '0.9rem' },
-                    fontWeight: 600,
-                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    bgcolor: isDark ? 'rgba(15, 23, 42, 0.65)' : '#f8fafc',
+                    borderRadius: '12px',
+                    px: 1.8,
+                    py: 0.6,
+                    border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e2e8f0',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      borderColor: isDark ? 'rgba(56, 189, 248, 0.4)' : '#93c5fd',
+                      bgcolor: isDark ? 'rgba(15, 23, 42, 0.85)' : '#ffffff',
+                    },
+                    '&:focus-within': {
+                      borderColor: '#38bdf8',
+                      bgcolor: isDark ? '#0d1527' : '#ffffff',
+                      boxShadow: isDark
+                        ? '0 0 0 3px rgba(56, 189, 248, 0.18)'
+                        : '0 0 0 3px rgba(59, 130, 246, 0.15)',
+                    },
                   }}
                 >
-                  {!avatarSrc && userInitials}
-                </Avatar>
+                  <SearchIcon sx={{ color: isDark ? '#64748b' : '#94a3b8', mr: 1.2, fontSize: 19 }} />
+                  <InputBase
+                    inputRef={superAdminSearchInputRef}
+                    placeholder="Filter organizations, tenant admins, emails..."
+                    value={searchQuery}
+                    onChange={(e) => handleSuperAdminSearchChange(e.target.value)}
+                    sx={{
+                      flex: 1,
+                      fontSize: '0.86rem',
+                      color: isDark ? '#f8fafc' : '#0f172a',
+                      '& input::placeholder': {
+                        color: isDark ? '#64748b' : '#94a3b8',
+                        opacity: 1,
+                        fontWeight: 500,
+                      },
+                    }}
+                  />
+                  {searchQuery ? (
+                    <Tooltip title="Clear search">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleSuperAdminSearchChange('')}
+                        sx={{ color: isDark ? '#94a3b8' : '#64748b', p: 0.2 }}
+                      >
+                        <CloseIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: { xs: 'none', md: 'flex' },
+                        alignItems: 'center',
+                        px: 0.8,
+                        py: 0.2,
+                        borderRadius: '6px',
+                        bgcolor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#e2e8f0',
+                        border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : '#cbd5e1'}`,
+                        color: isDark ? '#94a3b8' : '#64748b',
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      ⌘K
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+
+              {/* 3. Right: Control Toolbar & Super Admin Profile */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, flexShrink: 0 }}>
+                {/* Mobile search trigger */}
+                {isMobile && (
+                  <IconButton
+                    onClick={() => setMobileSearchOpen(true)}
+                    sx={{
+                      color: isDark ? '#94a3b8' : '#64748b',
+                      borderRadius: '10px',
+                      bgcolor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9',
+                      border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'}`,
+                    }}
+                  >
+                    <SearchIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                )}
+
+                {/* Theme Toggle Button with Custom Moon/Sun Images */}
+                <Tooltip title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"} arrow>
+                  <IconButton
+                    onClick={() => {
+                      const nextMode = isDark ? "light" : "dark";
+                      localStorage.setItem("appThemeMode", nextMode);
+                      window.dispatchEvent(new CustomEvent("themeModeChange", { detail: nextMode }));
+                    }}
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '12px',
+                      bgcolor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f1f5f9',
+                      border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'}`,
+                      p: 0.8,
+                      transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                      '&:hover': {
+                        bgcolor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0',
+                        borderColor: isDark ? 'rgba(56, 189, 248, 0.4)' : '#93c5fd',
+                        transform: 'scale(1.08)',
+                      },
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={isDark ? themeSunIcon : themeMoonIcon}
+                      alt={isDark ? "Sun Icon" : "Moon Icon"}
+                      sx={{
+                        width: 22,
+                        height: 22,
+                        objectFit: 'contain',
+                        filter: isDark ? 'invert(1) drop-shadow(0 0 5px rgba(250, 204, 21, 0.85))' : 'none',
+                        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        '&:hover': {
+                          transform: 'rotate(20deg)',
+                        },
+                      }}
+                    />
+                  </IconButton>
+                </Tooltip>
+
+                <Divider orientation="vertical" flexItem sx={{ mx: 0.5, height: 24, alignSelf: 'center', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} />
+
+                {/* Super Admin Identity Pill */}
+                <Box
+                  onClick={handleProfileMenu}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.2,
+                    cursor: 'pointer',
+                    p: '4px 10px 4px 5px',
+                    borderRadius: '12px',
+                    bgcolor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc',
+                    border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'}`,
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : '#f1f5f9',
+                      borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : '#93c5fd',
+                    },
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      background: 'linear-gradient(135deg, #0284c7 0%, #6366f1 100%)',
+                      width: 34,
+                      height: 34,
+                      fontSize: '0.82rem',
+                      fontWeight: 800,
+                      color: '#ffffff',
+                      boxShadow: '0 2px 8px rgba(2, 132, 199, 0.35)',
+                    }}
+                  >
+                    SA
+                  </Avatar>
+                  <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                    <Typography
+                      fontSize="0.86rem"
+                      fontWeight={800}
+                      color={isDark ? '#f8fafc' : '#0f172a'}
+                      sx={{ lineHeight: 1.15 }}
+                    >
+                      Super Admin
+                    </Typography>
+                    <Typography
+                      fontSize="0.68rem"
+                      fontWeight={700}
+                      color="#38bdf8"
+                      sx={{ lineHeight: 1.15 }}
+                    >
+                      ROOT ACCESS
+                    </Typography>
+                  </Box>
+                  <KeyboardArrowDown sx={{ fontSize: 17, color: isDark ? '#94a3b8' : '#64748b' }} />
+                </Box>
+
+                {/* Direct 1-Click Logout Button */}
+                <Tooltip title="Sign Out" arrow>
+                  <IconButton
+                    onClick={handleLogout}
+                    sx={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: '11px',
+                      color: isDark ? '#f87171' : '#dc2626',
+                      bgcolor: isDark ? 'rgba(239, 68, 68, 0.08)' : '#fee2e2',
+                      border: `1px solid ${isDark ? 'rgba(239, 68, 68, 0.2)' : '#fecaca'}`,
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        bgcolor: isDark ? 'rgba(239, 68, 68, 0.18)' : '#fca5a5',
+                        borderColor: '#ef4444',
+                        transform: 'scale(1.05)',
+                      },
+                    }}
+                  >
+                    <LogoutIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </>
+          ) : (
+            /* ═════════════════════════════════════════════════════════════════
+               ── STANDARD CRM TOPBAR (NON-SUPERADMIN) ──
+               ═════════════════════════════════════════════════════════════════ */
+            <>
+              {/* Left Section */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 2 } }}>
+                {(isMobile || isTablet) && (
+                  <Tooltip title="Menu" arrow>
+                    <IconButton 
+                      onClick={toggleDrawer} 
+                      sx={{ 
+                        color: isDark ? '#f8fafc' : '#0f1f3d',
+                        '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.1)' : alpha('#0f1f3d', 0.1) },
+                      }}
+                    >
+                      <MenuIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                
+                {/* Search Bar - Hidden on mobile */}
                 {!isMobile && (
-                  <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                    <Typography 
-                      fontSize="0.9rem"
-                      fontWeight={600}
-                      color={isDark ? '#f8fafc' : '#333333'}
-                      sx={{ lineHeight: 1.2 }}
-                    >
-                      {displayName}
-                    </Typography>
-                    <Typography 
-                      fontSize="0.75rem" 
-                      color={isDark ? '#94a3b8' : '#666666'}
-                      sx={{ lineHeight: 1.2 }}
-                    >
-                      {userRole}
-                    </Typography>
+                  <Box
+                    component="form"
+                    onSubmit={handleSearch}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      bgcolor: isDark ? '#0e1628' : '#f5f5f5',
+                      borderRadius: 2,
+                      px: 2,
+                      py: 0.5,
+                      width: { sm: 250, md: 300 },
+                      ml: { sm: 2, md: 4 },
+                      border: isDark ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid #e0e0e0',
+                      '&:hover': { bgcolor: isDark ? '#121c32' : '#f0f0f0' },
+                      '&:focus-within': {
+                        borderColor: '#2563eb',
+                        boxShadow: `0 0 0 2px rgba(37, 99, 235, 0.25)`,
+                      },
+                    }}
+                  >
+                    <SearchIcon sx={{ color: isDark ? '#64748b' : '#999', mr: 1, fontSize: 20 }} />
+                    <InputBase
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      sx={{
+                        flex: 1,
+                        fontSize: '0.9rem',
+                        color: isDark ? '#f8fafc' : 'inherit',
+                        '& input::placeholder': { color: isDark ? '#64748b' : '#999', opacity: 1 },
+                      }}
+                    />
                   </Box>
                 )}
               </Box>
-            </Tooltip>
-          </Box>
+
+              {/* Right Section */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1 } }}>
+                {show48HourTimer && (
+                  <Tooltip title="Workspace validity expiring soon — click for details" arrow>
+                    <Box
+                      onClick={() => window.dispatchEvent(new CustomEvent("openValidityWarningPopup"))}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.8,
+                        px: { xs: 1, sm: 1.4 },
+                        py: 0.55,
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        bgcolor: isDark ? 'rgba(239, 68, 68, 0.16)' : '#fef2f2',
+                        border: '1.5px solid #ef4444',
+                        color: isDark ? '#fca5a5' : '#dc2626',
+                        boxShadow: '0 0 12px rgba(239, 68, 68, 0.25)',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          bgcolor: isDark ? 'rgba(239, 68, 68, 0.24)' : '#fee2e2',
+                          transform: 'translateY(-1px)',
+                        },
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          bgcolor: '#ef4444',
+                          boxShadow: '0 0 8px #ef4444',
+                          animation: 'validityPulse 1.4s infinite',
+                          '@keyframes validityPulse': {
+                            '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                            '50%': { opacity: 0.4, transform: 'scale(0.8)' },
+                          },
+                        }}
+                      />
+                      <TimerIcon sx={{ fontSize: 16, color: '#ef4444' }} />
+                      <Typography
+                        sx={{
+                          fontSize: { xs: '0.72rem', sm: '0.78rem' },
+                          fontWeight: 800,
+                          fontVariantNumeric: 'tabular-nums',
+                          letterSpacing: '0.02em',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {isMobile ? formatCountdownHMS(validityRemainingMs) : `Expires in ${formatCountdownHMS(validityRemainingMs)}`}
+                      </Typography>
+                    </Box>
+                  </Tooltip>
+                )}
+
+                {/* Mobile Search Icon */}
+                {isMobile && (
+                  <Tooltip title="Search" arrow>
+                    <IconButton
+                      sx={{
+                        color: isDark ? '#94a3b8' : '#666',
+                        '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.08)' : alpha('#0f1f3d', 0.05) },
+                      }}
+                      onClick={() => setMobileSearchOpen(true)}
+                    >
+                      <SearchIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+
+                <Tooltip title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"} arrow>
+                  <IconButton
+                    onClick={() => {
+                      const nextMode = isDark ? "light" : "dark";
+                      localStorage.setItem("appThemeMode", nextMode);
+                      window.dispatchEvent(new CustomEvent("themeModeChange", { detail: nextMode }));
+                    }}
+                    sx={{
+                      color: isDark ? '#fbbf24' : '#64748b',
+                      border: isDark ? '1px solid rgba(251, 191, 36, 0.3)' : '1px solid #e2e8f0',
+                      bgcolor: isDark ? '#0e1628' : '#ffffff',
+                      '&:hover': { bgcolor: isDark ? '#121c32' : alpha('#0f1f3d', 0.06) },
+                    }}
+                  >
+                    {isDark ? <LightModeIcon sx={{ fontSize: 20 }} /> : <DarkModeIcon sx={{ fontSize: 20 }} />}
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Notifications" arrow>
+                  <IconButton
+                    onClick={handleNotificationMenu}
+                    sx={{
+                      color: isDark ? '#60a5fa' : '#0f1f3d',
+                      border: isDark ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid #e2e8f0',
+                      bgcolor: isDark ? '#0e1628' : '#ffffff',
+                      '&:hover': { bgcolor: isDark ? '#121c32' : alpha('#0f1f3d', 0.06) },
+                    }}
+                  >
+                    <Badge badgeContent={unreadCount} color="error" overlap="circular">
+                      <NotificationsIcon />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+
+                {/* User Profile */}
+                <Tooltip title="Profile" arrow>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      cursor: 'pointer',
+                      p: 0.5,
+                      borderRadius: '8px',
+                      '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.08)' : alpha('#0f1f3d', 0.05) },
+                    }}
+                    onClick={handleProfileMenu}
+                  >
+                    <Avatar
+                      src={avatarSrc}
+                      imgProps={{
+                        onError: () => setAvatarLoadFailed(true),
+                      }}
+                      sx={{
+                        bgcolor: avatarSrc ? 'transparent' : '#1e40af',
+                        width: { xs: 32, sm: 36 },
+                        height: { xs: 32, sm: 36 },
+                        fontSize: { xs: '0.8rem', sm: '0.9rem' },
+                        fontWeight: 600,
+                        color: '#ffffff',
+                      }}
+                    >
+                      {!avatarSrc && userInitials}
+                    </Avatar>
+                    {!isMobile && (
+                      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                        <Typography 
+                          fontSize="0.9rem"
+                          fontWeight={600}
+                          color={isDark ? '#f8fafc' : '#333333'}
+                          sx={{ lineHeight: 1.2 }}
+                        >
+                          {displayName}
+                        </Typography>
+                        <Typography 
+                          fontSize="0.75rem" 
+                          color={isDark ? '#94a3b8' : '#666666'}
+                          sx={{ lineHeight: 1.2 }}
+                        >
+                          {userRole}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Tooltip>
+              </Box>
+            </>
+          )}
         </Toolbar>
 
         {/* Mobile Bottom Border Indicator */}
@@ -937,6 +1434,100 @@ const Topbar = ({
 
       {/* Mobile Search Drawer */}
       {MobileSearchDrawer}
+
+      {/* ── Sleek In-App Logout Confirmation Dialog ── */}
+      <Dialog
+        open={logoutModalOpen}
+        onClose={() => setLogoutModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "20px",
+            bgcolor: isDark ? "#0d1527" : "#ffffff",
+            border: `1.5px solid ${isDark ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0"}`,
+            boxShadow: isDark
+              ? "0 24px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)"
+              : "0 20px 40px rgba(0, 0, 0, 0.12)",
+            p: 1.5,
+            backgroundImage: "none",
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, pt: 2, px: 2.5 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: "12px",
+                bgcolor: isDark ? "rgba(239, 68, 68, 0.12)" : "#fee2e2",
+                border: `1px solid ${isDark ? "rgba(239, 68, 68, 0.25)" : "#fecaca"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ef4444",
+              }}
+            >
+              <LogoutIcon sx={{ fontSize: 22 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", fontSize: "1.1rem" }}>
+                Confirm Sign Out
+              </Typography>
+              <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+                End your active management session
+              </Typography>
+            </Box>
+          </Stack>
+        </DialogTitle>
+        <DialogContent sx={{ px: 2.5, py: 1.5 }}>
+          <Typography variant="body2" sx={{ color: isDark ? "#cbd5e1" : "#475569", lineHeight: 1.6 }}>
+            Are you sure you want to sign out? You will need to re-enter your credentials to access the platform.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, pb: 2, pt: 1, gap: 1 }}>
+          <Button
+            onClick={() => setLogoutModalOpen(false)}
+            variant="outlined"
+            sx={{
+              borderRadius: "10px",
+              textTransform: "none",
+              fontWeight: 700,
+              px: 2.5,
+              borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "#cbd5e1",
+              color: isDark ? "#cbd5e1" : "#475569",
+              "&:hover": {
+                borderColor: isDark ? "rgba(255, 255, 255, 0.25)" : "#94a3b8",
+                bgcolor: isDark ? "rgba(255, 255, 255, 0.04)" : "#f1f5f9",
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={performLogout}
+            variant="contained"
+            color="error"
+            disabled={loggingOut}
+            startIcon={loggingOut ? <CircularProgress size={16} color="inherit" /> : <LogoutIcon sx={{ fontSize: 18 }} />}
+            sx={{
+              borderRadius: "10px",
+              textTransform: "none",
+              fontWeight: 800,
+              px: 2.8,
+              background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+              boxShadow: "0 4px 14px rgba(239, 68, 68, 0.35)",
+              "&:hover": {
+                background: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
+                boxShadow: "0 6px 18px rgba(239, 68, 68, 0.45)",
+              },
+            }}
+          >
+            {loggingOut ? "Signing Out..." : "Sign Out"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Spacer for fixed AppBar */}
       <Box sx={{ height: { xs: 56, sm: 64 } }} />

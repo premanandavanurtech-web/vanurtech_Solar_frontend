@@ -2713,6 +2713,7 @@ const UserManagement = () => {
   ];
 
   // â”€â”€ Fetch users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Fetch users ──────────────────────────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
@@ -2725,6 +2726,9 @@ const UserManagement = () => {
         setUsers(DEMO_USERS_FALLBACK);
         setFilteredUsers(DEMO_USERS_FALLBACK);
         setStats({ total: 16, active: 16, inactive: 0 });
+        setUsers([]);
+        setFilteredUsers([]);
+        setStats({ total: 0, active: 0, inactive: 0 });
         return;
       }
 
@@ -2753,11 +2757,15 @@ const UserManagement = () => {
       } else {
         setUsers(DEMO_USERS_FALLBACK);
         setStats({ total: 16, active: 16, inactive: 0 });
+        setUsers([]);
+        setStats({ total: 0, active: 0, inactive: 0 });
       }
     } catch (error) {
       console.error("Error fetching users:", error);
       setUsers(DEMO_USERS_FALLBACK);
       setStats({ total: 16, active: 16, inactive: 0 });
+      setUsers([]);
+      setStats({ total: 0, active: 0, inactive: 0 });
     } finally {
       setLoading(false);
     }

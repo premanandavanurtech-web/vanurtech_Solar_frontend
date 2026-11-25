@@ -500,6 +500,8 @@ export function getMonthlyPayrollState(month = "August 2026", availableUsers = [
               return {
                 ...u,
                 ...existing,
+                _id: u._id || existing._id,
+                userId: u._id || existing.userId || existing._id,
                 name: u.name || existing.name,
                 empId: u.empId || existing.empId,
                 department: u.department || existing.department,

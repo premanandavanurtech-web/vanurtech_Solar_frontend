@@ -53,6 +53,7 @@ import Salaries from "./pages/Salaries";
 import Payroll from "./pages/Payroll";
 import Payslips from "./pages/Payslips";
 import PayrollPayments from "./pages/PayrollPayments";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 
 const getAppTheme = (mode = "light") =>
   createTheme({
@@ -196,6 +197,10 @@ function App() {
                   <ProtectedRoute>
                     <MainLayout>
                       <Routes>
+                        <Route path="super-admin" element={<ProtectedRoute allowedRoles={["SUPER_ADMIN"]}><SuperAdminDashboard /></ProtectedRoute>} />
+                        <Route path="super-admin/new" element={<ProtectedRoute allowedRoles={["SUPER_ADMIN"]}><SuperAdminDashboard /></ProtectedRoute>} />
+                        <Route path="super-admin/org/:id" element={<ProtectedRoute allowedRoles={["SUPER_ADMIN"]}><SuperAdminDashboard /></ProtectedRoute>} />
+                        <Route path="super-admin/organization/:id" element={<ProtectedRoute allowedRoles={["SUPER_ADMIN"]}><SuperAdminDashboard /></ProtectedRoute>} />
                         <Route path="dashboard" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Dashboard /></ProtectedRoute>} />
                         <Route path="total-visits" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><TotalVisitsPage /></ProtectedRoute>} />
                         <Route path="reports" element={<ProtectedRoute allowedRoles={["Admin_panel", "ZSM", "Incharge", "TEAM"]}><Reports /></ProtectedRoute>} />

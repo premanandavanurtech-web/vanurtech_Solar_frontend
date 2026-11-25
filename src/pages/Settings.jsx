@@ -44,6 +44,8 @@ import {
   Security as SecurityIcon,
   Check as CheckIcon,
   PhoneAndroid as MobileAppIcon,
+  AccessTime as AccessTimeIcon,
+  EventAvailable as EventAvailableIcon,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -71,6 +73,70 @@ const Settings = () => {
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem("appThemeMode") === "dark";
   });
+
+  // Live Validity Countdown
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!user?.subscriptionExpiresAt) return;
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [user?.subscriptionExpiresAt]);
+
+  const validityDisplay = React.useMemo(() => {
+    if (!user?.subscriptionExpiresAt) {
+      return {
+        label: "Lifetime Access",
+        sub: "No expiration date",
+        color: "#22c55e",
+        bg: isDark ? "rgba(34, 197, 94, 0.12)" : "#f0fdf4",
+        border: isDark ? "rgba(34, 197, 94, 0.3)" : "#bbf7d0",
+      };
+    }
+    const expMs = new Date(user.subscriptionExpiresAt).getTime();
+    if (Number.isNaN(expMs)) return null;
+    const diff = expMs - nowMs;
+    const dateStr = new Date(expMs).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    if (diff <= 0) {
+      return {
+        label: "Validity Expired",
+        sub: `Ended on ${dateStr}`,
+        color: "#ef4444",
+        bg: isDark ? "rgba(239, 68, 68, 0.14)" : "#fef2f2",
+        border: isDark ? "rgba(239, 68, 68, 0.35)" : "#fecaca",
+      };
+    }
+
+    const totalSec = Math.floor(diff / 1000);
+    const days = Math.floor(totalSec / 86400);
+    const hours = Math.floor((totalSec % 86400) / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+
+    if (diff <= 48 * 3600 * 1000) {
+      const totalHrs = Math.floor(totalSec / 3600);
+      const hms = [totalHrs, mins, secs].map((n) => String(n).padStart(2, "0")).join(":");
+      return {
+        label: `${hms} Remaining`,
+        sub: `Expires ${dateStr}`,
+        color: "#ef4444",
+        bg: isDark ? "rgba(239, 68, 68, 0.14)" : "#fef2f2",
+        border: isDark ? "rgba(239, 68, 68, 0.38)" : "#fca5a5",
+      };
+    }
+
+    return {
+      label: `${days} Day${days !== 1 ? "s" : ""}, ${hours}h Left`,
+      sub: `Valid until ${dateStr}`,
+      color: "#16a34a",
+      bg: isDark ? "rgba(34, 197, 94, 0.12)" : "#f0fdf4",
+      border: isDark ? "rgba(34, 197, 94, 0.3)" : "#bbf7d0",
+    };
+  }, [user?.subscriptionExpiresAt, nowMs, isDark]);
 
   // Admin Profile Form state
   const [profileForm, setProfileForm] = useState({
@@ -281,14 +347,85 @@ const Settings = () => {
   return (
     <Box sx={{ p: { xs: 2.5, sm: 4 }, bgcolor: theme.palette.background.default, minHeight: "100vh", maxWidth: 1280, mx: "auto" }}>
       {/* Page Title Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight={800} sx={{ color: theme.palette.text.primary, letterSpacing: "-0.02em" }}>
-          Settings & Configuration
-        </Typography>
-        <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 0.5, fontSize: "0.9rem" }}>
-          Manage admin profile, password security, mobile APK role permissions, and theme appearance.
-        </Typography>
-      </Box>
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        justifyContent="space-between"
+        alignItems={{ xs: "flex-start", md: "center" }}
+        spacing={2}
+        sx={{ mb: 4 }}
+      >
+        <Box>
+          <Typography variant="h4" fontWeight={800} sx={{ color: theme.palette.text.primary, letterSpacing: "-0.02em" }}>
+            Settings & Configuration
+          </Typography>
+          <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mt: 0.5, fontSize: "0.9rem" }}>
+            Manage admin profile, password security, mobile APK role permissions, and theme appearance.
+          </Typography>
+        </Box>
+
+        {validityDisplay && (
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            sx={{
+              px: 2.2,
+              py: 1.2,
+              borderRadius: "14px",
+              bgcolor: validityDisplay.bg,
+              border: `1.5px solid ${validityDisplay.border}`,
+              flexShrink: 0,
+            }}
+          >
+            <Box
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: "10px",
+                bgcolor: isDark ? "rgba(255,255,255,0.06)" : "#ffffff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: validityDisplay.color,
+              }}
+            >
+              {user?.subscriptionExpiresAt ? (
+                <AccessTimeIcon sx={{ fontSize: 21 }} />
+              ) : (
+                <EventAvailableIcon sx={{ fontSize: 21 }} />
+              )}
+            </Box>
+            <Box>
+              <Typography
+                sx={{
+                  fontSize: "0.68rem",
+                  fontWeight: 800,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: theme.palette.text.secondary,
+                  lineHeight: 1.2,
+                }}
+              >
+                Workspace Validity
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: "0.95rem",
+                  fontWeight: 800,
+                  color: validityDisplay.color,
+                  fontVariantNumeric: "tabular-nums",
+                  lineHeight: 1.25,
+                }}
+              >
+                {validityDisplay.label}
+              </Typography>
+              <Typography sx={{ fontSize: "0.74rem", fontWeight: 600, color: theme.palette.text.secondary }}>
+                {validityDisplay.sub}
+              </Typography>
+            </Box>
+          </Stack>
+        )}
+      </Stack>
 
       {/* Grid Cards Section */}
       <Grid container spacing={2.5}>

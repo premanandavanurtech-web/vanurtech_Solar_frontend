@@ -37,6 +37,7 @@ export const toast = {
   success: (message, opts) => emit({ id: ++toastId, type: "success", message, ...opts }),
   error:   (message, opts) => emit({ id: ++toastId, type: "error",   message, ...opts }),
   warn:    (message, opts) => emit({ id: ++toastId, type: "warn",    message, ...opts }),
+  warning: (message, opts) => emit({ id: ++toastId, type: "warn",    message, ...opts }),
   info:    (message, opts) => emit({ id: ++toastId, type: "info",    message, ...opts }),
 };
 

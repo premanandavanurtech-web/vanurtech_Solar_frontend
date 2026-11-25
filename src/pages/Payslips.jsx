@@ -39,6 +39,7 @@ import {
   Print,
   CheckCircle,
   Refresh,
+  Send,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import axiosInstance from "../utils/axiosConfig";
@@ -82,7 +83,11 @@ export default function Payslips() {
   // ─── Data & Modal States ────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [dbSlips, setDbSlips] = useState([]);
+  const [dbUsers, setDbUsers] = useState([]);
   const [previewSlip, setPreviewSlip] = useState(null);
+  const [sendingSlipId, setSendingSlipId] = useState(null);
+  const [sendingAll, setSendingAll] = useState(false);
+  const [sentSlipsMap, setSentSlipsMap] = useState({});
 
   // ─── Load Real Backend Data (Users, Salary Structures, Payslips) ─────
   const loadBackendPayslips = useCallback(async (monthStr) => {
@@ -92,12 +97,34 @@ export default function Payslips() {
       const monthName = parts[0] || "October";
       const yearVal = parts[1] || "2026";
 
-      const [overviewRes, usersRes, structuresRes, payslipsRes] = await Promise.allSettled([
+      const [overviewRes, usersRes, structuresRes, payslipsRes, sentSlipsRes] = await Promise.allSettled([
         axiosInstance.get(`/payroll/overview?month=${monthName}&year=${yearVal}`),
         axiosInstance.get("/user/getAllUsers?page=1&limit=200"),
         axiosInstance.get("/payroll/salary-structures"),
         axiosInstance.get(`/payroll/payslips?month=${monthName}&year=${yearVal}&limit=200`),
+        axiosInstance.get(`/payroll/get-all?month=${monthName}&year=${yearVal}&limit=500`),
       ]);
+
+      // Populate sent slips map from MongoDB Payroll collection
+      const newSentMap = {};
+      if (sentSlipsRes.status === "fulfilled") {
+        const pRoot = sentSlipsRes.value?.data || {};
+        const pData = pRoot.result || pRoot.data || pRoot;
+        const payrollList = pData.payrolls || pRoot.payrolls || (Array.isArray(pData) ? pData : []);
+        payrollList.forEach((p) => {
+          const uId = String(p.user?._id || p.user || "");
+          if (uId) {
+            newSentMap[uId] = {
+              isSent: Boolean(p.isSentToUser),
+              sentAt: p.sentAt || p.createdAt,
+              salarySlipNo: p.salarySlipNo,
+              status: p.status,
+              payrollId: p._id,
+            };
+          }
+        });
+      }
+      setSentSlipsMap(newSentMap);
 
       const overviewData = overviewRes.status === "fulfilled"
         ? (overviewRes.value?.data?.result || overviewRes.value?.data?.data || overviewRes.value?.data || {})
@@ -114,6 +141,7 @@ export default function Payslips() {
       } else if (overviewData.employees && Array.isArray(overviewData.employees)) {
         users = overviewData.employees;
       }
+      setDbUsers(users);
 
       let structures = [];
       if (structuresRes.status === "fulfilled") {
@@ -410,6 +438,200 @@ export default function Payslips() {
     return filteredSlips.slice(start, start + rowsPerPage);
   }, [filteredSlips, page, rowsPerPage]);
 
+  // ─── Resolve Real MongoDB ObjectId for Employee ───────────────────
+  const isValidMongoId = (id) => typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id);
+
+  const resolveMongoUserId = useCallback((row) => {
+    if (!row) return null;
+    if (isValidMongoId(row._id)) return String(row._id);
+    if (isValidMongoId(row.userId)) return String(row.userId);
+    if (isValidMongoId(row.user?._id)) return String(row.user._id);
+    if (isValidMongoId(row.employee?._id)) return String(row.employee._id);
+    if (isValidMongoId(row.employee)) return String(row.employee);
+    if (isValidMongoId(row.id)) return String(row.id);
+
+    // If ID is numeric or fallback (e.g. 1 or "run-1"), match against real dbUsers
+    const rowEmpCode = String(row.empId || row.employeeId || "").trim().toLowerCase();
+    const rowEmail = String(row.email || "").trim().toLowerCase();
+    const rowName = String(row.name || row.employeeName || "").trim().toLowerCase();
+
+    const matched = dbUsers.find((u) => {
+      if (rowEmpCode && u.employeeId && String(u.employeeId).trim().toLowerCase() === rowEmpCode) return true;
+      if (rowEmail && u.email && String(u.email).trim().toLowerCase() === rowEmail) return true;
+      if (rowName && `${u.firstName || ""} ${u.lastName || ""}`.trim().toLowerCase() === rowName) return true;
+      return false;
+    });
+
+    if (matched?._id && isValidMongoId(String(matched._id))) {
+      return String(matched._id);
+    }
+
+    return null;
+  }, [dbUsers]);
+
+  // ─── Send Single Salary Slip to User APK ────────────────────────────
+  const handleSendSalarySlip = async (row) => {
+    const validUserId = resolveMongoUserId(row);
+    if (!validUserId) {
+      toast.error(`Cannot send: Employee "${row.name || "Employee"}" does not have a linked database user account.`);
+      return;
+    }
+
+    const parts = selectedMonth.split(" ");
+    const monthName = parts[0] || "November";
+    const yearNum = Number(parts[1]) || new Date().getFullYear();
+
+    setSendingSlipId(validUserId);
+    try {
+      const basic = Number(row.basicSalary || row.basic || 0);
+      const gross = Number(row.gross || basic);
+      const allowances = Math.max(0, gross - basic);
+
+      const earningsList = Array.isArray(row.earnings) && row.earnings.length > 0
+        ? row.earnings.map((e) => ({ name: e.component || e.name || "Allowance", amount: Number(e.amount) || 0 }))
+        : [{ name: "House Rent Allowance (HRA)", amount: allowances }];
+
+      const deductionsList = Array.isArray(row.deductionDetails) && row.deductionDetails.length > 0
+        ? row.deductionDetails.map((d) => ({ name: d.component || d.name || "Deduction", amount: Number(d.amount) || 0 }))
+        : [{ name: "Provident Fund (PF)", amount: Number(row.deductions || 0) }];
+
+      const payload = {
+        user: validUserId,
+        employeeId: row.empId || row.employeeId,
+        month: monthName,
+        year: yearNum,
+        basicSalary: basic,
+        allowances,
+        allowanceDetails: earningsList,
+        deductions: Number(row.deductions || 0),
+        deductionDetails: deductionsList,
+        netSalary: Number(row.netPay || Math.max(0, gross - Number(row.deductions || 0))),
+        halfDays: row.attendance?.halfDays || 0,
+        workingDays: row.attendance?.totalDays || 26,
+        status: "Pending",
+        remarks: `Salary slip for ${monthName} ${yearNum}`,
+      };
+
+      const res = await axiosInstance.post("/payroll/send-slip", payload);
+      const createdSlip = res.data?.result || res.data?.data || {};
+
+      toast.success(`Salary slip sent to ${row.name || "employee"} APK successfully!`);
+      const rowKey = String(row._id || row.id || validUserId);
+      setSentSlipsMap((prev) => ({
+        ...prev,
+        [validUserId]: {
+          isSent: true,
+          sentAt: new Date().toISOString(),
+          salarySlipNo: createdSlip.salarySlipNo || "Issued",
+          payrollId: createdSlip._id,
+        },
+        [rowKey]: {
+          isSent: true,
+          sentAt: new Date().toISOString(),
+          salarySlipNo: createdSlip.salarySlipNo || "Issued",
+          payrollId: createdSlip._id,
+        },
+      }));
+    } catch (err) {
+      console.error("Failed to send salary slip to user:", err);
+      toast.error(err.response?.data?.message || "Failed to send salary slip to user APK");
+    } finally {
+      setSendingSlipId(null);
+    }
+  };
+
+  // ─── Send All Displayed Slips to Users' APKs ────────────────────────
+  const handleSendAllSalarySlips = async () => {
+    if (!displayedSlips || displayedSlips.length === 0) {
+      toast.info("No salary slips to send");
+      return;
+    }
+
+    const unsentSlips = displayedSlips.filter((s) => {
+      const uId = resolveMongoUserId(s);
+      const rowKey = String(s._id || s.id);
+      return !sentSlipsMap[rowKey]?.isSent && (!uId || !sentSlipsMap[uId]?.isSent);
+    });
+
+    if (unsentSlips.length === 0) {
+      toast.info("All visible salary slips have already been sent to users' APKs!");
+      return;
+    }
+
+    const parts = selectedMonth.split(" ");
+    const monthName = parts[0] || "November";
+    const yearNum = Number(parts[1]) || new Date().getFullYear();
+
+    setSendingAll(true);
+    let successCount = 0;
+    try {
+      for (const row of unsentSlips) {
+        const validUserId = resolveMongoUserId(row);
+        if (!validUserId) continue;
+
+        const basic = Number(row.basicSalary || row.basic || 0);
+        const gross = Number(row.gross || basic);
+        const allowances = Math.max(0, gross - basic);
+
+        const earningsList = Array.isArray(row.earnings) && row.earnings.length > 0
+          ? row.earnings.map((e) => ({ name: e.component || e.name || "Allowance", amount: Number(e.amount) || 0 }))
+          : [{ name: "House Rent Allowance (HRA)", amount: allowances }];
+
+        const deductionsList = Array.isArray(row.deductionDetails) && row.deductionDetails.length > 0
+          ? row.deductionDetails.map((d) => ({ name: d.component || d.name || "Deduction", amount: Number(d.amount) || 0 }))
+          : [{ name: "Provident Fund (PF)", amount: Number(row.deductions || 0) }];
+
+        const payload = {
+          user: validUserId,
+          employeeId: row.empId || row.employeeId,
+          month: monthName,
+          year: yearNum,
+          basicSalary: basic,
+          allowances,
+          allowanceDetails: earningsList,
+          deductions: Number(row.deductions || 0),
+          deductionDetails: deductionsList,
+          netSalary: Number(row.netPay || Math.max(0, gross - Number(row.deductions || 0))),
+          halfDays: row.attendance?.halfDays || 0,
+          workingDays: row.attendance?.totalDays || 26,
+          status: "Pending",
+          remarks: `Salary slip for ${monthName} ${yearNum}`,
+        };
+
+        try {
+          const res = await axiosInstance.post("/payroll/send-slip", payload);
+          const createdSlip = res.data?.result || res.data?.data || {};
+          const rowKey = String(row._id || row.id || validUserId);
+          setSentSlipsMap((prev) => ({
+            ...prev,
+            [validUserId]: {
+              isSent: true,
+              sentAt: new Date().toISOString(),
+              salarySlipNo: createdSlip.salarySlipNo || "Issued",
+              payrollId: createdSlip._id,
+            },
+            [rowKey]: {
+              isSent: true,
+              sentAt: new Date().toISOString(),
+              salarySlipNo: createdSlip.salarySlipNo || "Issued",
+              payrollId: createdSlip._id,
+            },
+          }));
+          successCount++;
+        } catch (sendErr) {
+          console.error(`Failed to send slip to ${row.name}:`, sendErr);
+        }
+      }
+      if (successCount > 0) {
+        toast.success(`Successfully sent ${successCount} salary slips to employee APKs!`);
+      } else {
+        toast.warning("Could not send slips. Please ensure employee accounts are synced with the database.");
+      }
+    } finally {
+      setSendingAll(false);
+    }
+  };
+
   return (
     <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, minHeight: "100vh" }}>
       {/* ── 1. HEADER & BREADCRUMBS ──────────────────────────────────── */}
@@ -466,8 +688,37 @@ export default function Payslips() {
             </Breadcrumbs>
           </Box>
 
-          {/* Month Selector & Refresh */}
+          {/* Month Selector, Send All, & Refresh */}
           <Stack direction="row" spacing={1.5} alignItems="center">
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={
+                sendingAll ? (
+                  <CircularProgress size={14} color="inherit" />
+                ) : (
+                  <Send sx={{ fontSize: 14 }} />
+                )
+              }
+              onClick={handleSendAllSalarySlips}
+              disabled={sendingAll || loading || displayedSlips.length === 0}
+              sx={{
+                borderRadius: "8px",
+                textTransform: "none",
+                fontWeight: 700,
+                fontSize: "0.8rem",
+                height: 36,
+                px: 1.8,
+                bgcolor: "#059669",
+                color: "#ffffff",
+                whiteSpace: "nowrap",
+                boxShadow: "0 2px 10px rgba(5, 150, 105, 0.25)",
+                "&:hover": { bgcolor: "#047857" },
+              }}
+            >
+              {sendingAll ? "Sending All to App..." : "Send All to App"}
+            </Button>
+
             <Select
               size="small"
               value={selectedMonth}
@@ -617,28 +868,28 @@ export default function Payslips() {
           <Table sx={{ minWidth: 700 }}>
             <TableHead sx={{ bgcolor: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc" }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569" }}>
+                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569", whiteSpace: "nowrap" }}>
                   EMPLOYEE
                 </TableCell>
-                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569" }}>
+                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569", whiteSpace: "nowrap" }}>
                   EMPLOYEE ID
                 </TableCell>
-                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569" }}>
+                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569", whiteSpace: "nowrap" }}>
                   MONTH
                 </TableCell>
-                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569" }}>
+                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569", whiteSpace: "nowrap" }}>
                   GROSS SALARY
                 </TableCell>
-                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569" }}>
+                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569", whiteSpace: "nowrap" }}>
                   DEDUCTIONS
                 </TableCell>
-                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569" }}>
+                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569", whiteSpace: "nowrap" }}>
                   NET PAY
                 </TableCell>
-                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569" }}>
+                <TableCell sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569", whiteSpace: "nowrap" }}>
                   STATUS
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569" }}>
+                <TableCell align="right" sx={{ fontWeight: 800, fontSize: "0.8rem", color: isDark ? "#94a3b8" : "#475569", whiteSpace: "nowrap" }}>
                   ACTIONS
                 </TableCell>
               </TableRow>
@@ -663,153 +914,228 @@ export default function Payslips() {
                   </TableCell>
                 </TableRow>
               ) : (
-                displayedSlips.map((row) => (
-                  <TableRow key={row.id || row.empId} hover>
-                    {/* Employee */}
-                    <TableCell>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                        <Avatar
-                          sx={{
-                            bgcolor: row.avatarBg || "#dbeafe",
-                            color: row.avatarColor || "#1d4ed8",
-                            fontWeight: 800,
-                            fontSize: "0.8rem",
-                            width: 36,
-                            height: 36,
-                          }}
-                        >
-                          {row.initials || row.name?.[0] || "E"}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="subtitle2" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", lineHeight: 1.2 }}>
-                            {row.name}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
-                            {row.designation || row.department}
-                          </Typography>
+                displayedSlips.map((row) => {
+                  const validUserId = resolveMongoUserId(row);
+                  const empIdStr = validUserId || String(row._id || row.id || "");
+                  const sentInfo = sentSlipsMap[empIdStr] || (validUserId ? sentSlipsMap[validUserId] : null) || sentSlipsMap[String(row._id || row.id || "")];
+                  const isSent = Boolean(sentInfo?.isSent || row.isSentToUser);
+                  const isSending = sendingSlipId === empIdStr || (validUserId && sendingSlipId === validUserId);
+
+                  return (
+                    <TableRow key={row.id || row.empId} hover>
+                      {/* Employee */}
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                          <Avatar
+                            sx={{
+                              bgcolor: row.avatarBg || "#dbeafe",
+                              color: row.avatarColor || "#1d4ed8",
+                              fontWeight: 800,
+                              fontSize: "0.8rem",
+                              width: 36,
+                              height: 36,
+                            }}
+                          >
+                            {row.initials || row.name?.[0] || "E"}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight={800} sx={{ color: isDark ? "#f8fafc" : "#0f172a", lineHeight: 1.2 }}>
+                              {row.name}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+                              {row.designation || row.department}
+                            </Typography>
+                          </Box>
                         </Box>
-                      </Box>
-                    </TableCell>
+                      </TableCell>
 
-                    {/* Employee ID */}
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={700} sx={{ fontFamily: "monospace", color: isDark ? "#cbd5e1" : "#334155" }}>
-                        {row.empId}
-                      </Typography>
-                    </TableCell>
+                      {/* Employee ID */}
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <Typography variant="body2" fontWeight={700} sx={{ fontFamily: "monospace", color: isDark ? "#cbd5e1" : "#334155" }}>
+                          {row.empId}
+                        </Typography>
+                      </TableCell>
 
-                    {/* Month */}
-                    <TableCell>
-                      <Typography variant="body2" sx={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: 600 }}>
-                        {row.month || selectedMonth}
-                      </Typography>
-                    </TableCell>
+                      {/* Month */}
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <Typography variant="body2" sx={{ color: isDark ? "#cbd5e1" : "#334155", fontWeight: 600 }}>
+                          {row.month || selectedMonth}
+                        </Typography>
+                      </TableCell>
 
-                    {/* Gross */}
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : "#0f172a" }}>
-                        ₹ {Number(row.gross || 0).toLocaleString("en-IN")}
-                      </Typography>
-                    </TableCell>
+                      {/* Gross */}
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? "#f8fafc" : "#0f172a", whiteSpace: "nowrap" }}>
+                          ₹ {Number(row.gross || 0).toLocaleString("en-IN")}
+                        </Typography>
+                      </TableCell>
 
-                    {/* Deductions */}
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={700} sx={{ color: "#dc2626" }}>
-                        ₹ {Number(row.deductions || 0).toLocaleString("en-IN")}
-                      </Typography>
-                    </TableCell>
+                      {/* Deductions */}
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: "#dc2626", whiteSpace: "nowrap" }}>
+                          ₹ {Number(row.deductions || 0).toLocaleString("en-IN")}
+                        </Typography>
+                      </TableCell>
 
-                    {/* Net Pay */}
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={900} sx={{ color: "#16a34a" }}>
-                        ₹ {Number(row.netPay || 0).toLocaleString("en-IN")}
-                      </Typography>
-                    </TableCell>
+                      {/* Net Pay */}
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <Typography variant="body2" fontWeight={900} sx={{ color: "#16a34a", whiteSpace: "nowrap" }}>
+                          ₹ {Number(row.netPay || 0).toLocaleString("en-IN")}
+                        </Typography>
+                      </TableCell>
 
-                    {/* Slip Status */}
-                    <TableCell>
-                      {row.status === SLIP_STATUS.GENERATED && isPayrollFinalized ? (
-                        <Chip
-                          label="Generated"
-                          size="small"
-                          sx={{
-                            fontWeight: 800,
-                            fontSize: "0.75rem",
-                            bgcolor: isDark ? "rgba(16, 185, 129, 0.15)" : "#f0fdf4",
-                            color: isDark ? "#34d399" : "#15803d",
-                            border: "1px solid rgba(16, 185, 129, 0.3)",
-                          }}
-                        />
-                      ) : row.status === SLIP_STATUS.NEEDS_REGENERATION ? (
-                        <Chip
-                          label="Needs Regeneration"
-                          size="small"
-                          sx={{
-                            fontWeight: 800,
-                            fontSize: "0.75rem",
-                            bgcolor: isDark ? "rgba(244, 63, 94, 0.15)" : "#fff1f2",
-                            color: isDark ? "#fb7185" : "#e11d48",
-                            border: "1px solid rgba(244, 63, 94, 0.3)",
-                          }}
-                        />
-                      ) : (
-                        <Chip
-                          label="Not Generated"
-                          size="small"
-                          sx={{
-                            fontWeight: 700,
-                            fontSize: "0.75rem",
-                            bgcolor: isDark ? "rgba(245, 158, 11, 0.15)" : "#fef3c7",
-                            color: isDark ? "#fbbf24" : "#b45309",
-                            border: "1px solid rgba(245, 158, 11, 0.3)",
-                          }}
-                        />
-                      )}
-                    </TableCell>
+                      {/* Slip Status */}
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        {isSent ? (
+                          <Chip
+                            icon={<CheckCircle sx={{ fontSize: "13px !important", color: "#10b981 !important" }} />}
+                            label="Sent"
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: "0.72rem",
+                              height: 24,
+                              bgcolor: isDark ? "rgba(16, 185, 129, 0.12)" : "#f0fdf4",
+                              color: isDark ? "#34d399" : "#15803d",
+                              border: "1px solid rgba(16, 185, 129, 0.25)",
+                              whiteSpace: "nowrap",
+                            }}
+                          />
+                        ) : row.status === SLIP_STATUS.GENERATED && isPayrollFinalized ? (
+                          <Chip
+                            label="Generated"
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: "0.72rem",
+                              height: 24,
+                              bgcolor: isDark ? "rgba(59, 130, 246, 0.12)" : "#eff6ff",
+                              color: isDark ? "#60a5fa" : "#1d4ed8",
+                              border: "1px solid rgba(59, 130, 246, 0.25)",
+                              whiteSpace: "nowrap",
+                            }}
+                          />
+                        ) : row.status === SLIP_STATUS.NEEDS_REGENERATION ? (
+                          <Chip
+                            label="Needs Regeneration"
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: "0.72rem",
+                              height: 24,
+                              bgcolor: isDark ? "rgba(244, 63, 94, 0.12)" : "#fff1f2",
+                              color: isDark ? "#fb7185" : "#e11d48",
+                              border: "1px solid rgba(244, 63, 94, 0.25)",
+                              whiteSpace: "nowrap",
+                            }}
+                          />
+                        ) : (
+                          <Chip
+                            label="Not Generated"
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: "0.72rem",
+                              height: 24,
+                              bgcolor: isDark ? "rgba(245, 158, 11, 0.12)" : "#fef3c7",
+                              color: isDark ? "#fbbf24" : "#b45309",
+                              border: "1px solid rgba(245, 158, 11, 0.25)",
+                              whiteSpace: "nowrap",
+                            }}
+                          />
+                        )}
+                      </TableCell>
 
-                    {/* Actions */}
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<Visibility sx={{ fontSize: 16 }} />}
-                          onClick={() => setPreviewSlip(row)}
-                          sx={{
-                            borderRadius: "8px",
-                            textTransform: "none",
-                            fontWeight: 700,
-                            fontSize: "0.78rem",
-                            py: 0.3,
-                            px: 1.2,
-                            borderColor: isDark ? "rgba(255,255,255,0.15)" : "#cbd5e1",
-                            color: isDark ? "#f8fafc" : "#0f172a",
-                          }}
-                        >
-                          View
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          startIcon={<FileDownload sx={{ fontSize: 16 }} />}
-                          onClick={() => setPreviewSlip(row)}
-                          sx={{
-                            borderRadius: "8px",
-                            textTransform: "none",
-                            fontWeight: 700,
-                            fontSize: "0.78rem",
-                            py: 0.3,
-                            px: 1.2,
-                            bgcolor: "#1d68f0",
-                            "&:hover": { bgcolor: "#1557d0" },
-                          }}
-                        >
-                          Download
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      {/* Actions */}
+                      <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                        <Stack direction="row" spacing={0.8} justifyContent="flex-end" alignItems="center">
+                          {/* Send to App Icon Button */}
+                          <Tooltip title={isSent ? "Salary slip already sent to employee APK. Click to re-send." : "Send salary slip directly to employee's mobile app"}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={isSending || sendingAll}
+                                onClick={() => handleSendSalarySlip(row)}
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: "8px",
+                                  bgcolor: isSent
+                                    ? (isDark ? "rgba(16, 185, 129, 0.12)" : "#f0fdf4")
+                                    : (isDark ? "rgba(16, 185, 129, 0.08)" : "#ecfdf5"),
+                                  color: isDark ? "#34d399" : "#059669",
+                                  border: isDark ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid #bbf7d0",
+                                  transition: "all 0.15s ease",
+                                  "&:hover": {
+                                    bgcolor: isDark ? "rgba(16, 185, 129, 0.22)" : "#dcfce7",
+                                    borderColor: "#10b981",
+                                    color: isDark ? "#6ee7b7" : "#047857",
+                                  },
+                                }}
+                              >
+                                {isSending ? (
+                                  <CircularProgress size={14} color="inherit" />
+                                ) : isSent ? (
+                                  <CheckCircle sx={{ fontSize: 17, color: "#10b981" }} />
+                                ) : (
+                                  <Send sx={{ fontSize: 15 }} />
+                                )}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+
+                          {/* View Slip Icon Button */}
+                          <Tooltip title="View / Preview Salary Slip">
+                            <IconButton
+                              size="small"
+                              onClick={() => setPreviewSlip(row)}
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: "8px",
+                                bgcolor: isDark ? "rgba(255, 255, 255, 0.04)" : "#f8fafc",
+                                color: isDark ? "#94a3b8" : "#64748b",
+                                border: isDark ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid #e2e8f0",
+                                transition: "all 0.15s ease",
+                                "&:hover": {
+                                  bgcolor: isDark ? "rgba(255, 255, 255, 0.1)" : "#f1f5f9",
+                                  borderColor: isDark ? "rgba(255, 255, 255, 0.25)" : "#cbd5e1",
+                                  color: isDark ? "#f8fafc" : "#0f172a",
+                                },
+                              }}
+                            >
+                              <Visibility sx={{ fontSize: 17 }} />
+                            </IconButton>
+                          </Tooltip>
+
+                          {/* Download Slip PDF Icon Button */}
+                          <Tooltip title="Download Salary Slip PDF">
+                            <IconButton
+                              size="small"
+                              onClick={() => setPreviewSlip(row)}
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: "8px",
+                                bgcolor: isDark ? "rgba(29, 104, 240, 0.1)" : "#eff6ff",
+                                color: isDark ? "#60a5fa" : "#1d68f0",
+                                border: isDark ? "1px solid rgba(29, 104, 240, 0.25)" : "1px solid #bfdbfe",
+                                transition: "all 0.15s ease",
+                                "&:hover": {
+                                  bgcolor: isDark ? "rgba(29, 104, 240, 0.2)" : "#dbeafe",
+                                  borderColor: "#1d68f0",
+                                  color: isDark ? "#93c5fd" : "#1557d0",
+                                },
+                              }}
+                            >
+                              <FileDownload sx={{ fontSize: 17 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

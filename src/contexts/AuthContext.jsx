@@ -11,13 +11,27 @@ const AuthContext = createContext({});
 
 const normalizeRole = (role) => {
   const value = String(role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-  const map = { head_office: "ADMIN", admin_panel: "ADMIN", admin: "ADMIN", project_head: "PROJECT_HEAD", manager: "MANAGER", supervisor: "SUPERVISOR", installer: "INSTALLER", team: "INSTALLER", zsm: "PROJECT_HEAD", incharge: "SUPERVISOR" };
+  const map = {
+    super_admin: "SUPER_ADMIN",
+    superadmin: "SUPER_ADMIN",
+    head_office: "ADMIN",
+    admin_panel: "ADMIN",
+    admin: "ADMIN",
+    project_head: "PROJECT_HEAD",
+    manager: "MANAGER",
+    supervisor: "SUPERVISOR",
+    installer: "INSTALLER",
+    team: "INSTALLER",
+    zsm: "PROJECT_HEAD",
+    incharge: "SUPERVISOR",
+  };
   return map[value] || role;
 };
 
 const normalizeLegacyRole = (role) => {
   const canonicalRole = normalizeRole(role);
   const map = {
+    SUPER_ADMIN: "SUPER_ADMIN",
     ADMIN: "Admin_panel",
     PROJECT_HEAD: "ZSM",
     MANAGER: "ZSM",
@@ -46,12 +60,12 @@ export const AuthProvider = ({ children }) => {
 
     if (!token || !savedUser) return false;
 
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        return !!(parsedUser && parsedUser.email && normalizeRole(parsedUser.role));
-      } catch {
-        return false;
-      }
+    try {
+      const parsedUser = JSON.parse(savedUser);
+      return !!(parsedUser && parsedUser.email && normalizeRole(parsedUser.role));
+    } catch {
+      return false;
+    }
   }, []);
 
   /* ===============================
@@ -106,10 +120,13 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 401) {
-          localStorage.clear();
-          setUser(null);
-          window.location.href = "/login";
+        if (response.status === 401 && !endpoint.includes("/auth/login")) {
+          if (token && window.location.pathname !== "/login") {
+            console.warn(`[AuthContext] 401 received on ${endpoint}, redirecting to login`);
+            localStorage.clear();
+            setUser(null);
+            window.location.href = "/login";
+          }
         }
         throw new Error(data.message || "Request failed");
       }
@@ -155,6 +172,7 @@ export const AuthProvider = ({ children }) => {
       });
 
       const token = response.result?.token || response.token;
+      const refreshToken = response.result?.refreshToken || response.refreshToken;
       const userData = response.result?.user || response.result || response;
       const normalizedUserData = {
         ...userData,
@@ -164,6 +182,9 @@ export const AuthProvider = ({ children }) => {
       if (!token) throw new Error("No token received");
 
       localStorage.setItem("token", token);
+      if (refreshToken) {
+        localStorage.setItem("refreshToken", refreshToken);
+      }
       localStorage.setItem("user", JSON.stringify(normalizedUserData));
 
       setUser(normalizedUserData);
@@ -188,12 +209,23 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const updateLocalUser = useCallback((nextUser) => {
-    const normalizedUser = {
-      ...nextUser,
-      role: normalizeRole(nextUser?.role),
-    };
-    setUser(normalizedUser);
-    localStorage.setItem("user", JSON.stringify(normalizedUser));
+    setUser((prev) => {
+      let base = prev;
+      if (!base) {
+        try {
+          base = JSON.parse(localStorage.getItem("user") || "null");
+        } catch {
+          base = null;
+        }
+      }
+      const merged = {
+        ...(base || {}),
+        ...(nextUser || {}),
+      };
+      merged.role = normalizeRole(merged.role);
+      localStorage.setItem("user", JSON.stringify(merged));
+      return merged;
+    });
   }, []);
 
   /* ===============================
@@ -261,8 +293,29 @@ export const AuthProvider = ({ children }) => {
     [fetchAPI],
   );
 
-  const getUserRole = useCallback(() => normalizeLegacyRole(user?.role), [user]);
-  const getCanonicalUserRole = useCallback(() => normalizeRole(user?.role) || null, [user]);
+  const getUserRole = useCallback(() => {
+    if (user?.role) return normalizeLegacyRole(user.role);
+    try {
+      const saved = localStorage.getItem("user");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.role) return normalizeLegacyRole(parsed.role);
+      }
+    } catch { }
+    return null;
+  }, [user]);
+
+  const getCanonicalUserRole = useCallback(() => {
+    if (user?.role) return normalizeRole(user.role);
+    try {
+      const saved = localStorage.getItem("user");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.role) return normalizeRole(parsed.role);
+      }
+    } catch { }
+    return null;
+  }, [user]);
   const isTeamMember = useCallback(() => normalizeRole(user?.role) === "INSTALLER", [user]);
   const isManager = useCallback(
     () => ["ADMIN", "PROJECT_HEAD", "MANAGER", "SUPERVISOR"].includes(normalizeRole(user?.role)),

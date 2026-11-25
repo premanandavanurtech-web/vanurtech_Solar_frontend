@@ -50,6 +50,7 @@ export const DashboardProvider = ({ children }) => {
       // Determine API endpoint based on role
       switch (userRole) {
         case "ADMIN":
+        case "SUPER_ADMIN":
         case "PROJECT_HEAD":
         case "MANAGER":
           endpoint = "/lead/HeadOfficeDashboard";
@@ -61,7 +62,8 @@ export const DashboardProvider = ({ children }) => {
           endpoint = "/lead/TeamDashboard";
           break;
         default:
-          throw new Error("Invalid user role");
+          endpoint = "/lead/HeadOfficeDashboard";
+          break;
       }
 
       // Fetch dashboard data

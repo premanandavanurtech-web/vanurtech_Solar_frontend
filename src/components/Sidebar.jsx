@@ -16,6 +16,7 @@ import {
   useTheme,
   useMediaQuery,
   Badge,
+  Chip,
   AppBar,
   Toolbar,
 } from "@mui/material";
@@ -49,11 +50,13 @@ import {
   ReceiptLong,
   AccountBalance,
   AccountBalanceWallet,
+  Business,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import ViewInAr from "@mui/icons-material/ViewInAr";
 import { useAuth } from "../contexts/AuthContext";
+import { toBackendAssetUrl } from "../utils/backendAssetUrl";
 import sidebarLogoLight from "../assets/sidebar-logo-light.webp";
 import sidebarLogoDark from "../assets/sidebar-logo-dark.webp";
 
@@ -69,7 +72,8 @@ const normalizeRole = (role) => {
     head_office: "ADMIN",
     admin_panel: "ADMIN",
     admin: "ADMIN",
-    super_admin: "ADMIN",
+    super_admin: "SUPER_ADMIN",
+    superadmin: "SUPER_ADMIN",
     zsm: "PROJECT_HEAD",
     project_head: "PROJECT_HEAD",
     manager: "MANAGER",
@@ -101,6 +105,11 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
   const effectiveCollapsed = !isMobile && !open;
   const { user } = useAuth();
   const userRole = normalizeRole(user?.role);
+  const isSuperAdmin = userRole === "SUPER_ADMIN" || user?.role === "SUPER_ADMIN";
+
+  if (isSuperAdmin) {
+    return null;
+  }
 
   // Dynamic colors based on light vs dark theme
   const sidebarBg = isDark ? "#060b13" : "#ffffff";
@@ -115,8 +124,8 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
   // ── Menu items ─────────────────────────────────────────────────────────────
   const menuItems = useMemo(
     () => [
-
-      { text: "Dashboard",       icon: <Dashboard />,         path: "/dashboard",              roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
+      { text: "Companies & Admins", icon: <Business />, path: "/super-admin", roles: ["SUPER_ADMIN"] },
+      { text: "Dashboard",       icon: <Dashboard />,         path: "/dashboard",              roles: ["SUPER_ADMIN", "Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Lead Funnel",     icon: <AccountTree />,       path: "/lead-funnel",            roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "All Leads",       icon: <FilterAlt />,         path: "/all-leads",              roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
       { text: "Projects",        icon: <TaskAlt />,           path: "/projects",               roles: ["Admin_panel","ZSM","Incharge","TEAM"] },
@@ -140,7 +149,7 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
       { text: "Payroll",            icon: <Paid />,               path: "/payroll",            roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
       { text: "Salary Structure",   icon: <ReceiptLong />,        path: "/payroll/salaries",   roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
       { text: "Salary Slips",       icon: <AccountBalanceWallet />,path: "/payroll/payslips",   roles: ["Admin_panel","ZSM","Incharge","TEAM","ADMIN","PROJECT_HEAD","MANAGER","SUPERVISOR","INSTALLER"] },
-      { text: "Employees",          icon: <AdminPanelSettings />, path: "/user-management",    roles: ["Admin_panel","ZSM","Incharge"] },
+      { text: "Employees",          icon: <AdminPanelSettings />, path: "/user-management",    roles: ["SUPER_ADMIN", "Admin_panel","ZSM","Incharge"] },
       {
         text: "Location Visit",
         icon: <LocationOnIcon />,
@@ -162,6 +171,16 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
       menuItems.filter((item) => {
         const itemRoles = item.roles.map((r) => normalizeRole(r).toUpperCase());
         const uRole = normalizeRole(userRole).toUpperCase();
+
+        // Never expose Super Admin only items to non-superadmins
+        if (itemRoles.includes("SUPER_ADMIN") && !itemRoles.includes("ADMIN") && uRole !== "SUPER_ADMIN") {
+          return false;
+        }
+
+        if (uRole === "SUPER_ADMIN") {
+          return itemRoles.includes("SUPER_ADMIN");
+        }
+
         if (["ADMIN", "ADMIN_PANEL"].includes(uRole)) return true;
         if (["MANAGER", "PROJECT_HEAD", "ZSM"].includes(uRole)) {
           return true;
@@ -172,32 +191,40 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
   );
 
   const menuSections = useMemo(
-    () =>
-      [
+    () => {
+      const sections = isSuperAdmin
+        ? [
+            { text: "SaaS Control Plane", icon: <Business sx={{ color: "#38bdf8" }} />, itemNames: ["Companies & Admins"] },
+            { text: "Global Staff Directory", icon: <Groups sx={{ color: "#818cf8" }} />, itemNames: ["Employees"] },
+            { text: "Platform Analytics", icon: <Dashboard sx={{ color: "#34d399" }} />, itemNames: ["Dashboard"] },
+            { text: "System Configuration", icon: <SettingsIcon sx={{ color: "#f59e0b" }} />, itemNames: ["Settings"] },
+          ]
+        : [
+            { text: "Overview",    icon: <Dashboard />,    itemNames: ["Dashboard","Lead Funnel"] },
+            { text: "Leads",       icon: <FilterAlt />,    itemNames: ["All Leads","Missed Leads","Import Leads"] },
+            { text: "Projects",    icon: <TaskAlt />,      itemNames: ["Projects","Total Visits","3D Design","Add Quotation","All Quotes"] },
+            { text: "Inventory",   icon: <Inventory2Outlined />, itemNames: ["Inventory In","Inventory Out"] },
+            { text: "Attendance",  icon: <CalendarMonth />,itemNames: ["Team Attendance","My Attendance","Leave","Leave Types","Holiday Management"] },
+            { text: "Salary",      icon: <AccountBalanceWallet />, itemNames: ["Payroll","Salary Structure","Salary Slips"] },
+            { text: "HR",          icon: <Groups />,       itemNames: ["Employees"] },
+            { text: "Team",        icon: <Groups />,       itemNames: ["Location Visit","Expense"] },
+            { text: "Insights",    icon: <Insights />,     itemNames: ["Reports","Installer Work Register","Notifications"] },
+            { text: "Settings",    icon: <SettingsIcon />, itemNames: ["Settings"] },
+          ];
 
-        { text: "Overview",    icon: <Dashboard />,    itemNames: ["Dashboard","Lead Funnel"] },
-        { text: "Leads",       icon: <FilterAlt />,    itemNames: ["All Leads","Missed Leads","Import Leads"] },
-        { text: "Projects",    icon: <TaskAlt />,      itemNames: ["Projects","Total Visits","3D Design","Add Quotation","All Quotes"] },
-        { text: "Inventory",   icon: <Inventory2Outlined />, itemNames: ["Inventory In","Inventory Out"] },
-        { text: "Attendance",  icon: <CalendarMonth />,itemNames: ["Team Attendance","My Attendance","Leave","Leave Types","Holiday Management"] },
-        { text: "Salary",      icon: <AccountBalanceWallet />, itemNames: ["Payroll","Salary Structure","Salary Slips"] },
-        { text: "HR",          icon: <Groups />,       itemNames: ["Employees"] },
-        { text: "Team",        icon: <Groups />,       itemNames: ["Location Visit","Expense"] },
-        { text: "Insights",    icon: <Insights />,     itemNames: ["Reports","Installer Work Register","Notifications"] },
-        { text: "Settings",    icon: <SettingsIcon />, itemNames: ["Settings"] },
-
-      ]
+      return sections
         .map((section) => ({
           ...section,
           items: section.itemNames
             .map((name) => filteredItems.find((item) => item.text === name))
             .filter(Boolean),
         }))
-        .filter((section) => section.items.length > 0),
-    [filteredItems],
+        .filter((section) => section.items.length > 0);
+    },
+    [filteredItems, isSuperAdmin],
   );
 
-  const [openSection, setOpenSection] = useState("Overview");
+  const [openSection, setOpenSection] = useState(isSuperAdmin ? "SaaS Management" : "Overview");
 
   useEffect(() => {
     const active = menuSections.find((s) =>
@@ -507,7 +534,9 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         }}
       >
         <Box
-          component="img" src={currentLogo} alt="Vanurtech Pvt Ltd"
+          component="img"
+          src={toBackendAssetUrl(user?.companyLogo) || currentLogo}
+          alt={user?.companyName || "Company Logo"}
           onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = currentLogo; }}
           sx={{ width: "100%", height: "100%", objectFit: "contain", p: 0.3 }}
         />
@@ -516,8 +545,22 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
         <Box sx={{ overflow: "hidden" }}>
           <Typography variant="subtitle1" color={textPri} fontWeight={800}
             sx={{ lineHeight: 1.2, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
-            Vanurtech Pvt Ltd
+            {user?.companyName || "Vanurtech Pvt Ltd"}
           </Typography>
+          {isSuperAdmin && (
+            <Chip
+              label="SUPER ADMIN"
+              size="small"
+              sx={{
+                height: 16,
+                fontSize: "0.62rem",
+                fontWeight: 800,
+                bgcolor: "rgba(56, 189, 248, 0.15)",
+                color: "#38bdf8",
+                mt: 0.3,
+              }}
+            />
+          )}
         </Box>
       )}
     </Box>
@@ -541,14 +584,14 @@ const Sidebar = ({ open, toggleDrawer, onClose }) => {
           border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : borderCol}`,
           boxShadow: isDark ? "0 6px 16px rgba(0,0,0,0.4)" : "0 6px 16px rgba(30,64,175,0.14)",
         }}>
-          <Box component="img" src={currentLogo} alt="Vanurtech Pvt Ltd"
+          <Box component="img" src={toBackendAssetUrl(user?.companyLogo) || currentLogo} alt={user?.companyName || "Company Logo"}
             onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = currentLogo; }}
             sx={{ height: "85%", width: "auto", maxWidth: "100%", objectFit: "contain" }}
           />
         </Box>
         <Box>
           <Typography variant="subtitle1" color={textPri} fontWeight={800} sx={{ lineHeight: 1.2 }}>
-            Vanurtech Pvt Ltd
+            {user?.companyName || "Vanurtech Pvt Ltd"}
           </Typography>
         </Box>
       </Box>

@@ -20,6 +20,15 @@ axiosInstance.interceptors.request.use(
     return config;
   },
   (error) => {
+    if (error.response?.status === 403) {
+      const msg = String(error.response?.data?.message || "").toLowerCase();
+      if (msg.includes("deactivated")) {
+        window.dispatchEvent(new CustomEvent("orgAccessBlocked", { detail: { reason: "deactivated" } }));
+      } else if (msg.includes("validity expired") || msg.includes("subscription has expired")) {
+        window.dispatchEvent(new CustomEvent("orgAccessBlocked", { detail: { reason: "expired" } }));
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -47,7 +56,16 @@ axiosInstance.interceptors.response.use(
           localStorage.removeItem('accessToken');
           localStorage.removeItem('user');
           window.location.href = '/login';
-          return Promise.reject(error);
+          if (error.response?.status === 403) {
+      const msg = String(error.response?.data?.message || "").toLowerCase();
+      if (msg.includes("deactivated")) {
+        window.dispatchEvent(new CustomEvent("orgAccessBlocked", { detail: { reason: "deactivated" } }));
+      } else if (msg.includes("validity expired") || msg.includes("subscription has expired")) {
+        window.dispatchEvent(new CustomEvent("orgAccessBlocked", { detail: { reason: "expired" } }));
+      }
+    }
+
+    return Promise.reject(error);
         }
         
         const response = await axiosInstance.post('/auth/refresh', {
@@ -77,6 +95,15 @@ axiosInstance.interceptors.response.use(
       }
     }
     
+    if (error.response?.status === 403) {
+      const msg = String(error.response?.data?.message || "").toLowerCase();
+      if (msg.includes("deactivated")) {
+        window.dispatchEvent(new CustomEvent("orgAccessBlocked", { detail: { reason: "deactivated" } }));
+      } else if (msg.includes("validity expired") || msg.includes("subscription has expired")) {
+        window.dispatchEvent(new CustomEvent("orgAccessBlocked", { detail: { reason: "expired" } }));
+      }
+    }
+
     return Promise.reject(error);
   }
 );

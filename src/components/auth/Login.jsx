@@ -179,6 +179,9 @@ const Login = () => {
         const userRole = userData?.role;
 
         const normalizedRoleMap = {
+          SUPER_ADMIN: "SUPER_ADMIN",
+          super_admin: "SUPER_ADMIN",
+          superadmin: "SUPER_ADMIN",
           Head_office: "ADMIN",
           Admin_panel: "ADMIN",
           ADMIN: "ADMIN",
@@ -202,7 +205,9 @@ const Login = () => {
         setSuccessMessage("Login successful! Redirecting to dashboard...");
 
         setTimeout(() => {
-          if (normalizedRole === "INSTALLER") {
+          if (normalizedRole === "SUPER_ADMIN") {
+            navigate("/super-admin", { replace: true });
+          } else if (normalizedRole === "INSTALLER") {
             navigate("/attendance", { replace: true });
           } else {
             navigate("/dashboard", { replace: true });
