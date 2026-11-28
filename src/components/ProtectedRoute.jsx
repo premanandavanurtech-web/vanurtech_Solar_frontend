@@ -89,8 +89,14 @@ const ProtectedRoute = ({
     return <Navigate to="/login" replace />;
   }
 
-  // If Super Admin, grant full access
+  // Super Admin is strictly locked to /super-admin* routes
   if (userRole === "SUPER_ADMIN") {
+    const isSuperAdminRoute =
+      location.pathname === "/super-admin" ||
+      location.pathname.startsWith("/super-admin/");
+    if (!isSuperAdminRoute) {
+      return <Navigate to="/super-admin" replace />;
+    }
     return children;
   }
 
