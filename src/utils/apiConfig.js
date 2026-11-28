@@ -19,13 +19,13 @@ const resolveApiOrigin = () => {
       return `${protocol}//${host}:${port}`;
     }
   }
-  return "https://vanurtech-solar-backend-1.onrender.com";
+  return "https://vanurtech-solar-backend-n5q8.onrender.com";
 };
 
 export const API_ORIGIN = normalizeOrigin(resolveApiOrigin());
 
 export const LEGACY_API_ORIGINS = [
-  "https://vanurtech-solar-backend-1.onrender.com",
+  "https://vanurtech-solar-backend-n5q8.onrender.com",
 ];
 
 export const KNOWN_API_HOSTS = new Set(

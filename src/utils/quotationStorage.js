@@ -13,15 +13,25 @@ const parseStoredValue = (rawValue, fallbackValue) => {
   }
 };
 
+const getActiveScopeSuffix = () => {
+  try {
+    const rawUser = localStorage.getItem("user");
+    if (!rawUser) return "anon";
+    const parsed = JSON.parse(rawUser);
+    const scopeId = parsed?.company || parsed?._id || parsed?.id;
+    return scopeId ? String(scopeId) : "anon";
+  } catch {
+    return "anon";
+  }
+};
+
+const getScopedKey = (key) => `${key}:${getActiveScopeSuffix()}`;
+
 const readStorage = (key, fallbackValue) => {
   try {
-    const val = localStorage.getItem(key);
+    const scopedKey = getScopedKey(key);
+    const val = localStorage.getItem(scopedKey);
     if (val !== null) return parseStoredValue(val, fallbackValue);
-    const legacyKey = key.replace(/^solar360-/, "solar-crm-");
-    if (legacyKey !== key) {
-      const legacyVal = localStorage.getItem(legacyKey);
-      if (legacyVal !== null) return parseStoredValue(legacyVal, fallbackValue);
-    }
     return fallbackValue;
   } catch {
     return fallbackValue;
@@ -30,11 +40,12 @@ const readStorage = (key, fallbackValue) => {
 
 const writeStorage = (key, value) => {
   try {
+    const scopedKey = getScopedKey(key);
     if (value === null || value === undefined) {
-      localStorage.removeItem(key);
+      localStorage.removeItem(scopedKey);
       return;
     }
-    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(scopedKey, JSON.stringify(value));
   } catch {
     // Ignore storage failures to avoid blocking the quotation flow.
   }
@@ -154,6 +165,11 @@ export const buildQuotationRecord = ({
   const nextSequence = getQuotationSequenceForYear(quotations, quotationYear) + 1;
   const leadName = resolveLeadName(lead || existingQuotation?.lead, quotationTitle);
 
+  let activeUser = null;
+  try {
+    activeUser = JSON.parse(localStorage.getItem("user") || "null");
+  } catch {}
+
   return {
     ...existingQuotation,
     id: existingQuotation?.id || createQuotationId(),
@@ -164,6 +180,8 @@ export const buildQuotationRecord = ({
     lead: lead || existingQuotation?.lead || null,
     leadId: lead?._id || existingQuotation?.leadId || existingQuotation?.lead?._id || "",
     leadName,
+    companyName: existingQuotation?.companyName || activeUser?.companyName || "",
+    companyLogo: existingQuotation?.companyLogo || activeUser?.companyLogo || null,
     form,
     paymentMilestones,
     sectionsToShow,

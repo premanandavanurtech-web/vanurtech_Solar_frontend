@@ -511,6 +511,7 @@ export default function LiveTrackingMap({
   const effectiveTrips = Array.isArray(trips) && trips.length > 0 ? trips : internalTrips;
   const [activeTripIdx, setActiveTripIdx] = useState(0);
   const [activeRouteIdx, setActiveRouteIdx] = useState(0);
+  const activeTrip = effectiveTrips[activeTripIdx] || effectiveTrips[0] || null;
   const userAdjustedViewportRef = useRef(false);
   const suppressViewportEventsRef = useRef(false);
   const [mapLoaded,  setMapLoaded]  = useState(false);

@@ -379,8 +379,36 @@ const buildQuotationData = (saved) => {
     .filter(Boolean)
     .join(", ")
 
+  let activeUser = null
+  try {
+    activeUser = JSON.parse(localStorage.getItem("user") || "null")
+  } catch {}
+
+  const companyDoc = saved.company && typeof saved.company === "object" ? saved.company : null
+  const resolvedCompanyName =
+    companyDoc?.name ||
+    saved.companyName ||
+    activeUser?.companyName ||
+    defaultQuotationData.company.name
+  const rawCompanyLogo =
+    companyDoc?.logo ||
+    saved.companyLogo ||
+    activeUser?.companyLogo ||
+    ""
+  const resolvedCompanyLogo = rawCompanyLogo
+    ? (toBackendAssetUrl(rawCompanyLogo) || defaultQuotationData.company.logo)
+    : defaultQuotationData.company.logo
+
   return {
     ...defaultQuotationData,
+    company: {
+      ...defaultQuotationData.company,
+      name: resolvedCompanyName,
+      logo: resolvedCompanyLogo,
+      email: companyDoc?.email || activeUser?.email || defaultQuotationData.company.email,
+      phone: companyDoc?.phone || activeUser?.phoneNumber || defaultQuotationData.company.phone,
+      location: companyDoc?.address || activeUser?.address || defaultQuotationData.company.location,
+    },
     quote: {
       ...defaultQuotationData.quote,
       number: saved.quotationNumber || defaultQuotationData.quote.number,
